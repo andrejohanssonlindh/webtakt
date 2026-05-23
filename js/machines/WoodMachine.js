@@ -1,0 +1,217 @@
+/**
+ * WoodMachine.js
+ * --------------
+ * Wood / clave / rimshot / cowbell percussion synthesizer.
+ * Uses a short resonant bandpass ring to simulate the acoustic character of
+ * hard struck wood or metal objects. Two tunable resonator bands are mixed
+ * to allow tonal shaping — one for the fundamental ring, one for the body.
+ *
+ * Self-enveloping — manages its own amp per hit via very short, hard decay.
+ * The track Envelope is still in-chain for optional shaping but this machine
+ * sounds correct at envelope defaults.
+ *
+ * Audio graph:
+ *   _clickOsc (persistent, sine) → _clickGain (per-note attack burst)─┐
+ *   _ring1 (BP, persistent)      → _ring1Gain (per-note decay)        ─┤
+ *   _ring2 (BP, persistent)      → _ring2Gain (per-note decay)        ─┴→ outputGain → [Filter]
+ *
+ * The click oscillator provides the hard initial strike transient.
+ * ring1 and ring2 are driven by the same persistent noise burst
+ * through per-note gain nodes that decay independently.
+ *
+ * Parameters:
+ *   'freq1'        — primary resonator center Hz (200–4000)
+ *   'freq2'        — secondary resonator center Hz (400–8000)
+ *   'ring'         — resonator Q — how tight/ringy (1–30)
+ *   'mix'          — blend of ring2 vs ring1 (0 = ring1 only, 1 = ring2 only)
+ *   'decay'        — body ring decay in seconds (0.001–0.4)
+ *   'click'        — click transient level (0–1)
+ *   'click.freq'   — click burst frequency Hz (500–12000)
+ *   'output.level' — 0–1
+ */
+
+import { Machine }        from './Machine.js';
+import { getNoiseBuffer } from '../util/AudioBuffers.js';
+
+const _noiseCache = { buf: null };
+const _getNoiseBuffer = ctx => getNoiseBuffer(ctx, _noiseCache, 0.5);
+
+export class WoodMachine extends Machine {
+  constructor(context) {
+    super(context);
+    this.type  = 'wood';
+    this.label = 'Wood';
+
+    this._params = {
+      'freq1':        600,
+      'freq2':        1400,
+      'ring':         12,
+      'mix':          0.35,
+      'decay':        0.08,
+      'click':        0.6,
+      'click.freq':   3000,
+      'output.level': 0.85,
+    };
+
+    this.outputGain = context.createGain();
+    this.outputGain.gain.value = this._params['output.level'];
+
+    // Persistent noise source — driven through per-note gains into the resonators
+    this._noiseSrc        = context.createBufferSource();
+    this._noiseSrc.buffer = _getNoiseBuffer(context);
+    this._noiseSrc.loop   = true;
+    this._noiseSrc.start();
+
+    // Primary resonator (ring1)
+    this._ring1      = context.createBiquadFilter();
+    this._ring1.type = 'bandpass';
+    this._ring1.frequency.value = this._params['freq1'];
+    this._ring1.Q.value         = this._params['ring'];
+    this._noiseSrc.connect(this._ring1);
+
+    // Secondary resonator (ring2)
+    this._ring2      = context.createBiquadFilter();
+    this._ring2.type = 'bandpass';
+    this._ring2.frequency.value = this._params['freq2'];
+    this._ring2.Q.value         = this._params['ring'];
+    this._noiseSrc.connect(this._ring2);
+
+    // Click oscillator — persistent
+    this._clickOsc       = context.createOscillator();
+    this._clickOsc.type  = 'sine';
+    this._clickOsc.frequency.value = this._params['click.freq'];
+    this._clickOsc.start();
+
+    // Per-note nodes
+    this._ring1Gain = null;
+    this._ring2Gain = null;
+    this._clickGain = null;
+  }
+
+  noteOn(midiNote, velocity, time) {
+    const velScale = velocity / 127;
+    const t        = time;
+    const decay    = this._params['decay'];
+    const mix      = this._params['mix'];
+    const clickAmt = this._params['click'];
+
+    // Detach old per-note nodes
+    if (this._ring1Gain) {
+      try { this._ring1.disconnect(this._ring1Gain); } catch (_) {}
+      try { this._ring1Gain.disconnect();             } catch (_) {}
+    }
+    if (this._ring2Gain) {
+      try { this._ring2.disconnect(this._ring2Gain); } catch (_) {}
+      try { this._ring2Gain.disconnect();             } catch (_) {}
+    }
+    if (this._clickGain) {
+      try { this._clickOsc.disconnect(this._clickGain); } catch (_) {}
+      try { this._clickGain.disconnect();                } catch (_) {}
+    }
+
+    // Ring1
+    this._ring1Gain = this.context.createGain();
+    this._ring1Gain.gain.setValueAtTime((1 - mix) * velScale, t);
+    this._ring1Gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
+    this._ring1.connect(this._ring1Gain);
+    this._ring1Gain.connect(this.outputGain);
+
+    // Ring2
+    this._ring2Gain = this.context.createGain();
+    this._ring2Gain.gain.setValueAtTime(mix * velScale, t);
+    this._ring2Gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
+    this._ring2.connect(this._ring2Gain);
+    this._ring2Gain.connect(this.outputGain);
+
+    // Click burst — very short
+    if (clickAmt > 0.001) {
+      this._clickGain = this.context.createGain();
+      this._clickGain.gain.setValueAtTime(clickAmt * velScale, t);
+      this._clickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.004);
+      this._clickOsc.connect(this._clickGain);
+      this._clickGain.connect(this.outputGain);
+    }
+
+    // Cleanup
+    const refs = {
+      r1: this._ring1, r1g: this._ring1Gain,
+      r2: this._ring2, r2g: this._ring2Gain,
+      co: this._clickOsc, cg: this._clickGain,
+    };
+    const cleanupMs = (decay + 0.1) * 1000 + Math.max(t - this.context.currentTime, 0) * 1000;
+    setTimeout(() => {
+      try { refs.r1.disconnect(refs.r1g); } catch (_) {}
+      try { refs.r1g.disconnect();        } catch (_) {}
+      try { refs.r2.disconnect(refs.r2g); } catch (_) {}
+      try { refs.r2g.disconnect();        } catch (_) {}
+      if (refs.cg) {
+        try { refs.co.disconnect(refs.cg); } catch (_) {}
+        try { refs.cg.disconnect();        } catch (_) {}
+      }
+    }, cleanupMs);
+  }
+
+  noteOff(time) {} // Self-enveloping
+
+  connect(destinationNode) { this.outputGain.connect(destinationNode); }
+
+  disconnect() {
+    try { this._noiseSrc.stop(); } catch (_) {}
+    try { this._clickOsc.stop(); } catch (_) {}
+    this.outputGain.disconnect();
+  }
+
+  setParam(path, value, time) {
+    this._params[path] = value;
+    const t = time ?? this.context.currentTime;
+
+    switch (path) {
+      case 'freq1':
+        this._ring1.frequency.setTargetAtTime(value, t, 0.005);
+        break;
+      case 'freq2':
+        this._ring2.frequency.setTargetAtTime(value, t, 0.005);
+        break;
+      case 'ring':
+        this._ring1.Q.setTargetAtTime(value, t, 0.005);
+        this._ring2.Q.setTargetAtTime(value, t, 0.005);
+        break;
+      case 'click.freq':
+        this._clickOsc.frequency.setTargetAtTime(value, t, 0.005);
+        break;
+      case 'output.level':
+        this.outputGain.gain.setValueAtTime(value, t);
+        break;
+      // 'mix', 'decay', 'click' — JS-only, read in noteOn
+    }
+  }
+
+  getParam(path) { return this._params[path]; }
+
+  getParamList() {
+    return [
+      { path: 'freq1',        label: 'Freq 1',     type: 'number', min: 200,   max: 4000,  default: 600,  modulatable: true,  lfoMin: 200,   lfoMax: 4000,  plockMode: 'audioParam' },
+      { path: 'freq2',        label: 'Freq 2',     type: 'number', min: 400,   max: 8000,  default: 1400, modulatable: true,  lfoMin: 400,   lfoMax: 8000,  plockMode: 'audioParam' },
+      { path: 'ring',         label: 'Ring',       type: 'number', min: 1,     max: 30,    default: 12,   modulatable: true,  lfoMin: 1,     lfoMax: 30,    plockMode: 'audioParam' },
+      { path: 'mix',          label: 'Mix',        type: 'number', min: 0,     max: 1,     default: 0.35,                                                   plockMode: 'js'        },
+      { path: 'decay',        label: 'Decay',      type: 'number', min: 0.001, max: 0.4,   default: 0.08,                                                   plockMode: 'js'        },
+      { path: 'click',        label: 'Click',      type: 'number', min: 0,     max: 1,     default: 0.6,                                                    plockMode: 'js'        },
+      { path: 'click.freq',   label: 'Click Freq', type: 'number', min: 500,   max: 12000, default: 3000, modulatable: true,  lfoMin: 500,   lfoMax: 12000, plockMode: 'audioParam' },
+      { path: 'output.level', label: 'Level',      type: 'number', min: 0,     max: 1,     default: 0.85, modulatable: true,  lfoMin: 0,     lfoMax: 1,     plockMode: 'audioParam' },
+    ];
+  }
+
+  resolveAudioParam(path) {
+    switch (path) {
+      case 'freq1':        return this._ring1.frequency;
+      case 'freq2':        return this._ring2.frequency;
+      case 'ring':         return this._ring1.Q;
+      case 'click.freq':   return this._clickOsc.frequency;
+      case 'output.level': return this.outputGain.gain;
+      default: return null;
+    }
+  }
+
+  toJSON()      { return { type: this.type, params: { ...this._params } }; }
+  fromJSON(obj) { Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v)); }
+}

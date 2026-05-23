@@ -1,0 +1,524 @@
+/**
+ * Track.js
+ * --------
+ * The central owner of one complete voice: machine + sequencer + signal chain.
+ * Project.js creates 8 Track instances.
+ *
+ * Owns and wires the full per-track audio graph:
+ *   machine → filter → envelope (ampGain) → outputGain → AudioEngine.fxBus
+ *
+ * Also owns:
+ *   - Sequencer (step data, runs against Clock)
+ *   - Array of LFOs
+ *   - Mod wheel destination assignments (as param paths)
+ *   - Follow source (index of another track whose notes this track mirrors)
+ *
+ * Machine registry: to add a new machine type, import it here and add to MACHINES map.
+ *
+ * Depends: SynthMachine, FMMachine, KickSilkMachine, KickHardMachine, SnareMachine, HiHatMachine, NoiseMachine, TransientMachine, Filter, Envelope, LFO, Sequencer
+ * Used by: Project.js
+ *
+ * Public:
+ *   .index             — track number (0-based)
+ *   .machine           — current Machine instance
+ *   .sequencer         — Sequencer instance
+ *   .filter            — Filter instance
+ *   .envelope          — Envelope instance
+ *   .lfos              — LFO[] array
+ *   .muted             — boolean
+ *   .followSource      — track index to follow, or null
+ *   .outputGain        — GainNode (mute is implemented by zeroing this)
+ *   setMachine(type)   — swap machine type, rewires audio graph
+ *   mute() / unmute()
+ *   setFollow(index)   — set follow source (null to clear)
+ *   addLFO()           — add a new LFO instance
+ *   removeLFO(index)
+ *   setLFODestination(lfoIndex, paramPath) — resolve path → AudioParam and connect
+ *   resolveParam(path) — returns { object, audioParam } for a given path string
+ *   toJSON() / fromJSON()
+ */
+
+import { SynthMachine }     from '../machines/SynthMachine.js';
+import { FMMachine }        from '../machines/FMMachine.js';
+import { KickMachine }      from '../machines/KickMachine.js';
+import { KickHardMachine }  from '../machines/KickHardMachine.js';
+import { KickSilkMachine }  from '../machines/KickSilkMachine.js';
+import { SnareMachine }     from '../machines/SnareMachine.js';
+import { HiHatMachine }     from '../machines/HiHatMachine.js';
+import { NoiseMachine }     from '../machines/NoiseMachine.js';
+import { TransientMachine } from '../machines/TransientMachine.js';
+import { SwarmMachine }     from '../machines/SwarmMachine.js';
+import { SamplerMachine }   from '../machines/SamplerMachine.js';
+import { CymbalMachine }    from '../machines/CymbalMachine.js';
+import { WoodMachine }      from '../machines/WoodMachine.js';
+import { WavetableMachine } from '../machines/WavetableMachine.js';
+import { KarplusMachine }   from '../machines/KarplusMachine.js';
+import { BassMachine }      from '../machines/BassMachine.js';
+import { CombMachine }      from '../machines/CombMachine.js';
+import { ChordMachine }     from '../machines/ChordMachine.js';
+import { Filter }        from '../signal/Filter.js';
+import { Envelope }      from '../signal/Envelope.js';
+import { LFO }           from '../signal/LFO.js';
+import { Sequencer }     from '../sequencer/Sequencer.js';
+import { DelayFX }       from '../signal/DelayFX.js';
+import { BitcrushFX }    from '../signal/BitcrushFX.js';
+import { ReverbFX }      from '../signal/ReverbFX.js';
+
+const MACHINES = {
+  synth:      SynthMachine,
+  fm:         FMMachine,
+  kick:       KickMachine,      // backward compat alias → KickSilkMachine
+  'kick.silk': KickSilkMachine,
+  'kick.hard': KickHardMachine,
+  snare:      SnareMachine,
+  hihat:      HiHatMachine,
+  noise:      NoiseMachine,
+  transient:  TransientMachine,
+  swarm:      SwarmMachine,
+  sampler:    SamplerMachine,
+  cymbal:     CymbalMachine,
+  wood:       WoodMachine,
+  wavetable:  WavetableMachine,
+  karplus:    KarplusMachine,
+  bass:       BassMachine,
+  comb:       CombMachine,
+  chord:      ChordMachine,
+};
+
+export class Track {
+  /**
+   * @param {number} index
+   * @param {import('../core/AudioEngine.js').AudioEngine} audio
+   * @param {import('../core/Clock.js').Clock} clock
+   */
+  constructor(index, audio, clock) {
+    this.index   = index;
+    this.audio   = audio;
+    this.clock   = clock;
+    this.muted   = false;
+    this.followSource = null;
+
+    // Output gain — mute implemented here
+    this.outputGain = audio.context.createGain();
+    this.outputGain.gain.value = 1.0;
+
+    // Stereo panner
+    this.pannerNode = audio.context.createStereoPanner();
+    this.pannerNode.pan.value = 0;
+
+    // Per-track FX chain: panner → delay → bitcrush → reverb → fxBus
+    this.delayFX   = new DelayFX(audio.context);
+    this.bitcrushFX = new BitcrushFX(audio.context);
+    this.reverbFX  = new ReverbFX(audio.context);
+
+    this.outputGain.connect(this.pannerNode);
+    this.pannerNode.connect(this.delayFX.inputNode);
+    this.delayFX.connect(this.bitcrushFX.inputNode);
+    this.bitcrushFX.connect(this.reverbFX.inputNode);
+    this.reverbFX.connect(audio.fxBus);
+
+    // Signal chain nodes
+    this.filter   = new Filter(audio.context);
+    this.envelope = new Envelope(audio.context);
+    this.envelope.connectToFilter(this.filter);
+
+    // Envelope amp → outputGain
+    this.envelope.connect(this.outputGain);
+    // Filter → envelope amp
+    this.filter.connect(this.envelope.ampGain);
+
+    // Default machine: synth
+    this.machine = null;
+    this.setMachine('synth');
+
+    // Sequencer
+    this.sequencer = new Sequencer(this, clock);
+
+    // LFO destination paths (parallel to this.lfos) — must be before addLFO()
+    this._lfoDestPaths = [];
+
+    // LFOs — start with one
+    this.lfos = [];
+    this.addLFO();
+
+    // Mod wheel destination paths (resolved on assignment)
+    this.modWheelTargets = [null, null];  // 2 wheels
+
+    // Name of the last sound loaded from the library, or null if base/modified
+    this.loadedSoundName = null;
+
+    // SampleStore reference — set by Project after construction
+    this.sampleStore = null;
+
+    // Semitone transpose applied to every note on this track (+/-24)
+    this.trigTone = 0;
+
+    // Nudge quantize: 0 = keep recorded nudge, 1 = full quantize (nudge → 0)
+    this.nudgeQuantize = 0;
+
+    // Scale constraint: index into SCALE_DEFS (0 = chromatic / no filter)
+    this.scaleIndex = 0;
+    // Lead note (root) for scale, 0–11 (pitch class, C=0)
+    this.leadNote   = 0;
+
+    // DJ filter: -1 = full LPF, 0 = flat, +1 = full HPF
+    this.djFilter = 0;
+  }
+
+  /**
+   * Swap machine type. Disconnects old machine, creates new one, rewires.
+   * @param {string} type — 'synth' | 'fm' | 'drum'
+   */
+  setMachine(type) {
+    if (this.machine) {
+      this.machine.disconnect();
+    }
+    const MachineClass = MACHINES[type] ?? SynthMachine;
+    this.machine = new MachineClass(this.audio.context);
+    // machine → base HPF → base LPF → main filter node
+    this.machine.connect(this.filter._baseHPF);
+    // Changing machine type manually clears the loaded sound name
+    this.loadedSoundName = null;
+  }
+
+  mute() {
+    this.muted = true;
+    this.outputGain.gain.setTargetAtTime(0, this.audio.context.currentTime, 0.01);
+  }
+
+  unmute() {
+    this.muted = false;
+    this.outputGain.gain.setTargetAtTime(1.0, this.audio.context.currentTime, 0.01);
+  }
+
+  /**
+   * Apply the DJ filter value to the base HPF and LPF nodes.
+   * value: -1 = full LPF (80 Hz cutoff), 0 = flat, +1 = full HPF (8000 Hz cutoff)
+   * Left half drives LPF down (20000 → 80 Hz), right half drives HPF up (20 → 8000 Hz).
+   * @param {number} value — clamped to [-1, 1]
+   */
+  applyDJFilter(value) {
+    this.djFilter = Math.max(-1, Math.min(1, value));
+    const now = this.audio.context.currentTime;
+    if (this.djFilter <= 0) {
+      // Left side: sweep LPF down, HPF stays neutral
+      const t = -this.djFilter;  // 0 = flat, 1 = full LPF
+      // exponential interpolation 20000 → 80 Hz
+      const lpf = 20000 * Math.pow(80 / 20000, t);
+      this.filter._baseLPF.frequency.setTargetAtTime(lpf, now, 0.01);
+      this.filter._baseHPF.frequency.setTargetAtTime(20, now, 0.01);
+    } else {
+      // Right side: sweep HPF up, LPF stays neutral
+      const t = this.djFilter;   // 0 = flat, 1 = full HPF
+      // exponential interpolation 20 → 8000 Hz
+      const hpf = 20 * Math.pow(8000 / 20, t);
+      this.filter._baseHPF.frequency.setTargetAtTime(hpf, now, 0.01);
+      this.filter._baseLPF.frequency.setTargetAtTime(20000, now, 0.01);
+    }
+  }
+
+  /** @param {number|null} trackIndex */
+  setFollow(trackIndex) {
+    this.followSource = trackIndex;
+  }
+
+  addLFO() {
+    const lfo = new LFO(this.audio.context, this.lfos.length, this.clock);
+    lfo.start();
+    this.lfos.push(lfo);
+    this._lfoDestPaths.push('');
+    return lfo;
+  }
+
+  /** @param {number} lfoIndex */
+  removeLFO(lfoIndex) {
+    const lfo = this.lfos[lfoIndex];
+    if (!lfo) return;
+    lfo.stop();
+    lfo.clearDestination();
+    this.lfos.splice(lfoIndex, 1);
+    this._lfoDestPaths.splice(lfoIndex, 1);
+  }
+
+  /**
+   * Resolve a parameter path for mod wheel use.
+   * Returns { audioParam, min, max } using lfoMin/lfoMax from the descriptor.
+   * @param {string} path
+   * @returns {{ audioParam: AudioParam, min: number, max: number }|null}
+   */
+  resolveModWheelParam(path) {
+    if (!path) return null;
+    if (path === 'amp.pan') {
+      return { obj: null, audioParam: this.pannerNode.pan, min: -1, max: 1 };
+    }
+    const sources = [
+      { obj: this.machine,     params: this.machine.getParamList()      },
+      { obj: this.filter,      params: this.filter.getParamList()       },
+      { obj: this.delayFX,     params: this.delayFX.getParamList()      },
+      { obj: this.bitcrushFX,  params: this.bitcrushFX.getParamList()   },
+      { obj: this.reverbFX,    params: this.reverbFX.getParamList()     },
+    ];
+    for (const { obj, params } of sources) {
+      const descriptor = params.find(p => p.path === path && p.modulatable);
+      if (!descriptor) continue;
+      const audioParam = obj.resolveAudioParam?.(path) ?? null;
+      // JS-only params (no AudioParam) are still controllable via setParam directly
+      return { obj, audioParam, min: descriptor.lfoMin, max: descriptor.lfoMax };
+    }
+    return null;
+  }
+
+  /**
+   * Assign an LFO to a parameter path.
+   * Resolves path → AudioParam + depthScale and connects the LFO.
+   * @param {number} lfoIndex
+   * @param {string} paramPath — e.g. 'filter.cutoff', 'osc.detune'
+   */
+  setLFODestination(lfoIndex, paramPath) {
+    const lfo = this.lfos[lfoIndex];
+    if (!lfo) return;
+
+    if (!paramPath) {
+      lfo.clearDestination();
+      this._lfoDestPaths[lfoIndex] = '';
+      return;
+    }
+
+    const resolved = this._resolveAudioParam(paramPath);
+    if (resolved) {
+      if (resolved.jsOnly) {
+        // JS-only destination: no AudioParam to connect, just store depthScale for read-back
+        lfo.clearDestination();
+        lfo.setJSDepthScale(resolved.depthScale);
+      } else {
+        lfo.setDestination(resolved.audioParam, resolved.depthScale);
+      }
+      this._lfoDestPaths[lfoIndex] = paramPath;
+    }
+  }
+
+  /**
+   * Resolve a parameter path string to a Web Audio AudioParam + depthScale.
+   * Delegates to machine → filter → envelope in order.
+   * depthScale = (lfoMax - lfoMin) / 2 so that 100% depth = full half-range swing.
+   * @param {string} path
+   * @returns {{ audioParam: AudioParam, depthScale: number }|null}
+   */
+  _resolveAudioParam(path) {
+    // Pan is owned directly by the track
+    if (path === 'amp.pan') {
+      return { audioParam: this.pannerNode.pan, depthScale: 1.0 };
+    }
+
+    // Tone is a JS-only param read at step-fire time — no AudioParam needed.
+    // depthScale = 24 gives ±24 semitone swing at 100% depth.
+    if (path === 'trig.tone') {
+      return { audioParam: null, depthScale: 24, jsOnly: true };
+    }
+
+    // Build descriptor lookup from all modulatable sources
+    const allParams = [
+      ...this.machine.getParamList(),
+      ...this.filter.getParamList(),
+      ...this.delayFX.getParamList(),
+      ...this.bitcrushFX.getParamList(),
+      ...this.reverbFX.getParamList(),
+      ...this._envelopeModulatableParams(),
+    ];
+    const descriptor = allParams.find(p => p.path === path && p.modulatable);
+    if (!descriptor) return null;
+
+    let audioParam = this.machine.resolveAudioParam?.(path) ?? null;
+    if (!audioParam) audioParam = this.filter.resolveAudioParam?.(path) ?? null;
+    if (!audioParam) audioParam = this.delayFX.resolveAudioParam?.(path) ?? null;
+    if (!audioParam) audioParam = this.bitcrushFX.resolveAudioParam?.(path) ?? null;
+    if (!audioParam) audioParam = this.reverbFX.resolveAudioParam?.(path) ?? null;
+    if (!audioParam) return null;
+
+    const depthScale = (descriptor.lfoMax - descriptor.lfoMin) / 2;
+    return { audioParam, depthScale };
+  }
+
+  /** No envelope params are safely LFO-modulatable: ADSR times are JS-only,
+   *  and ampGain.gain is controlled by scheduled automation that fights LFO addition. */
+  _envelopeModulatableParams() {
+    return [];
+  }
+
+  /**
+   * Get all modulatable parameter paths for LFO destination dropdown.
+   * Returns grouped structure: [{ group, items: [{ path, label }] }]
+   * @returns {Array}
+   */
+  /**
+   * Clear only step notes — active flag and note data — leaving all params untouched.
+   */
+  clearNotes() {
+    this.sequencer.steps.forEach(s => {
+      s.active    = false;
+      s.note      = 60;
+      s.velocity  = 100;
+      s.length    = 1;
+      s.nudge     = 0;
+      s.retrigger = null;
+      s.chance    = 100;
+      s.plocks.clear();
+      s.condition = { type: 'always', options: {}, label: '—', evaluate() { return true; } };
+    });
+    this.sequencer.stepCount  = 16;
+    this.sequencer.pageOffset = 0;
+    // Trim steps array back to 16 so inactive pages are truly gone
+    this.sequencer.steps.length = 16;
+  }
+
+  /**
+   * Full reset: clear notes + restore all params to defaults + reset LFOs to one empty LFO.
+   */
+  resetTrack() {
+    this.clearNotes();
+
+    // Reset machine to synth with defaults
+    this.setMachine('synth');
+
+    // Reset filter
+    this.filter.fromJSON({});
+
+    // Reset envelope
+    this.envelope.fromJSON({});
+
+    // Reset FX
+    this.delayFX.fromJSON({});
+    this.bitcrushFX.fromJSON({});
+    this.reverbFX.fromJSON({});
+
+    // Reset pan, tone, quantize, scale, sound name, and DJ filter
+    this.pannerNode.pan.setTargetAtTime(0, this.audio.context.currentTime, 0.005);
+    this.loadedSoundName = null;
+    this.trigTone      = 0;
+    this.nudgeQuantize = 0;
+    this.scaleIndex    = 0;
+    this.leadNote      = 0;
+    this.applyDJFilter(0);
+
+    // Reset mute
+    if (this.muted) this.unmute();
+    this.followSource = null;
+    this.modWheelTargets = [null, null];
+
+    // Tear down all LFOs and start fresh with one
+    this.lfos.forEach(l => { l.clearDestination(); l.stop(); });
+    this.lfos = [];
+    this._lfoDestPaths = [];
+    this.addLFO();
+  }
+
+  getAssignableParams() {
+    // Detune lives in machine but belongs logically in Trig — pull it out separately
+    const detuneParam = this.machine.getParamList().find(p => p.path === 'osc.detune' && p.modulatable);
+
+    const machineParams = this.machine.getParamList()
+      .filter(p => p.modulatable && p.path !== 'osc.detune')
+      .map(p => {
+        // For FM operator params (op1.*, op2.*, etc.), prefix label with operator number
+        const opMatch = p.path.match(/^(op\d+)\./);
+        const label = opMatch ? `${opMatch[1].toUpperCase()} ${p.label}` : p.label;
+        return { path: p.path, label };
+      });
+
+    const filterParams = this.filter.getParamList()
+      .filter(p => p.modulatable)
+      .map(p => ({ path: p.path, label: p.label }));
+
+    const ampParams = [{ path: 'amp.pan', label: 'Pan' }];
+
+    const delayParams = this.delayFX.getParamList()
+      .filter(p => p.modulatable)
+      .map(p => ({ path: p.path, label: p.label }));
+
+    const crushParams = this.bitcrushFX.getParamList()
+      .filter(p => p.modulatable)
+      .map(p => ({ path: p.path, label: p.label }));
+
+    const reverbParams = this.reverbFX.getParamList()
+      .filter(p => p.modulatable)
+      .map(p => ({ path: p.path, label: p.label }));
+
+    const trigItems = [{ path: 'trig.tone', label: 'Tone' }];
+    if (detuneParam) trigItems.push({ path: 'osc.detune', label: 'Detune' });
+
+    const groups = [];
+    groups.push({ group: 'Trig', items: trigItems });
+    if (machineParams.length) groups.push({ group: this.machine.label ?? 'Machine', items: machineParams });
+    if (filterParams.length)  groups.push({ group: 'Filter', items: filterParams });
+    groups.push({ group: 'Amp', items: ampParams });
+    if (delayParams.length)  groups.push({ group: 'Delay', items: delayParams });
+    if (crushParams.length)  groups.push({ group: 'Crush', items: crushParams });
+    if (reverbParams.length) groups.push({ group: 'Reverb', items: reverbParams });
+    return groups;
+  }
+
+  toJSON() {
+    return {
+      index:        this.index,
+      muted:        this.muted,
+      followSource: this.followSource,
+      pan:          this.pannerNode.pan.value,
+      trigTone:      this.trigTone,
+      nudgeQuantize: this.nudgeQuantize,
+      scaleIndex:    this.scaleIndex,
+      leadNote:     this.leadNote,
+      djFilter:     this.djFilter,
+      machine:      this.machine.toJSON(),
+      filter:       this.filter.toJSON(),
+      envelope:     this.envelope.toJSON(),
+      delayFX:      this.delayFX.toJSON(),
+      bitcrushFX:   this.bitcrushFX.toJSON(),
+      reverbFX:     this.reverbFX.toJSON(),
+      lfos:         this.lfos.map((lfo, i) => ({
+        ...lfo.toJSON(),
+        destPath: this._lfoDestPaths[i] ?? '',
+      })),
+      sequencer:    this.sequencer.toJSON(),
+      modWheelTargets: [...this.modWheelTargets],
+    };
+  }
+
+  /** @param {object} obj */
+  fromJSON(obj) {
+    this.muted        = obj.muted        ?? false;
+    this.followSource = obj.followSource ?? null;
+    this.pannerNode.pan.value = obj.pan ?? 0;
+    this.trigTone      = obj.trigTone      ?? 0;
+    this.nudgeQuantize = obj.nudgeQuantize ?? 0;
+    this.scaleIndex    = obj.scaleIndex    ?? 0;
+    this.leadNote   = obj.leadNote   ?? 0;
+    this.applyDJFilter(obj.djFilter ?? 0);
+    if (obj.machine?.type) this.setMachine(obj.machine.type);
+    this.machine.fromJSON(obj.machine ?? {});
+    // Restore sampler buffer asynchronously if we have a store reference
+    if (this.machine.type === 'sampler' && this.machine.sampleId && this.sampleStore) {
+      this.sampleStore.load(this.machine.sampleId, this.audio.context).then(buf => {
+        if (buf) this.machine.setBuffer(buf, this.machine.sampleId, this.machine.sampleName);
+      });
+    }
+    this.filter.fromJSON(obj.filter ?? {});
+    this.envelope.fromJSON(obj.envelope ?? {});
+    this.delayFX.fromJSON(obj.delayFX ?? {});
+    this.bitcrushFX.fromJSON(obj.bitcrushFX ?? {});
+    this.reverbFX.fromJSON(obj.reverbFX ?? {});
+    this.sequencer.fromJSON(obj.sequencer ?? {});
+    this.modWheelTargets = obj.modWheelTargets ?? [null, null];
+
+    // Restore LFOs
+    this.lfos.forEach(l => l.stop());
+    this.lfos = [];
+    this._lfoDestPaths = [];
+    (obj.lfos ?? []).forEach(lfoObj => {
+      const lfo = this.addLFO();
+      lfo.fromJSON(lfoObj);
+      if (lfoObj.destPath) this.setLFODestination(this.lfos.length - 1, lfoObj.destPath);
+    });
+
+    if (this.muted) this.mute();
+  }
+}

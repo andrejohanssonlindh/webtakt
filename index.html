@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Webtakt</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <div id="app">
+
+    <!-- TRANSPORT -->
+    <div id="transport">
+      <span class="transport-title">WEBTAKT</span>
+      <div class="sep"></div>
+      <button id="btn-play" class="btn">▶ PLAY</button>
+      <button id="btn-rec" class="btn">⏺ REC</button>
+      <div class="sep"></div>
+      <span class="bpm-label">BPM</span>
+      <span id="bpm-display">120</span>
+      <input id="bpm-slider" type="range" min="20" max="300" value="120" step="1" />
+      <div class="transport-right">
+        <button id="btn-clear-notes" class="btn">CLR NOTES</button>
+        <button id="btn-clear-track" class="btn">CLR TRACK</button>
+        <button id="btn-clear-notes-all" class="btn">CLR NOTES ALL</button>
+        <button id="btn-clear-all" class="btn">CLR ALL</button>
+        <div class="sep"></div>
+        <div class="track-count-ctrl">
+          <span class="track-count-label">TRACKS</span>
+          <button id="btn-tracks-minus" class="btn track-count-btn">−</button>
+          <span id="track-count-display">8</span>
+          <button id="btn-tracks-plus" class="btn track-count-btn">+</button>
+        </div>
+        <div class="sep"></div>
+        <button id="btn-export" class="btn">EXPORT</button>
+        <label class="btn" style="cursor:pointer;">
+          IMPORT
+          <input id="btn-import" type="file" accept=".json" style="display:none" />
+        </label>
+      </div>
+    </div>
+
+    <!-- TRACK ROW -->
+    <div id="track-row"></div>
+
+    <!-- SYNTH PANELS -->
+    <div id="synth-panel"></div>
+
+    <!-- MIDDLE ROW: step grid | track nav (page + length) -->
+    <div id="middle-row">
+      <div id="step-grid"></div>
+      <div id="track-nav">
+        <div id="track-nav-page-counter">1/1</div>
+        <button id="track-nav-next" class="btn track-nav-btn">&#9658;</button>
+        <button id="track-nav-length" class="btn track-nav-btn">LEN</button>
+      </div>
+    </div>
+
+    <!-- LENGTH POPUP -->
+    <div id="length-popup" style="display:none">
+      <div class="length-popup-label">TRACK LENGTH</div>
+      <div class="length-popup-steps" id="length-popup-steps">16</div>
+      <div class="length-popup-row">
+        <button class="btn length-popup-btn" id="lp-minus16">-16</button>
+        <button class="btn length-popup-btn" id="lp-minus1">-1</button>
+        <button class="btn length-popup-btn" id="lp-plus1">+1</button>
+        <button class="btn length-popup-btn" id="lp-plus16">+16</button>
+      </div>
+    </div>
+
+    <!-- KEYBOARD ROW -->
+    <div id="keyboard-row">
+      <div id="mod-wheels"></div>
+      <div id="keyboard"></div>
+      <div id="octave-controls"></div>
+    </div>
+
+    <!-- CONFIRM / PROMPT MODAL -->
+    <div id="confirm-modal" class="modal-overlay" style="display:none">
+      <div class="modal-box">
+        <p id="confirm-msg"></p>
+        <input id="confirm-input" type="text" class="modal-input" style="display:none" />
+        <div class="modal-btns">
+          <button id="confirm-cancel" class="btn">CANCEL</button>
+          <button id="confirm-ok" class="btn modal-btn-ok">OK</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module">
+    import { AudioEngine }   from './js/core/AudioEngine.js';
+    import { Clock }         from './js/core/Clock.js';
+    import { AppState }      from './js/state/AppState.js';
+    import { Project }       from './js/state/Project.js';
+    import { SoundLibrary }  from './js/state/SoundLibrary.js';
+    import { TrackRow }      from './js/ui/TrackRow.js';
+    import { StepGrid }      from './js/ui/StepGrid.js';
+    import { SynthPanel }    from './js/ui/SynthPanel.js';
+    import { ModWheel }      from './js/ui/ModWheel.js';
+    import { Keyboard }      from './js/ui/Keyboard.js';
+
+    // ── Boot ────────────────────────────────────────────────
+    const audio   = new AudioEngine();
+    const clock   = new Clock(audio);
+    const project = new Project(audio, clock);
+    const state   = new AppState(project);
+    const library = new SoundLibrary();
+
+    // ── Mount UI ─────────────────────────────────────────────
+    const trackRow   = new TrackRow(document.getElementById('track-row'), state);
+    const synthPanel = new SynthPanel(document.getElementById('synth-panel'), state, library, _openModal, project.sampleStore, audio.context);
+    const stepGrid   = new StepGrid(document.getElementById('step-grid'), state);
+    const modWheel   = new ModWheel(document.getElementById('mod-wheels'), state);
+    const keyboard   = new Keyboard(
+      document.getElementById('keyboard'),
+      document.getElementById('octave-controls'),
+      state
+    );
+
+    // ── Wire clock tick → step highlight + record-mode step advance ──
+    let _lastHighlight = -1;
+
+    clock.register((_tickIndex, scheduledTime) => {
+      const seq = state.selectedTrack?.sequencer;
+      if (!seq) return;
+      const justFired = (seq._stepIndex - 1 + seq.stepCount) % seq.stepCount;
+      if (justFired !== _lastHighlight) {
+        _lastHighlight = justFired;
+        // Always record the scheduled time of the most recently fired step.
+        // Keyboard._noteOn reads this to compute nudge during record mode.
+        state.lastStepScheduledTime = scheduledTime;
+        requestAnimationFrame(() => {
+          // In record mode, follow the playhead across pages automatically.
+          // Guard: justFired must still be within the current stepCount (a clear
+          // may have reset stepCount while this rAF was queued).
+          if (state.recording && justFired < seq.stepCount) {
+            const playPage = Math.floor(justFired / 16);
+            if (seq.pageOffset !== playPage) {
+              seq.pageOffset = playPage;
+              _updatePageCounter();
+              stepGrid._build();
+              _lastHighlight = -1;
+            }
+          }
+          const pageStart = seq.pageOffset * 16;
+          const visIdx    = justFired - pageStart;
+          stepGrid.highlightStep(visIdx >= 0 && visIdx < 16 ? visIdx : -1);
+          // Record mode: track which step the keyboard should write into.
+          // Use a dedicated field so selectedStepIndex stays at -1 and the grid
+          // shows no selection highlight while recording.
+          if (state.recording && visIdx >= 0 && visIdx < 16) {
+            state.recordStepIndex = visIdx;
+          }
+        });
+      }
+    });
+
+    // ── Transport ─────────────────────────────────────────────
+    const btnPlay    = document.getElementById('btn-play');
+    const btnRec     = document.getElementById('btn-rec');
+    const bpmSlider  = document.getElementById('bpm-slider');
+    const bpmDisplay = document.getElementById('bpm-display');
+    let playing = false;
+
+    btnPlay.addEventListener('click', () => {
+      audio.resume();
+      if (!playing) {
+        project.start();
+        playing = true;
+        btnPlay.textContent = '▮▮ STOP';
+        btnPlay.classList.add('playing');
+      } else {
+        project.stop();
+        playing = false;
+        btnPlay.textContent = '▶ PLAY';
+        btnPlay.classList.remove('playing');
+        stepGrid.highlightStep(-1);
+        _lastHighlight = -1;
+        state.selectStep(-1);
+      }
+    });
+
+    btnRec.addEventListener('click', () => {
+      const wasRecording = state.recording;
+      state.setRecording(!wasRecording);
+      // Turning record ON always starts playback
+      if (!wasRecording && !playing) {
+        btnPlay.click();
+      }
+    });
+
+    state.on('recordingChanged', ({ recording }) => {
+      if (!recording) { state.selectStep(-1); state.recordStepIndex = -1; }
+      btnRec.classList.toggle('recording', recording);
+    });
+
+    bpmSlider.addEventListener('input', () => {
+      const bpm = parseInt(bpmSlider.value);
+      project.setBPM(bpm);
+      bpmDisplay.textContent = bpm;
+    });
+
+    // ── Confirm / prompt modal (replaces window.confirm to avoid audio pause) ──
+    function _openModal(msg, inputDefault, onConfirm) {
+      const modal     = document.getElementById('confirm-modal');
+      const msgEl     = document.getElementById('confirm-msg');
+      const inputEl   = document.getElementById('confirm-input');
+      const okBtn     = document.getElementById('confirm-ok');
+      const cancelBtn = document.getElementById('confirm-cancel');
+      msgEl.textContent = msg;
+      if (inputDefault !== null) {
+        inputEl.value = inputDefault;
+        inputEl.style.display = 'block';
+        setTimeout(() => { inputEl.focus(); inputEl.select(); }, 0);
+      } else {
+        inputEl.style.display = 'none';
+      }
+      modal.style.display = 'flex';
+      function close() {
+        modal.style.display = 'none';
+        okBtn.removeEventListener('click', handleOk);
+        cancelBtn.removeEventListener('click', handleCancel);
+        inputEl.removeEventListener('keydown', handleKey);
+      }
+      function handleOk()     { close(); onConfirm(inputEl.value); }
+      function handleCancel() { close(); }
+      function handleKey(e)   { if (e.key === 'Enter') handleOk(); if (e.key === 'Escape') handleCancel(); }
+      okBtn.addEventListener('click', handleOk);
+      cancelBtn.addEventListener('click', handleCancel);
+      inputEl.addEventListener('keydown', handleKey);
+    }
+    function confirmAction(msg, onConfirm) { _openModal(msg, null, onConfirm); }
+    function promptFilename(defaultName, onConfirm) { _openModal('Export filename:', defaultName, onConfirm); }
+
+    // ── Track count +/- ──────────────────────────────────────
+    const trackCountDisplay = document.getElementById('track-count-display');
+
+    function _setTrackCount(n) {
+      project.setTrackCount(n);
+      trackCountDisplay.textContent = project.tracks.length;
+      // Clamp selected track if it no longer exists
+      if (state.selectedTrackIndex >= project.tracks.length) {
+        state.selectTrack(project.tracks.length - 1);
+      }
+      trackRow._build();
+      synthPanel.render();
+      _updatePageCounter();
+    }
+
+    document.getElementById('btn-tracks-minus').addEventListener('click', () => {
+      _setTrackCount(project.tracks.length - 1);
+    });
+    document.getElementById('btn-tracks-plus').addEventListener('click', () => {
+      _setTrackCount(project.tracks.length + 1);
+    });
+
+    // ── Clear ─────────────────────────────────────────────────
+    function _afterClear() {
+      _lastHighlight = -1;
+      state.selectStep(-1);
+      stepGrid._build();
+      synthPanel.render();
+      trackRow.render();
+      _updatePageCounter();
+    }
+
+    document.getElementById('btn-clear-notes').addEventListener('click', () => {
+      confirmAction('Clear notes on this track?', () => {
+        state.selectedTrack.clearNotes();
+        _afterClear();
+      });
+    });
+
+    document.getElementById('btn-clear-track').addEventListener('click', () => {
+      confirmAction('Reset this track to defaults?\nAll params, LFOs and notes will be cleared.', () => {
+        state.selectedTrack.resetTrack();
+        _afterClear();
+      });
+    });
+
+    document.getElementById('btn-clear-notes-all').addEventListener('click', () => {
+      confirmAction('Clear notes on ALL tracks?', () => {
+        project.tracks.forEach(t => t.clearNotes());
+        _afterClear();
+      });
+    });
+
+    document.getElementById('btn-clear-all').addEventListener('click', () => {
+      confirmAction('Reset ALL tracks to defaults?\nEverything will be cleared.', () => {
+        project.tracks.forEach(t => t.resetTrack());
+        _afterClear();
+      });
+    });
+
+    // ── Export / Import ───────────────────────────────────────
+    document.getElementById('btn-export').addEventListener('click', () => {
+      promptFilename('webtakt-project', (name) => {
+        const filename = name.trim() || 'webtakt-project';
+        const json = JSON.stringify(project.toJSON(), null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = filename.endsWith('.json') ? filename : filename + '.json';
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+    });
+    document.getElementById('btn-import').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      await project.importFile(file);
+      trackCountDisplay.textContent = project.tracks.length;
+      if (state.selectedTrackIndex >= project.tracks.length) {
+        state.selectedTrackIndex = project.tracks.length - 1;
+      }
+      trackRow._build();
+      synthPanel.render();
+      stepGrid._build();
+    });
+
+    // ── Track nav: page counter + next page + length popup ───
+    const pageCounter  = document.getElementById('track-nav-page-counter');
+    const btnNavNext   = document.getElementById('track-nav-next');
+    const btnNavLength = document.getElementById('track-nav-length');
+    const lengthPopup  = document.getElementById('length-popup');
+    const lpSteps      = document.getElementById('length-popup-steps');
+
+    function _pageCount(seq) {
+      return Math.max(1, Math.ceil(seq.stepCount / 16));
+    }
+
+    // Highest page number (1-based) that has any data — active or inactive.
+    // Always >= _pageCount(seq). Never returns 0.
+    function _maxUsedPages(seq) {
+      const activePages = _pageCount(seq);
+      let maxPage = activePages;
+      for (let i = seq.stepCount; i < seq.steps.length; i++) {
+        const s = seq.steps[i];
+        if (s.active || s.hasPLocks || s.hasCondition) {
+          maxPage = Math.max(maxPage, Math.floor(i / 16) + 1);
+        }
+      }
+      return maxPage;
+    }
+
+    function _updatePageCounter() {
+      const seq         = state.selectedTrack.sequencer;
+      const page        = seq.pageOffset + 1;
+      const activePages = _pageCount(seq);
+      const maxPages    = _maxUsedPages(seq);
+      // Show "1/2(4)" only when inactive pages actually have step data
+      pageCounter.textContent = maxPages > activePages
+        ? `${page}/${activePages}(${maxPages})`
+        : `${page}/${activePages}`;
+    }
+
+    function _goToPage(pageIndex) {
+      const seq = state.selectedTrack.sequencer;
+      seq.pageOffset = Math.max(0, pageIndex);
+      _updatePageCounter();
+      state.selectStep(-1);
+      stepGrid._build();
+      _lastHighlight = -1;
+    }
+
+    function _setStepCount(n) {
+      const seq = state.selectedTrack.sequencer;
+      seq.stepCount = Math.max(1, n);
+      _updatePageCounter();
+      lpSteps.textContent = seq.stepCount;
+      state.selectStep(-1);
+      stepGrid._build();
+    }
+
+    function _closeLengthPopup() {
+      lengthPopup.style.display = 'none';
+      document.removeEventListener('pointerdown', _popupOutsideClick);
+    }
+
+    function _popupOutsideClick(e) {
+      if (!lengthPopup.contains(e.target) && e.target !== btnNavLength) {
+        _closeLengthPopup();
+      }
+    }
+
+    btnNavNext.addEventListener('click', () => {
+      const seq      = state.selectedTrack.sequencer;
+      const maxPages = _maxUsedPages(seq);
+      _goToPage((seq.pageOffset + 1) % maxPages);
+    });
+
+    btnNavLength.addEventListener('click', (e) => {
+      if (lengthPopup.style.display !== 'none') {
+        _closeLengthPopup();
+        return;
+      }
+      const seq = state.selectedTrack.sequencer;
+      lpSteps.textContent = seq.stepCount;
+      // Position popup above the button
+      const rect = btnNavLength.getBoundingClientRect();
+      lengthPopup.style.right = (window.innerWidth - rect.right) + 'px';
+      lengthPopup.style.top   = (rect.top - lengthPopup.offsetHeight - 4) + 'px';
+      lengthPopup.style.display = 'flex';
+      // Need to measure after display:flex
+      requestAnimationFrame(() => {
+        const pr = lengthPopup.getBoundingClientRect();
+        lengthPopup.style.top = (rect.top - pr.height - 4) + 'px';
+      });
+      setTimeout(() => document.addEventListener('pointerdown', _popupOutsideClick), 0);
+    });
+
+    document.getElementById('lp-minus16').addEventListener('click', () => {
+      _setStepCount(state.selectedTrack.sequencer.stepCount - 16);
+    });
+    document.getElementById('lp-minus1').addEventListener('click', () => {
+      _setStepCount(state.selectedTrack.sequencer.stepCount - 1);
+    });
+    document.getElementById('lp-plus1').addEventListener('click', () => {
+      _setStepCount(state.selectedTrack.sequencer.stepCount + 1);
+    });
+    document.getElementById('lp-plus16').addEventListener('click', () => {
+      _setStepCount(state.selectedTrack.sequencer.stepCount + 16);
+    });
+
+    // Update page counter whenever the selected track changes
+    state.on('trackSelected', _updatePageCounter);
+    _updatePageCounter();
+
+    // ── Keyboard shortcuts ────────────────────────────────────
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        btnPlay.click();
+        return;
+      }
+      if (e.code === 'Enter') {
+        e.preventDefault();
+        btnRec.click();
+        return;
+      }
+      // e.code is layout-independent and unaffected by Shift
+      const digitMatch = e.code.match(/^Digit(\d)$/);
+      const num = digitMatch ? parseInt(digitMatch[1]) : NaN;
+      if (!isNaN(num) && e.shiftKey) {
+        // Shift+1..N → jump to that page on the current track
+        e.preventDefault();
+        _goToPage(num - 1);
+        return;
+      }
+      if (!isNaN(num) && num >= 1 && num <= project.tracks.length && !e.shiftKey) {
+        const track = project.tracks[num - 1];
+        track.muted ? track.unmute() : track.mute();
+        trackRow.render();
+      }
+    });
+
+    // ── Resume AudioContext on first user gesture ─────────────
+    document.addEventListener('click', () => audio.resume(), { once: true });
+
+    // No auto-load — always start fresh. Use IMPORT to load a saved project.
+
+  </script>
+
+</body>
+</html>
