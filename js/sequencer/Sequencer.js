@@ -156,16 +156,17 @@ export class Sequencer {
     const offTime = time + (step.length * this.clock._secondsPerTick);
 
     // Record wall-clock trigger state for the trig glow animation in TrackRow.
-    // scheduledTime is AudioContext time; convert the gate to ms for performance.now() math.
-    const nowMs        = performance.now();
-    const audioNow     = this.clock.audio.context.currentTime;
+    const nowMs         = performance.now();
+    const audioNow      = this.clock.audio.context.currentTime;
     const startOffsetMs = (time - audioNow) * 1000;
     this.lastFireTime     = nowMs + startOffsetMs;
     this.lastFireDuration = (offTime - time) * 1000;
 
+    // ── Pick voice slot ────────────────────────────────────────
+    // nextVoice() returns an idle slot or steals the oldest busy one.
+    const voice = this.track._pool?.nextVoice();
+
     // ── P-lock dispatch ────────────────────────────────────────
-    // envOverrides: passed directly into scheduleNote() — never touch _params.
-    // jsRestores:   immediate restores called after noteOn is scheduled.
     const envOverrides = {};
     const jsRestores   = [];
 
@@ -173,18 +174,11 @@ export class Sequencer {
       const modeMap = this._buildPlockModeMap();
 
       for (const [path, value] of step.plocks) {
-        // env.* and fenv.* may not be in modeMap (Envelope has no getParamList);
-        // treat any unmapped env/fenv path as 'envelope'.
         const mode = modeMap.get(path)
           ?? (path.startsWith('env.') || path.startsWith('fenv.') ? 'envelope' : 'js');
 
         switch (mode) {
           case 'envelope':
-            // Collected and passed to scheduleNote.
-            // filter.cutoff: scheduleNote owns the frequency AudioParam via _scheduleADS;
-            //   going through 'filter' setParam would race with cancelAndHoldAtTime.
-            // filter.envAmount: read by scheduleNote to compute modDepth.
-            // env.*/fenv.*: ADSR values consumed directly by scheduleNote.
             envOverrides[path] = value;
             break;
 
@@ -197,7 +191,8 @@ export class Sequencer {
           }
 
           case 'audioParam': {
-            const obj = this._resolveParamOwner(path);
+            // P-lock targets the chosen voice's machine, not the canonical slot.
+            const obj = voice ? voice.machine : this._resolveParamOwner(path);
             const old = obj.getParam(path);
             obj.setParam(path, value, time);
             jsRestores.push(() => obj.setParam(path, old, offTime));
@@ -205,7 +200,11 @@ export class Sequencer {
           }
 
           case 'js': {
-            const obj = this._resolveParamOwner(path);
+            // JS p-locks on machine params target the chosen voice slot.
+            const isMachine = !path.startsWith('filter.') && !path.startsWith('delay.')
+              && !path.startsWith('crush.') && !path.startsWith('reverb.')
+              && !path.startsWith('env.') && !path.startsWith('fenv.');
+            const obj = (voice && isMachine) ? voice.machine : this._resolveParamOwner(path);
             const old = obj.getParam(path);
             obj.setParam(path, value);
             jsRestores.push(() => obj.setParam(path, old));
@@ -221,34 +220,34 @@ export class Sequencer {
           }
 
           case 'trig':
-            // Handled below when resolving the final note number — no restore needed.
             break;
         }
       }
     }
 
-    // Use p-locked release if present, otherwise track default
     const release    = envOverrides['env.release'] ?? this.track.envelope?.getParam('env.release') ?? 0;
     const oscOffTime = offTime + release;
 
-    // Apply trig.tone (semitone transpose): p-lock overrides track default.
-    // Also sum any LFOs targeting trig.tone (JS-only, read at fire time).
+    // Mark slot busy until release tail ends
+    if (voice) voice.claim(oscOffTime);
+
+    // Apply trig.tone (semitone transpose)
     let tone = step.plocks.has('trig.tone') ? step.plocks.get('trig.tone') : (this.track.trigTone ?? 0);
     this.track.lfos.forEach((lfo, i) => {
       if (this.track._lfoDestPaths[i] === 'trig.tone') tone += lfo.getCurrentValue();
     });
     const finalNote = Math.max(0, Math.min(127, step.note + Math.round(tone)));
 
-    // Pass offTime to noteOn for machines that self-schedule their full ADSR
-    // (e.g. FMMachine). Other machines ignore the extra argument.
-    this.track.machine?.noteOn(finalNote, step.velocity, time, offTime);
-    this.track.machine?.noteOff(oscOffTime);
+    // Fire on the chosen voice slot (machine + envelope), not the canonical track refs
+    const machine  = voice?.machine  ?? this.track.machine;
+    const envelope = voice?.envelope ?? this.track.envelope;
 
-    this.track.envelope?.scheduleNote(time, offTime, envOverrides);
+    machine?.noteOn(finalNote, step.velocity, time, offTime);
+    machine?.noteOff(oscOffTime);
+    envelope?.scheduleNote(time, offTime, envOverrides);
 
-    // Notify LFOs so they can retrigger phase (TRG mode) and schedule
-    // ADSR depth envelopes (advanced mode). Pass amp params for 'amp' source.
-    const ampParams = this.track.envelope?._params ?? {};
+    // Notify LFOs (phase retrigger, advanced ADSR depth)
+    const ampParams = envelope?._params ?? {};
     this.track.lfos.forEach(lfo => {
       lfo.noteOn(time, offTime, { ...ampParams, ...envOverrides });
       lfo.noteOff(offTime);

@@ -2,6 +2,12 @@
 
 > **Maintenance rule:** Any feature addition, rename, or architectural change that affects files, signal chain, UI layout, or public APIs **must be documented here** before the PR/session is considered done. Keep tables, diagrams, and section text current — stale docs are treated as bugs.
 
+---
+
+## Known Issues / Pending Work
+
+---
+
 ## Overview
 
 A browser-based modular step sequencer / synthesizer inspired by Elektron Syntakt and Moog Mother-32.
@@ -42,6 +48,7 @@ js/
     CymbalMachine.js    — Crash/ride cymbal: inharmonic oscs + HPF + resonant BP
     WoodMachine.js      — Clave/wood block/cowbell: dual resonant bandpass + click
     WavetableMachine.js — Wavetable oscillator with morphing (8-entry bank via PeriodicWave)
+    WavetableSamplerMachine.js — Two-sample wavetable: morph between sample A and B via AudioWorklet
     KarplusMachine.js   — Karplus-Strong plucked string (noise burst + comb filter)
     BassMachine.js      — Bassline voice: saw/sq + sub + drive + portamento + accent
     CombMachine.js      — Resonator/comb filter: noise/impulse exciter + tuned delay loop
@@ -49,7 +56,8 @@ js/
   signal/
     Filter.js           — BiquadFilterNode wrapper: type, cutoff, resonance, envAmount + base LPF/HPF
     Envelope.js         — Dual ADSR (amp + filter env), scheduleNote for sequencer, noteOn/noteOff for live
-    LFO.js              — LFO: waveform, speed, depth, destination routing
+    LFO.js              — LFO: waveform, speed, depth, destination routing (supports multiple AudioParam destinations)
+    VoicePool.js        — 4-slot voice pool per track: each slot owns machine + envelope; all slots share filter + outputGain
   ui/
     TrackRow.js         — 8 track selector buttons, mute state, machine type indicator
     StepGrid.js         — 16-step grid (current page), click to select, dblclick to add lowest note
@@ -64,8 +72,9 @@ js/
       FMPanel.js              — Custom SYNTH tab layout for FMMachine: schematic + 2×2 operator grid
       SoundLibraryPanel.js    — SOUNDS tab content: tag filter chips + scrollable sound card list
       SamplerPanel.js         — Custom SYNTH tab for SamplerMachine: file picker, mic record, waveform + trim handles
+      WavetableSamplerPanel.js — Custom SYNTH tab for WavetableSamplerMachine: dual file pickers + morph/speed/level controls
   state/
-    Track.js            — Owns one machine + sequencer + filter + envelope + LFOs + pannerNode
+    Track.js            — Owns VoicePool + sequencer + filter + FX chain + LFOs + pannerNode; .machine/.envelope are getters into pool slot 0
     Project.js          — 8–12 tracks (dynamic), BPM, export/import JSON file
     AppState.js         — Selected track/step, active tab/LFO, event bus
     SoundLibrary.js     — Persistent sound library (localStorage): save/load/delete named voice snapshots
@@ -83,11 +92,13 @@ AppState
               ├── Sequencer
               │     └── Step (×64)
               │           └── Condition
-              ├── Machine (SynthMachine | BassMachine | ChordMachine | WavetableMachine | SwarmMachine | FMMachine | KarplusMachine | CombMachine | KickSilkMachine | KickHardMachine | SnareMachine | HiHatMachine | CymbalMachine | WoodMachine | TransientMachine | NoiseMachine | SamplerMachine | DrumMachine)
-              ├── Filter
-              ├── Envelope
+              ├── VoicePool (4 slots)
+              │     └── VoiceSlot (×4)
+              │           ├── Machine (SynthMachine | BassMachine | ChordMachine | … one per slot)
+              │           └── Envelope (one per slot — prevents amplitude stacking on overlap)
+              ├── Filter (shared across all slots)
               ├── StereoPannerNode (pannerNode — owned directly by Track)
-              └── LFO (×N, at least 1)
+              └── LFO (×N, at least 1; machine-param LFOs connect to all 4 slot machines)
 
 AudioEngine
   └── Clock
@@ -106,14 +117,17 @@ UI (reads AppState, calls Track/Sequencer/Machine methods)
 
 ## Audio Signal Chain (per track)
 
+Each track runs 4 voice slots in parallel. Slots share the filter and output; each has its own machine and envelope to prevent amplitude stacking when notes overlap.
+
 ```
-Machine (oscillator nodes)
-  → Filter._baseHPF (BiquadFilterNode, highpass, no resonance — base filter)
-    → Filter._baseLPF (BiquadFilterNode, lowpass, no resonance — base filter)
-      → Filter.node (BiquadFilterNode — main filter: type/cutoff/resonance)
-        → Envelope.ampGain (GainNode, ADSR-controlled)
-          → Track.outputGain (GainNode — mute implemented here)
-            → Track.pannerNode (StereoPannerNode — pan)
+VoiceSlot ×4 (each slot is fully isolated before the shared filter):
+  Machine (oscillator nodes) → Envelope.ampGain (GainNode, per-slot ADSR gate) ─┐
+                                                                                  ↓
+  Filter._baseHPF (BiquadFilterNode, highpass, shared) ────────────────────────── ← all 4 slots sum here
+    → Filter._baseLPF (BiquadFilterNode, lowpass, shared)
+      → Filter.node (BiquadFilterNode, shared — type/cutoff/resonance)
+        → Track.outputGain (GainNode, shared — mute implemented here)
+            → Track.pannerNode (StereoPannerNode, shared — pan)
               → DelayFX.inputNode
                 → BitcrushFX.inputNode
                   → ReverbFX.inputNode
@@ -121,22 +135,30 @@ Machine (oscillator nodes)
                       → AudioEngine.masterGain
                         → AudioContext.destination
 
-Envelope also drives Filter.node.frequency directly (filter envelope modulation).
+Each Envelope also drives Filter.node.frequency directly (filter envelope modulation).
+All 4 envelopes modulate the same shared filter frequency param — they race-cancel correctly
+via cancelAndHoldAtTime, so whichever slot fires latest wins the filter sweep.
+
+The ampGain gate sits BEFORE the filter (machine → ampGain → baseHPF), not after.
+This ensures each slot is isolated: a silent slot contributes zero audio to the filter
+even though all slots sum into the same filter input. The previous post-filter fan-out
+topology (filter.node → all 4 ampGains) caused all slots to bleed through all envelopes.
 
 LFOs connect to AudioParams:
-  - Filter.node.frequency / Q
-  - Filter._baseLPF.frequency / Filter._baseHPF.frequency
-  - Machine oscillator detune (osc.detune — hidden in SYNTH tab, visible in TRIG + LFO)
-  - Track.pannerNode.pan (amp.pan)
-  - DelayFX: delay.time, delay.feedback, delay.wet
-  - BitcrushFX: crush.rate, crush.wet
-  - ReverbFX: reverb.damp, reverb.wet
-  - (any AudioParam reachable via Track._resolveAudioParam)
+  - Filter.node.frequency / Q  (single shared param)
+  - Filter._baseLPF.frequency / Filter._baseHPF.frequency  (single shared)
+  - Machine AudioParams (osc.detune, sub.level, output.level, etc.) — connected to ALL 4 slot machines
+  - Track.pannerNode.pan (amp.pan — single shared)
+  - DelayFX / BitcrushFX / ReverbFX params — single shared
 
 Mod wheels use `Track.resolveModWheelParam(path)` → `{ audioParam, min, max }` and
 set the AudioParam directly (absolute value in lfoMin–lfoMax range), not additively like LFOs.
 Wheel position 0–1 maps linearly to [min, max].
 ```
+
+### Voice selection (VoicePool.nextVoice)
+
+Round-robin through 4 slots; picks the first idle one (past its release tail). If all 4 are busy, steals the one whose release ends soonest. Before returning the chosen slot, syncs its machine and envelope params from slot 0 (canonical) so UI knob changes always take effect on the next note.
 
 ---
 
@@ -741,7 +763,7 @@ Export downloads a `.json` file; Import reads a `.json` File object.
 | Steps total | 64 per track |
 | Steps visible | 16 (one page) |
 | Step pages | Per-track page nav UI built (see Track Nav section) |
-| Machines | SynthMachine, KickSilkMachine, KickHardMachine, SnareMachine, HiHatMachine, FMMachine, SwarmMachine, NoiseMachine, TransientMachine, SamplerMachine, CymbalMachine, WoodMachine, WavetableMachine, KarplusMachine, BassMachine, CombMachine, ChordMachine active; DrumMachine stubbed |
+| Machines | SynthMachine, KickSilkMachine, KickHardMachine, SnareMachine, HiHatMachine, FMMachine, SwarmMachine, NoiseMachine, TransientMachine, SamplerMachine, WavetableSamplerMachine, CymbalMachine, WoodMachine, WavetableMachine, KarplusMachine, BassMachine, CombMachine, ChordMachine active; DrumMachine stubbed |
 | Machine selector | MACHINE tab in SynthPanel; scrollable card grid, click to swap |
 | Filter | Main filter (LP/HP/BP/Notch/Peaking/Allpass) + base filter (HPF+LPF), FilterViz with env ghost |
 | Pan | Per-track stereo pan, p-lockable + LFO-assignable |
@@ -805,6 +827,61 @@ AudioBufferSourceNode (per-note) → outputGain → [Filter]
 - Velocity scales `output.level`.
 - Reverse: rebuilds a reversed `AudioBuffer` slice per noteOn (cheap for trimmed regions).
 - Loop: `src.loopStart/loopEnd` set to the trimmed region.
+
+---
+
+## WavetableSampler Machine
+
+`type: 'wt-sampler'` — two-sample wavetable machine. Loads sample A and sample B, then morphs between them per-sample using an `AudioWorkletNode`.
+
+### Files
+- `js/machines/WavetableSamplerMachine.js` — machine logic
+- `js/worklets/wavetable-sampler-processor.js` — AudioWorkletProcessor
+- `js/ui/panels/WavetableSamplerPanel.js` — custom SYNTH tab UI
+
+### Architecture
+Self-enveloping (like SamplerMachine). Uses a persistent `AudioWorkletNode` running `wavetable-sampler-processor.js`.
+
+```
+AudioWorkletNode (persistent) → outputGain → [Filter]
+```
+
+The worklet receives two `Float32Array[]` channel arrays (one per sample) via its `port`. On each `process()` call it linearly interpolates between the two buffers sample-by-sample, driven by the `morph` AudioParam. A single playhead advances through a shared reference length scaled to each buffer's actual length, so both samples stay time-aligned regardless of differing durations.
+
+Reverse playback is implemented by inverting the playback rate in the trigger message (negative rate → processor reads backwards). Loop wraps the playhead back to `startFrac`.
+
+### Parameters
+| Path | Range | Default | Description |
+|---|---|---|---|
+| `morph` | 0–1 | 0.5 | Crossfade centre: 0 = full A, 1 = full B. LFO-assignable + p-lockable. |
+| `sweep.depth` | 0–1 | 0 | SampleSweep depth: sine LFO amplitude around morph centre (0 = off). |
+| `sweep.speed` | 0.05–20 Hz | 0.5 | SampleSweep rate. |
+| `sample.start` | 0–1 | 0 | Normalized start of playback region |
+| `sample.end` | 0–1 | 1 | Normalized end of playback region |
+| `sample.speed` | 0.125–4 | 1 | Playback rate multiplier |
+| `sample.pitch` | boolean | true | Track MIDI note (true) or fixed pitch (false) |
+| `sample.rootA` | 0–127 | 60 | MIDI root of sample A |
+| `sample.rootB` | 0–127 | 60 | MIDI root of sample B |
+| `sample.loop` | boolean | false | Loop region |
+| `sample.reverse` | boolean | false | Reverse playback |
+| `output.level` | 0–1 | 0.85 | Output gain. LFO-assignable + p-lockable. |
+
+Pitch interpolation: the effective root is `rootA × (1 − morph) + rootB × morph`, so detuning tracks the morph position when the two samples are at different pitches.
+
+### WavetableSamplerPanel UI (SYNTH tab)
+Two side-by-side sample slots (A = green, B = amber), each with:
+- **LOAD** button: opens file picker, decodes audio, saves to SampleStore
+- **Root A/B knob**: MIDI root note for that sample
+- **Waveform canvas**: renders sample channel 0
+
+Below the slots:
+- **MORPH** knob (large), **START**, **END**, **SPEED**, **LEVEL** knobs
+- **PITCH**, **LOOP**, **REV** toggle buttons
+
+### Sample persistence in saved projects
+`WavetableSamplerMachine.toJSON()` includes `sampleIdA/B` and `sampleNameA/B`. On `fromJSON()`, `Track` asynchronously loads both buffers from `SampleStore`.
+
+---
 
 ## New Machines (batch addition)
 

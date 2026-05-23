@@ -86,6 +86,18 @@ export class SoundLibrary {
         if (buf) track.machine.setBuffer(buf, track.machine.sampleId, track.machine.sampleName);
       });
     }
+    if (track.machine.type === 'wt-sampler' && track.sampleStore) {
+      if (track.machine.sampleIdA) {
+        track.sampleStore.load(track.machine.sampleIdA, track.audio.context).then(buf => {
+          if (buf) track.machine.setBufferA(buf, track.machine.sampleIdA, track.machine.sampleNameA);
+        });
+      }
+      if (track.machine.sampleIdB) {
+        track.sampleStore.load(track.machine.sampleIdB, track.audio.context).then(buf => {
+          if (buf) track.machine.setBufferB(buf, track.machine.sampleIdB, track.machine.sampleNameB);
+        });
+      }
+    }
 
     // Restore pan
     track.pannerNode.pan.setTargetAtTime(sound.pan ?? 0, track.audio.context.currentTime, 0.005);

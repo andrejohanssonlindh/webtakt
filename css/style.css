@@ -2259,6 +2259,120 @@ body {
   background: var(--accent-glow);
 }
 
+/* ─── WT SAMPLER PANEL ───────────────────────────────────── */
+
+.wt-sampler-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px;
+  width: 100%;
+  height: 100%;
+}
+
+.wt-sampler-slots {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+}
+
+.wt-sampler-slot {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 6px;
+  background: #0d0d1a;
+  overflow: hidden;
+}
+
+.wt-sampler-slot-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.wt-sampler-slot-badge {
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+}
+
+.wt-sampler-load-btn {
+  font-size: 10px;
+  padding: 2px 7px;
+  cursor: pointer;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+  flex-shrink: 0;
+}
+
+.wt-sampler-load-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.wt-sampler-play-btn,
+.wt-sampler-rec-btn {
+  font-size: 10px;
+  padding: 2px 6px;
+  flex-shrink: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.wt-sampler-play-btn:hover {
+  border-color: #4caf50;
+  color: #4caf50;
+}
+
+.wt-sampler-rec-btn.wt-sampler-rec-active {
+  color: #e74c3c;
+  border-color: #e74c3c;
+  animation: pulse-rec 0.8s ease-in-out infinite alternate;
+}
+
+.wt-sampler-slot-name {
+  font-size: 10px;
+  color: var(--text-dim);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wt-sampler-root-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 0 2px;
+}
+
+.wt-sampler-waveform {
+  display: block;
+  border-radius: 2px;
+  flex: 1;
+  min-height: 40px;
+}
+
+.wt-sampler-params {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
 /* ─── MIXER TAB ──────────────────────────────────────────── */
 
 .mixer-wrapper {

@@ -56,8 +56,10 @@ import { KarplusMachine }   from '../machines/KarplusMachine.js';
 import { BassMachine }      from '../machines/BassMachine.js';
 import { CombMachine }      from '../machines/CombMachine.js';
 import { ChordMachine }     from '../machines/ChordMachine.js';
+import { WavetableSamplerMachine } from '../machines/WavetableSamplerMachine.js';
 import { Filter }        from '../signal/Filter.js';
 import { Envelope }      from '../signal/Envelope.js';
+import { VoicePool }     from '../signal/VoicePool.js';
 import { LFO }           from '../signal/LFO.js';
 import { Sequencer }     from '../sequencer/Sequencer.js';
 import { DelayFX }       from '../signal/DelayFX.js';
@@ -83,6 +85,7 @@ const MACHINES = {
   bass:       BassMachine,
   comb:       CombMachine,
   chord:      ChordMachine,
+  'wt-sampler': WavetableSamplerMachine,
 };
 
 export class Track {
@@ -118,17 +121,12 @@ export class Track {
     this.reverbFX.connect(audio.fxBus);
 
     // Signal chain nodes
-    this.filter   = new Filter(audio.context);
-    this.envelope = new Envelope(audio.context);
-    this.envelope.connectToFilter(this.filter);
+    this.filter = new Filter(audio.context);
+    // filter.node → outputGain (wired once here; slots gate before the filter input)
+    this.filter.connect(this.outputGain);
 
-    // Envelope amp → outputGain
-    this.envelope.connect(this.outputGain);
-    // Filter → envelope amp
-    this.filter.connect(this.envelope.ampGain);
-
-    // Default machine: synth
-    this.machine = null;
+    // Voice pool — owns machines + envelopes; all slots connect to shared filter + outputGain
+    this._pool = null;
     this.setMachine('synth');
 
     // Sequencer
@@ -165,19 +163,43 @@ export class Track {
     this.djFilter = 0;
   }
 
+  /** Canonical machine (slot 0) — used by UI panels for param reads/writes. */
+  get machine()  { return this._pool?.machine;  }
+
+  /** Canonical envelope (slot 0) — used by UI panels for param reads/writes. */
+  get envelope() { return this._pool?.envelope; }
+
   /**
-   * Swap machine type. Disconnects old machine, creates new one, rewires.
-   * @param {string} type — 'synth' | 'fm' | 'drum'
+   * Swap machine type across all voice slots.
+   * Params from slot 0 are preserved and copied to new slots.
+   * @param {string} type
    */
   setMachine(type) {
-    if (this.machine) {
-      this.machine.disconnect();
-    }
     const MachineClass = MACHINES[type] ?? SynthMachine;
-    this.machine = new MachineClass(this.audio.context);
-    // machine → base HPF → base LPF → main filter node
-    this.machine.connect(this.filter._baseHPF);
-    // Changing machine type manually clears the loaded sound name
+    const makeMachine  = (ctx) => new MachineClass(ctx);
+
+    if (this._pool) {
+      // Rewire LFOs: disconnect all existing machine AudioParam connections
+      this.lfos?.forEach((lfo, i) => {
+        const path = this._lfoDestPaths?.[i];
+        if (path) this._pool.disconnectLFOFromAll(lfo, path);
+      });
+      this._pool.setMachine(makeMachine);
+      // Reconnect LFOs to new machines
+      this.lfos?.forEach((lfo, i) => {
+        const path = this._lfoDestPaths?.[i];
+        if (path) this._rewireLFOToPool(lfo, i, path);
+      });
+    } else {
+      this._pool = new VoicePool(
+        this.audio.context,
+        this.filter,
+        this.outputGain,
+        makeMachine,
+        4
+      );
+    }
+
     this.loadedSoundName = null;
   }
 
@@ -270,53 +292,68 @@ export class Track {
 
   /**
    * Assign an LFO to a parameter path.
-   * Resolves path → AudioParam + depthScale and connects the LFO.
+   * For machine params: connects to the AudioParam on every voice slot.
+   * For filter/FX/pan params: connects to the single shared AudioParam.
    * @param {number} lfoIndex
-   * @param {string} paramPath — e.g. 'filter.cutoff', 'osc.detune'
+   * @param {string} paramPath
    */
   setLFODestination(lfoIndex, paramPath) {
     const lfo = this.lfos[lfoIndex];
     if (!lfo) return;
 
-    if (!paramPath) {
+    // Disconnect from previous destination(s) before reassigning
+    lfo.clearDestination();
+    this._lfoDestPaths[lfoIndex] = '';
+
+    if (!paramPath) return;
+
+    this._rewireLFOToPool(lfo, lfoIndex, paramPath);
+  }
+
+  /**
+   * Internal: wire one LFO to its resolved destination(s).
+   * Machine params → all voice slots. Shared params → single AudioParam.
+   */
+  _rewireLFOToPool(lfo, lfoIndex, paramPath) {
+    const resolved = this._resolveAudioParam(paramPath);
+    if (!resolved) return;
+
+    if (resolved.jsOnly) {
       lfo.clearDestination();
-      this._lfoDestPaths[lfoIndex] = '';
+      lfo.setJSDepthScale(resolved.depthScale);
+      this._lfoDestPaths[lfoIndex] = paramPath;
       return;
     }
 
-    const resolved = this._resolveAudioParam(paramPath);
-    if (resolved) {
-      if (resolved.jsOnly) {
-        // JS-only destination: no AudioParam to connect, just store depthScale for read-back
-        lfo.clearDestination();
-        lfo.setJSDepthScale(resolved.depthScale);
-      } else {
-        lfo.setDestination(resolved.audioParam, resolved.depthScale);
-      }
-      this._lfoDestPaths[lfoIndex] = paramPath;
+    // Check if this path belongs to the machine (multi-slot) or shared signal chain
+    const isMachineParam = this.machine.resolveAudioParam?.(paramPath) != null;
+
+    if (isMachineParam) {
+      // Connect to every slot's machine AudioParam
+      this._pool.connectLFOToAll(lfo, paramPath, resolved.depthScale);
+    } else {
+      // Single shared AudioParam (filter, FX, pan)
+      lfo.addDestination(resolved.audioParam, resolved.depthScale);
     }
+
+    this._lfoDestPaths[lfoIndex] = paramPath;
   }
 
   /**
    * Resolve a parameter path string to a Web Audio AudioParam + depthScale.
-   * Delegates to machine → filter → envelope in order.
+   * For machine params, returns the slot-0 AudioParam (caller handles multi-slot).
    * depthScale = (lfoMax - lfoMin) / 2 so that 100% depth = full half-range swing.
    * @param {string} path
-   * @returns {{ audioParam: AudioParam, depthScale: number }|null}
+   * @returns {{ audioParam: AudioParam, depthScale: number, jsOnly?: boolean }|null}
    */
   _resolveAudioParam(path) {
-    // Pan is owned directly by the track
     if (path === 'amp.pan') {
       return { audioParam: this.pannerNode.pan, depthScale: 1.0 };
     }
-
-    // Tone is a JS-only param read at step-fire time — no AudioParam needed.
-    // depthScale = 24 gives ±24 semitone swing at 100% depth.
     if (path === 'trig.tone') {
       return { audioParam: null, depthScale: 24, jsOnly: true };
     }
 
-    // Build descriptor lookup from all modulatable sources
     const allParams = [
       ...this.machine.getParamList(),
       ...this.filter.getParamList(),
@@ -328,6 +365,7 @@ export class Track {
     const descriptor = allParams.find(p => p.path === path && p.modulatable);
     if (!descriptor) return null;
 
+    // Try slot-0 machine first, then shared signal chain objects
     let audioParam = this.machine.resolveAudioParam?.(path) ?? null;
     if (!audioParam) audioParam = this.filter.resolveAudioParam?.(path) ?? null;
     if (!audioParam) audioParam = this.delayFX.resolveAudioParam?.(path) ?? null;
@@ -377,14 +415,15 @@ export class Track {
   resetTrack() {
     this.clearNotes();
 
-    // Reset machine to synth with defaults
+    // Reset machine to synth with defaults (rebuilds pool)
     this.setMachine('synth');
 
     // Reset filter
     this.filter.fromJSON({});
 
-    // Reset envelope
+    // Reset envelope on all slots
     this.envelope.fromJSON({});
+    this._pool.syncParams();
 
     // Reset FX
     this.delayFX.fromJSON({});
@@ -470,7 +509,7 @@ export class Track {
       djFilter:     this.djFilter,
       machine:      this.machine.toJSON(),
       filter:       this.filter.toJSON(),
-      envelope:     this.envelope.toJSON(),
+      envelope:     this.envelope.toJSON(),   // slot-0 envelope (canonical)
       delayFX:      this.delayFX.toJSON(),
       bitcrushFX:   this.bitcrushFX.toJSON(),
       reverbFX:     this.reverbFX.toJSON(),
@@ -493,16 +532,39 @@ export class Track {
     this.scaleIndex    = obj.scaleIndex    ?? 0;
     this.leadNote   = obj.leadNote   ?? 0;
     this.applyDJFilter(obj.djFilter ?? 0);
+
+    // Swap machine type (rebuilds pool slots), then restore params into slot 0
     if (obj.machine?.type) this.setMachine(obj.machine.type);
     this.machine.fromJSON(obj.machine ?? {});
+
     // Restore sampler buffer asynchronously if we have a store reference
     if (this.machine.type === 'sampler' && this.machine.sampleId && this.sampleStore) {
       this.sampleStore.load(this.machine.sampleId, this.audio.context).then(buf => {
         if (buf) this.machine.setBuffer(buf, this.machine.sampleId, this.machine.sampleName);
       });
     }
+    // Restore wt-sampler buffers asynchronously
+    if (this.machine.type === 'wt-sampler' && this.sampleStore) {
+      if (this.machine.sampleIdA) {
+        this.sampleStore.load(this.machine.sampleIdA, this.audio.context).then(buf => {
+          if (buf) this.machine.setBufferA(buf, this.machine.sampleIdA, this.machine.sampleNameA);
+        });
+      }
+      if (this.machine.sampleIdB) {
+        this.sampleStore.load(this.machine.sampleIdB, this.audio.context).then(buf => {
+          if (buf) this.machine.setBufferB(buf, this.machine.sampleIdB, this.machine.sampleNameB);
+        });
+      }
+    }
+
+    // Sync machine params to all slots, then restore shared signal chain
+    this._pool.syncParams();
+
     this.filter.fromJSON(obj.filter ?? {});
+    // Restore envelope into slot 0, then sync to all slots
     this.envelope.fromJSON(obj.envelope ?? {});
+    this._pool.syncParams();
+
     this.delayFX.fromJSON(obj.delayFX ?? {});
     this.bitcrushFX.fromJSON(obj.bitcrushFX ?? {});
     this.reverbFX.fromJSON(obj.reverbFX ?? {});

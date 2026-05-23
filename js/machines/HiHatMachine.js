@@ -25,7 +25,8 @@
  *   'output.level' — 0–1
  */
 
-import { Machine } from './Machine.js';
+import { Machine }            from './Machine.js';
+import { scheduleCallback }  from '../util/AudioBuffers.js';
 
 const RATIOS   = [1.0, 1.3420, 1.2312, 1.6420, 1.9689, 2.0782];
 const BASE_FREQ = 300;
@@ -92,14 +93,13 @@ export class HiHatMachine extends Machine {
     this._hp.connect(this._ampGain);
     this._ampGain.connect(this.outputGain);
 
-    // Schedule cleanup after decay tail
+    // Disconnect after decay tail using AudioContext-time callback (not wall clock)
     const ampGain = this._ampGain;
     const hp      = this._hp;
-    const cleanupMs = (decay + 0.15) * 1000 + Math.max(t - this.context.currentTime, 0) * 1000;
-    setTimeout(() => {
-      try { hp.disconnect(ampGain);  } catch (_) {}
-      try { ampGain.disconnect();    } catch (_) {}
-    }, cleanupMs);
+    scheduleCallback(this.context, t + decay + 0.15, () => {
+      try { hp.disconnect(ampGain); } catch (_) {}
+      try { ampGain.disconnect();   } catch (_) {}
+    });
   }
 
   noteOff(time) {}  // Self-enveloping

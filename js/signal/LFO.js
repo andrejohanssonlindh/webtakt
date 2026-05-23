@@ -26,9 +26,13 @@
  * ───────────
  * OscillatorNode (_lfoOsc)
  *   → GainNode (_depthGain, gain shaped by depth / ADSR envelope)
- *     → destination AudioParam
+ *     → destination AudioParam(s)
  *
- * Owns:    OscillatorNode, GainNode (_depthGain), GainNode (_fadeGain)
+ * Multiple destinations are supported (one per voice-pool slot).
+ * addDestination / removeDestination manage the set.
+ * setDestination / clearDestination are kept for single-destination callers.
+ *
+ * Owns:    OscillatorNode, GainNode (_depthGain)
  * Depends: Web Audio API only
  * Used by: Track.js, Sequencer.js (noteOn / noteOff calls)
  */
@@ -94,9 +98,10 @@ export class LFO {
     this._depthGain  = context.createGain();  // shaped by depth/ADSR
     this._depthGain.gain.value = 0;
 
-    this._destination = null;
-    this._depthScale  = 1;
-    this._running     = false;
+    // Set of connected AudioParams — supports multiple voice-pool slots.
+    this._destinations = new Set();
+    this._depthScale   = 1;
+    this._running      = false;
 
     // Phase offset applied when the oscillator is restarted (TRG mode)
     // OscillatorNode has no phase setter, so we stop/start at an offset time
@@ -106,19 +111,36 @@ export class LFO {
 
   // ── Destination ──────────────────────────────────────────────────────────
 
-  setDestination(audioParam, depthScale = 1) {
-    this.clearDestination();
-    this._destination = audioParam;
-    this._depthScale  = depthScale;
-    this._depthGain.connect(audioParam);
+  /** Add one AudioParam to the destination set. */
+  addDestination(audioParam, depthScale = 1) {
+    this._depthScale = depthScale;
+    if (!this._destinations.has(audioParam)) {
+      this._destinations.add(audioParam);
+      this._depthGain.connect(audioParam);
+    }
     this._applyDepth();
   }
 
-  clearDestination() {
-    if (this._destination) {
-      try { this._depthGain.disconnect(this._destination); } catch (_) {}
-      this._destination = null;
+  /** Remove one AudioParam from the destination set. */
+  removeDestination(audioParam) {
+    if (this._destinations.has(audioParam)) {
+      try { this._depthGain.disconnect(audioParam); } catch (_) {}
+      this._destinations.delete(audioParam);
     }
+  }
+
+  /** Convenience: replace all destinations with a single one (legacy callers). */
+  setDestination(audioParam, depthScale = 1) {
+    this.clearDestination();
+    this.addDestination(audioParam, depthScale);
+  }
+
+  /** Disconnect from all destinations. */
+  clearDestination() {
+    for (const ap of this._destinations) {
+      try { this._depthGain.disconnect(ap); } catch (_) {}
+    }
+    this._destinations.clear();
   }
 
   setJSDepthScale(depthScale) {

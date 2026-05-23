@@ -28,3 +28,33 @@ export function getNoiseBuffer(context, cache, durationSeconds) {
   cache.buf = buf;
   return buf;
 }
+
+// Shared 1-sample silent buffer used by scheduleCallback (one per context is enough,
+// but we cache per context via a WeakMap to stay GC-friendly).
+const _silentBufCache = new WeakMap();
+function _getSilentBuf(context) {
+  let buf = _silentBufCache.get(context);
+  if (!buf) {
+    buf = context.createBuffer(1, 1, context.sampleRate);
+    _silentBufCache.set(context, buf);
+  }
+  return buf;
+}
+
+/**
+ * Fire `fn` at AudioContext time `atTime` using a 1-sample silent
+ * AudioBufferSourceNode whose `onended` fires precisely on the audio thread.
+ * This avoids wall-clock setTimeout drift for post-note node cleanup.
+ *
+ * @param {AudioContext} context
+ * @param {number} atTime   — AudioContext.currentTime value
+ * @param {Function} fn
+ */
+export function scheduleCallback(context, atTime, fn) {
+  const src = context.createBufferSource();
+  src.buffer = _getSilentBuf(context);
+  // No destination needed — onended fires regardless of graph connection
+  src.onended = fn;
+  src.start(atTime);
+  src.stop(atTime);
+}

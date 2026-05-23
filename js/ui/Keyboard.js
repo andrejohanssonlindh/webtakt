@@ -39,6 +39,8 @@ export class Keyboard {
     this.octave     = 4;
     this._heldKeys  = new Set();
     this._audioReady = false;
+    // Per-note voice slot claimed from the pool, for matching noteOff to the right slot
+    this._heldSlots = new Map(); // midiNote → VoiceSlot
     // In record mode: track when each key was pressed and which step it wrote to
     this._recordNoteOnTime  = new Map(); // midiNote → AudioContext time of noteOn
     this._recordNoteOnStep  = new Map(); // midiNote → { stepIndex, pageOffset }
@@ -55,6 +57,7 @@ export class Keyboard {
       if (!recording) {
         this._recordNoteOnTime.clear();
         this._recordNoteOnStep.clear();
+        this._heldSlots.clear();
       }
     });
   }
@@ -162,16 +165,23 @@ export class Keyboard {
     // Subsequent calls return immediately because ctx.state === 'running'.
     await this._ensureAudio();
 
-    const ctx     = this.state.project.audio.context;
-    const machine = this.state.selectedTrack.machine;
-    const track   = this.state.selectedTrack;
+    const ctx   = this.state.project.audio.context;
+    const track = this.state.selectedTrack;
 
     // Small lookahead so the audio thread always has a valid future slot.
     // 0.015s is enough to avoid glitches without audible delay.
     const time = ctx.currentTime + 0.015;
 
+    // Claim a voice slot from the pool so keyboard notes don't stack on slot 0
+    const voice = track._pool?.nextVoice() ?? null;
+    const machine  = voice?.machine  ?? track.machine;
+    const envelope = voice?.envelope ?? track.envelope;
+    // Mark the slot busy for a generous live-play window (will be updated on noteOff)
+    if (voice) voice.claim(time + 30);
+    this._heldSlots.set(midiNote, voice);
+
     machine?.noteOn(midiNote, 100, time);
-    track.envelope.noteOn(time);
+    envelope.noteOn(time);
 
     // Write into the record-tracked step when recording, else the manually selected step
     const stepIndex = this.state.recording
@@ -216,13 +226,24 @@ export class Keyboard {
 
     await this._ensureAudio();
 
-    const ctx     = this.state.project.audio.context;
-    const machine = this.state.selectedTrack.machine;
-    const track   = this.state.selectedTrack;
-    const time    = ctx.currentTime + 0.015;
+    const ctx   = this.state.project.audio.context;
+    const track = this.state.selectedTrack;
+    const time  = ctx.currentTime + 0.015;
+
+    // Use the slot that was claimed on noteOn for this key
+    const voice    = this._heldSlots.get(midiNote) ?? null;
+    const machine  = voice?.machine  ?? track.machine;
+    const envelope = voice?.envelope ?? track.envelope;
+    this._heldSlots.delete(midiNote);
+
+    // Update busy-until time to the actual release tail
+    if (voice) {
+      const release = envelope.getParam('env.release') ?? 0.3;
+      voice.claim(time + release);
+    }
 
     machine?.noteOff(time);
-    track.envelope.noteOff(time);
+    envelope.noteOff(time);
 
     // In record mode: compute how long the key was held and write to step.length
     if (this.state.recording && this._recordNoteOnTime.has(midiNote)) {

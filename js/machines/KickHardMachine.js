@@ -29,8 +29,8 @@
  *   'output.level' — 0–1
  */
 
-import { Machine }         from './Machine.js';
-import { getNoiseBuffer }  from '../util/AudioBuffers.js';
+import { Machine }                        from './Machine.js';
+import { getNoiseBuffer, scheduleCallback } from '../util/AudioBuffers.js';
 
 const _noiseCache = { buf: null };
 const _getNoiseBuffer = ctx => getNoiseBuffer(ctx, _noiseCache, 0.25);
@@ -132,19 +132,18 @@ export class KickHardMachine extends Machine {
     this._subOsc.connect(this._subGain);
     this._subGain.connect(this._shaper);
 
-    // Schedule disconnect after decay
+    // Disconnect after decay tail using AudioContext-time callback (not wall clock)
     const bodyGainRef = this._bodyGain;
     const subGainRef  = this._subGain;
     const tuneOscRef  = this._tuneOsc;
     const subOscRef   = this._subOsc;
     const shaperRef   = this._shaper;
-    const cleanupMs   = (decay * 1.3 + 0.1) * 1000 + (t - this.context.currentTime) * 1000;
-    setTimeout(() => {
+    scheduleCallback(this.context, t + decay * 1.3 + 0.1, () => {
       try { tuneOscRef.disconnect(bodyGainRef); } catch (_) {}
       try { bodyGainRef.disconnect(shaperRef);  } catch (_) {}
       try { subOscRef.disconnect(subGainRef);   } catch (_) {}
       try { subGainRef.disconnect(shaperRef);   } catch (_) {}
-    }, cleanupMs);
+    });
 
     // ── Punch noise burst — bypasses shaper for click clarity ──
     if (punch > 0.001) {

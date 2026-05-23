@@ -21,6 +21,7 @@ import { DefaultMachinePanel }     from './panels/DefaultMachinePanel.js';
 import { BPM_DIVISIONS }           from '../signal/LFO.js';
 import { SoundLibraryPanel }       from './panels/SoundLibraryPanel.js';
 import { SamplerPanel }            from './panels/SamplerPanel.js';
+import { WavetableSamplerPanel }   from './panels/WavetableSamplerPanel.js';
 
 export class SynthPanel {
   /**
@@ -969,6 +970,17 @@ export class SynthPanel {
           const buf = await sampleStore?.load(track.machine.sampleId, ctx);
           if (buf) track.machine.setBuffer(buf, track.machine.sampleId, track.machine.sampleName);
         }
+        if (track.machine.type === 'wt-sampler') {
+          const sampleStore = this.state.project.sampleStore;
+          if (track.machine.sampleIdA) {
+            const buf = await sampleStore?.load(track.machine.sampleIdA, ctx);
+            if (buf) track.machine.setBufferA(buf, track.machine.sampleIdA, track.machine.sampleNameA);
+          }
+          if (track.machine.sampleIdB) {
+            const buf = await sampleStore?.load(track.machine.sampleIdB, ctx);
+            if (buf) track.machine.setBufferB(buf, track.machine.sampleIdB, track.machine.sampleNameB);
+          }
+        }
 
         const time = ctx.currentTime + 0.015;
         let restoreDelay;
@@ -1127,7 +1139,8 @@ export class SynthPanel {
     { type: 'wood',      label: 'Wood',      desc: 'Clave / rimshot / cowbell' },
     { type: 'transient', label: 'Transient', desc: 'Click + body sweep' },
     { type: 'noise',     label: 'Noise',     desc: 'Shaped noise + crush' },
-    { type: 'sampler',   label: 'Sampler',   desc: 'Load file or record mic' },
+    { type: 'sampler',     label: 'Sampler',    desc: 'Load file or record mic' },
+    { type: 'wt-sampler', label: 'WT Sampler', desc: 'Morph between two samples' },
   ];
 
   _renderMachineTab(track) {
@@ -1196,6 +1209,11 @@ export class SynthPanel {
     if (track.machine.type === 'sampler') {
       const ctx = this._makePanelContext(track);
       new SamplerPanel(this._content, ctx, this.sampleStore, this.audioContext);
+      return;
+    }
+    if (track.machine.type === 'wt-sampler') {
+      const ctx = this._makePanelContext(track);
+      new WavetableSamplerPanel(this._content, ctx, this.sampleStore, this.audioContext);
       return;
     }
     const ctx = this._makePanelContext(track);

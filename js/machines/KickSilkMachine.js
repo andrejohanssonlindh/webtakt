@@ -20,8 +20,8 @@
  *   'output.level' — 0–1
  */
 
-import { Machine }         from './Machine.js';
-import { getNoiseBuffer }  from '../util/AudioBuffers.js';
+import { Machine }                        from './Machine.js';
+import { getNoiseBuffer, scheduleCallback } from '../util/AudioBuffers.js';
 
 const _noiseCache = { buf: null };
 const _getNoiseBuffer = ctx => getNoiseBuffer(ctx, _noiseCache, 0.25);
@@ -84,13 +84,13 @@ export class KickSilkMachine extends Machine {
     this._tuneOsc.connect(this._bodyGain);
     this._bodyGain.connect(this.outputGain);
 
-    // Schedule disconnect after decay so we don't leave dangling nodes
+    // Disconnect after decay tail using AudioContext-time callback (not wall clock)
     const bodyGainRef = this._bodyGain;
     const tuneOscRef  = this._tuneOsc;
-    setTimeout(() => {
+    scheduleCallback(this.context, t + decay + 0.1, () => {
       try { tuneOscRef.disconnect(bodyGainRef); } catch (_) {}
       try { bodyGainRef.disconnect(); }           catch (_) {}
-    }, (decay + 0.1) * 1000 + (t - this.context.currentTime) * 1000);
+    });
 
     // ── Punch noise burst ──
     if (punch > 0.001) {

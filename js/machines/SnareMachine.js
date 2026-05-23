@@ -29,8 +29,8 @@
  *   'output.level' — 0–1
  */
 
-import { Machine }         from './Machine.js';
-import { getNoiseBuffer }  from '../util/AudioBuffers.js';
+import { Machine }                        from './Machine.js';
+import { getNoiseBuffer, scheduleCallback } from '../util/AudioBuffers.js';
 
 const _noiseCache = { buf: null };
 const _getNoiseBuffer = ctx => getNoiseBuffer(ctx, _noiseCache, 0.5);
@@ -117,18 +117,17 @@ export class SnareMachine extends Machine {
     this._snapGain.connect(this._noiseAmp);
     this._noiseAmp.connect(this.outputGain);
 
-    // Schedule cleanup after decay tail
+    // Disconnect after decay tail using AudioContext-time callback (not wall clock)
     const bodyAmp  = this._bodyAmp;
     const noiseAmp = this._noiseAmp;
     const toneGain = this._toneGain;
     const snapGain = this._snapGain;
-    const cleanupMs = (decay + 0.15) * 1000 + Math.max(t - this.context.currentTime, 0) * 1000;
-    setTimeout(() => {
-      try { toneGain.disconnect(bodyAmp);   } catch (_) {}
-      try { snapGain.disconnect(noiseAmp);  } catch (_) {}
-      try { bodyAmp.disconnect();           } catch (_) {}
-      try { noiseAmp.disconnect();          } catch (_) {}
-    }, cleanupMs);
+    scheduleCallback(this.context, t + decay + 0.15, () => {
+      try { toneGain.disconnect(bodyAmp);  } catch (_) {}
+      try { snapGain.disconnect(noiseAmp); } catch (_) {}
+      try { bodyAmp.disconnect();          } catch (_) {}
+      try { noiseAmp.disconnect();         } catch (_) {}
+    });
   }
 
   noteOff(time) {}  // Self-enveloping
