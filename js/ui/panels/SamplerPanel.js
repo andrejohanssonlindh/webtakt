@@ -139,6 +139,10 @@ export class SamplerPanel {
     paramRow.appendChild(this._makeToggle('REV',   'sample.reverse'));
     paramRow.appendChild(this._makeToggle('LOOP',  'sample.loop'));
 
+    // SAMPLE LEN button — sets trig length to match the trimmed sample duration
+    this._sampleLenBtn = this._makeSampleLenBtn();
+    paramRow.appendChild(this._sampleLenBtn);
+
     wrap.appendChild(paramRow);
 
     this.container.appendChild(wrap);
@@ -159,6 +163,54 @@ export class SamplerPanel {
 
     // Drag on canvas for trim handles
     this._setupDrag();
+  }
+
+  _makeSampleLenBtn() {
+    const wrap = document.createElement('div');
+    wrap.className = 'sampler-toggle';
+
+    const btn = document.createElement('button');
+    btn.className   = 'btn sampler-action-btn';
+    btn.textContent = 'SMPL LEN';
+    btn.title       = 'Set trig length to trimmed sample duration (at root pitch)';
+
+    btn.addEventListener('click', () => {
+      if (!this.machine.hasBuffer) return;
+      const track = this.ctx.getTrack?.();
+      if (!track) return;
+
+      const buf       = this.machine._buffer;
+      const startNorm = this.machine.getParam('sample.start');
+      const endNorm   = this.machine.getParam('sample.end');
+      const speed     = this.machine.getParam('sample.speed') || 1;
+      // Use only speed, not pitch — length covers the full sample at any note
+      const durSec    = (endNorm - startNorm) * buf.duration / speed;
+
+      const secondsPerTick = track.sequencer.clock._secondsPerTick;
+      const lengthTicks    = Math.max(1 / 16, durSec / secondsPerTick);
+
+      // Write to selected step or all steps (same logic as the LENGTH knob)
+      const state   = this.ctx.state;
+      const hasStep = state?.selectedStepIndex >= 0;
+      if (hasStep) {
+        const step = track.sequencer.getVisibleSteps()[state.selectedStepIndex];
+        if (step) {
+          step.length = lengthTicks;
+          state.emit('stepChanged', {
+            trackIndex: state.selectedTrackIndex,
+            stepIndex:  state.selectedStepIndex,
+            step,
+          });
+        }
+      } else {
+        track.sequencer.steps.forEach(s => { s.length = lengthTicks; });
+        // Re-render trig tab so the LENGTH knob snaps to the new value
+        if (state?.activeTab === 'trig') state.emit('tabChanged', { tab: 'trig' });
+      }
+    });
+
+    wrap.appendChild(btn);
+    return wrap;
   }
 
   _makeToggle(label, path) {

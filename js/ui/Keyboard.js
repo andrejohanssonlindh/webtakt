@@ -39,6 +39,9 @@ export class Keyboard {
     this.octave     = 4;
     this._heldKeys  = new Set();
     this._audioReady = false;
+    // In record mode: track when each key was pressed and which step it wrote to
+    this._recordNoteOnTime  = new Map(); // midiNote → AudioContext time of noteOn
+    this._recordNoteOnStep  = new Map(); // midiNote → { stepIndex, pageOffset }
 
     this._buildOctaveControls();
     this._build();
@@ -47,6 +50,13 @@ export class Keyboard {
     // Rebuild key colors when scale or selected track changes
     state.on('scaleChanged',  () => this._applyScale());
     state.on('trackSelected', () => this._applyScale());
+    // Clear held-note record state when recording stops
+    state.on('recordingChanged', ({ recording }) => {
+      if (!recording) {
+        this._recordNoteOnTime.clear();
+        this._recordNoteOnStep.clear();
+      }
+    });
   }
 
   get _rootNote() {
@@ -182,6 +192,15 @@ export class Keyboard {
           step.nudge = Math.max(-0.99, Math.min(0.99, offsetTicks));
         }
 
+        // In record mode, remember when this note started so _noteOff can write step.length
+        if (this.state.recording) {
+          this._recordNoteOnTime.set(midiNote, ctx.currentTime);
+          this._recordNoteOnStep.set(midiNote, {
+            stepIndex,
+            pageOffset: track.sequencer.pageOffset,
+          });
+        }
+
         this.state.emit('stepChanged', {
           trackIndex: this.state.selectedTrackIndex,
           stepIndex,
@@ -204,6 +223,31 @@ export class Keyboard {
 
     machine?.noteOff(time);
     track.envelope.noteOff(time);
+
+    // In record mode: compute how long the key was held and write to step.length
+    if (this.state.recording && this._recordNoteOnTime.has(midiNote)) {
+      const onTime    = this._recordNoteOnTime.get(midiNote);
+      const info      = this._recordNoteOnStep.get(midiNote);
+      this._recordNoteOnTime.delete(midiNote);
+      this._recordNoteOnStep.delete(midiNote);
+
+      const holdSec        = ctx.currentTime - onTime;
+      const secondsPerTick = track.sequencer.clock._secondsPerTick;
+      const lengthTicks    = Math.max(1 / 16, holdSec / secondsPerTick);
+
+      // Only write if the page hasn't changed since noteOn (step is still reachable)
+      if (info && info.pageOffset === track.sequencer.pageOffset) {
+        const step = track.sequencer.getVisibleSteps()[info.stepIndex];
+        if (step) {
+          step.length = lengthTicks;
+          this.state.emit('stepChanged', {
+            trackIndex: this.state.selectedTrackIndex,
+            stepIndex:  info.stepIndex,
+            step,
+          });
+        }
+      }
+    }
   }
 
   _bindKeyboard() {

@@ -2235,6 +2235,20 @@ body {
   margin-top: 2px;
 }
 
+.sampler-action-btn {
+  font-size: 10px;
+  padding: 2px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--accent-dim);
+  color: var(--accent);
+  border-radius: var(--radius);
+}
+
+.sampler-action-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
+
 /* ─── MIXER TAB ──────────────────────────────────────────── */
 
 .mixer-wrapper {

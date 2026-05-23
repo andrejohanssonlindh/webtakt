@@ -414,7 +414,7 @@ export class SynthPanel {
 
   /**
    * Build the ordered length steps list.
-   * 1/16 → 16/16 (step 1/16 each), then +1/4 to 4 steps, then +1/2 to 8, then +1 to 64.
+   * 1/16 → 16/16 (1/16 each), then coarser increments up to 256 bars.
    * Values are in ticks (1 tick = 1 step at default resolution).
    */
   _buildLengthSteps() {
@@ -429,6 +429,10 @@ export class SynthPanel {
     for (let n = 4.5; n <= 8.0 + 1e-9; n += 0.5) steps.push(parseFloat(n.toFixed(1)));
     // 9 to 64 in increments of 1
     for (let n = 9; n <= 64; n++) steps.push(n);
+    // 66 to 128 in increments of 2
+    for (let n = 66; n <= 128; n += 2) steps.push(n);
+    // 132 to 256 in increments of 4
+    for (let n = 132; n <= 256; n += 4) steps.push(n);
     return steps;
   }
 
@@ -1173,6 +1177,8 @@ export class SynthPanel {
       container:     this._content,
       activeWidgets: this._activeWidgets,
       knobByPath:    this._knobByPath,
+      state:         this.state,
+      getTrack:      () => this.state.selectedTrack,
       writeValue:    (target, path, value, emitChange) => this._writeValue(target, path, value, emitChange),
       emitStep:      () => {
         const s = this._step();
