@@ -196,7 +196,7 @@ export class Track {
         this.filter,
         this.outputGain,
         makeMachine,
-        4
+        8
       );
     }
 
