@@ -232,6 +232,16 @@ body {
   font-size: 9px;
   transition: border-color 0.1s, background 0.1s;
   position: relative;
+  overflow: hidden;
+}
+
+.track-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(232, 160, 32, calc(var(--trig-glow, 0) * 0.28));
+  pointer-events: none;
 }
 
 .track-btn:hover {

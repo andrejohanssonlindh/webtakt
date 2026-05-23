@@ -47,6 +47,10 @@ export class Sequencer {
     this._playCount  = 0;
     this._tickBound  = this._onTick.bind(this);
 
+    // Wall-clock trigger state — read by TrackRow for the trig glow animation
+    this.lastFireTime     = 0;   // performance.now() at last fire
+    this.lastFireDuration = 0;   // gate length in ms
+
     this.steps = Array.from({ length: DEFAULT_STEP_COUNT }, (_, i) => new Step(i));
   }
 
@@ -150,6 +154,14 @@ export class Sequencer {
     const effectiveNudge = step.nudge * (1 - (this.track.nudgeQuantize ?? 0));
     const time    = scheduledTime + (effectiveNudge * this.clock._secondsPerTick);
     const offTime = time + (step.length * this.clock._secondsPerTick);
+
+    // Record wall-clock trigger state for the trig glow animation in TrackRow.
+    // scheduledTime is AudioContext time; convert the gate to ms for performance.now() math.
+    const nowMs        = performance.now();
+    const audioNow     = this.clock.audio.context.currentTime;
+    const startOffsetMs = (time - audioNow) * 1000;
+    this.lastFireTime     = nowMs + startOffsetMs;
+    this.lastFireDuration = (offTime - time) * 1000;
 
     // ── P-lock dispatch ────────────────────────────────────────
     // envOverrides: passed directly into scheduleNote() — never touch _params.
