@@ -126,6 +126,24 @@ body {
   50%       { opacity: 0.6; }
 }
 
+#btn-tape {
+  min-width: 64px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+#btn-tape.taping {
+  background: #10401a;
+  border-color: var(--green);
+  color: var(--green);
+  animation: tape-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes tape-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
+}
+
 .bpm-label {
   color: var(--text-dim);
   font-size: 9px;

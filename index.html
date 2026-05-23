@@ -16,6 +16,7 @@
       <div class="sep"></div>
       <button id="btn-play" class="btn">▶ PLAY</button>
       <button id="btn-rec" class="btn">⏺ REC</button>
+      <button id="btn-tape" class="btn">⏺ TAPE</button>
       <div class="sep"></div>
       <span class="bpm-label">BPM</span>
       <span id="bpm-display">120</span>
@@ -91,7 +92,8 @@
   </div>
 
   <script type="module">
-    import { AudioEngine }   from './js/core/AudioEngine.js';
+    import { AudioEngine }       from './js/core/AudioEngine.js';
+    import { GlobalRecorder }    from './js/core/GlobalRecorder.js';
     import { Clock }         from './js/core/Clock.js';
     import { AppState }      from './js/state/AppState.js';
     import { Project }       from './js/state/Project.js';
@@ -103,8 +105,9 @@
     import { Keyboard }      from './js/ui/Keyboard.js';
 
     // ── Boot ────────────────────────────────────────────────
-    const audio   = new AudioEngine();
-    const clock   = new Clock(audio);
+    const audio    = new AudioEngine();
+    const recorder = new GlobalRecorder(audio);
+    const clock    = new Clock(audio);
     const project = new Project(audio, clock);
     const state   = new AppState(project);
     const library = new SoundLibrary();
@@ -195,6 +198,26 @@
     state.on('recordingChanged', ({ recording }) => {
       if (!recording) { state.selectStep(-1); state.recordStepIndex = -1; }
       btnRec.classList.toggle('recording', recording);
+    });
+
+    // ── Global tape recorder ──────────────────────────────────
+    const btnTape = document.getElementById('btn-tape');
+
+    btnTape.addEventListener('click', async () => {
+      audio.resume();
+      if (!recorder.recording) {
+        recorder.start();
+        btnTape.textContent = '⏹ STOP TAPE';
+        btnTape.classList.add('taping');
+      } else {
+        btnTape.textContent = '⏺ TAPE';
+        btnTape.classList.remove('taping');
+        await recorder.stop();
+        // Prompt for filename then save
+        promptFilename('webtakt-recording', (name) => {
+          recorder.save(name.trim() || 'webtakt-recording');
+        });
+      }
     });
 
     bpmSlider.addEventListener('input', () => {
