@@ -667,6 +667,48 @@ export class SynthPanel {
     panel.appendChild(alwaysKnobsRow);
     this._activeWidgets.push(lengthKnob, chanceKnob, toneKnob);
 
+    // ── Shift buttons (always visible) ──────────────────────
+    const shiftRow = document.createElement('div');
+    shiftRow.className = 'trig-btn-row';
+
+    const shiftBwd = document.createElement('button');
+    shiftBwd.className = 'btn';
+    shiftBwd.textContent = '◀ SHIFT';
+    shiftBwd.addEventListener('click', () => {
+      const seq   = track.sequencer;
+      const count = seq.stepCount;
+      const first = seq.steps[0];
+      for (let i = 0; i < count - 1; i++) {
+        seq.steps[i] = seq.steps[i + 1];
+        seq.steps[i].index = i;
+      }
+      seq.steps[count - 1] = first;
+      first.index = count - 1;
+      this.state.emit('stepChanged', { trackIndex: this.state.selectedTrackIndex, stepIndex: -1, step: null });
+      this._renderContent();
+    });
+
+    const shiftFwd = document.createElement('button');
+    shiftFwd.className = 'btn';
+    shiftFwd.textContent = 'SHIFT ▶';
+    shiftFwd.addEventListener('click', () => {
+      const seq   = track.sequencer;
+      const count = seq.stepCount;
+      const last  = seq.steps[count - 1];
+      for (let i = count - 1; i > 0; i--) {
+        seq.steps[i] = seq.steps[i - 1];
+        seq.steps[i].index = i;
+      }
+      seq.steps[0] = last;
+      last.index = 0;
+      this.state.emit('stepChanged', { trackIndex: this.state.selectedTrackIndex, stepIndex: -1, step: null });
+      this._renderContent();
+    });
+
+    shiftRow.appendChild(shiftBwd);
+    shiftRow.appendChild(shiftFwd);
+    panel.appendChild(shiftRow);
+
     // ── No-step section: QUANTIZE knob ──────────────────────
     if (!hasStep) {
       const noStepRow = document.createElement('div');
@@ -934,6 +976,33 @@ export class SynthPanel {
 
     updatePreview();
     wrapper.appendChild(preview);
+
+    // ── Keyboard folding toggle ──────────────────────────────
+    const foldRow = document.createElement('div');
+    foldRow.className = 'scales-fold-row';
+
+    const foldLabel = document.createElement('span');
+    foldLabel.className = 'scales-fold-label';
+    foldLabel.textContent = 'KEYBOARD FOLD';
+
+    const foldBtn = document.createElement('button');
+    foldBtn.className = 'btn scales-fold-btn' + (this.state.keyFolding ? ' active' : '');
+    foldBtn.textContent = this.state.keyFolding ? 'ON' : 'OFF';
+    foldBtn.addEventListener('click', () => {
+      this.state.keyFolding = !this.state.keyFolding;
+      foldBtn.textContent = this.state.keyFolding ? 'ON' : 'OFF';
+      foldBtn.classList.toggle('active', this.state.keyFolding);
+      this.state.emit('keyFoldingChanged', { on: this.state.keyFolding });
+    });
+
+    const foldDesc = document.createElement('span');
+    foldDesc.className = 'scales-fold-desc';
+    foldDesc.textContent = 'a–\' / q–¨ map in-scale notes in series';
+
+    foldRow.appendChild(foldLabel);
+    foldRow.appendChild(foldBtn);
+    foldRow.appendChild(foldDesc);
+    wrapper.appendChild(foldRow);
 
     this._content.appendChild(wrapper);
   }

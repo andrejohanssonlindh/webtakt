@@ -1111,6 +1111,40 @@ body {
   background: #0e0e0e;
 }
 
+/* ─── KEY LABELS ────────────────────────────────────────── */
+
+.key-label {
+  position: absolute;
+  bottom: 5px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0;
+  pointer-events: none;
+  line-height: 1;
+}
+
+.key.white-key .key-label {
+  color: #666;
+}
+
+.key.black-key .key-label {
+  color: #888;
+  bottom: 4px;
+  font-size: 7px;
+}
+
+.key.white-key.scale-blocked .key-label {
+  color: #444;
+}
+
+.key.black-key.scale-blocked .key-label {
+  color: #333;
+}
+
 /* ─── OCTAVE CONTROLS ────────────────────────────────────── */
 
 #octave-controls {
@@ -1747,6 +1781,59 @@ body {
 
 .scales-preview-note.out-scale {
   opacity: 0.3;
+}
+
+/* ─── SCALES FOLD ROW ────────────────────────────────────── */
+
+.scales-fold-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0 2px;
+  border-top: 1px solid var(--border-dim);
+}
+
+.scales-fold-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.scales-fold-btn {
+  padding: 3px 10px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  min-width: 38px;
+  text-align: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+
+.scales-fold-btn:hover {
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+
+.scales-fold-btn.active {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.scales-fold-desc {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--text-dim);
+  opacity: 0.6;
+  font-style: italic;
 }
 
 /* ─── LFO TAB LAYOUT ─────────────────────────────────────── */

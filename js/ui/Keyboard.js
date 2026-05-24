@@ -13,6 +13,15 @@
  * If a step is selected in the grid, playing a note writes it into that step
  * (step.active = true, step.note = midiNote) and emits stepChanged.
  *
+ * Swedish keyboard support:
+ *   Keys ö, ä, ', å, ¨ replace the US-layout ; ' \ [ ] at the same physical positions.
+ *
+ * Keyboard folding (keyFolding = true):
+ *   Bottom row (a s d f g h j k l ö ä ') → in-scale notes 0–11 ascending
+ *   Top row    (q w e r t y u i o p å ¨) → same notes +1 octave
+ *   Key labels on each piano key show "lower/upper" (e.g. "a/q").
+ *   When no folding, labels show just the lower-row key for white keys.
+ *
  * Owns:    key DOM elements, octave state, keyboard event listeners
  * Depends: AppState.js
  * Used by: index.html (mounted to #keyboard and #octave-controls)
@@ -23,8 +32,18 @@ import { noteInScale } from '../state/Scales.js';
 const WHITE_NOTES = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23];
 const BLACK_NOTES = [1, 3, -1, 6, 8, 10, -1, 13, 15, -1, 18, 20, 22, -1];
 
-const KB_WHITE = ['a','s','d','f','g','h','j','k','l',';',"'",'\\'];
-const KB_BLACK = ['w','e','','t','y','u','','i','o','','p','['];
+// Swedish keyboard — bottom row (a–') and top row (q–¨)
+// In chromatic mode: bottom row = white keys, top row = black keys
+// In folded mode:    bottom row = in-scale notes, top row = same notes +12
+const KB_LOWER = ['a','s','d','f','g','h','j','k','l','ö','ä',"'"];
+const KB_UPPER = ['q','w','e','r','t','y','u','i','o','p','å',''];
+
+// Chromatic mode: top-row keys at their natural positions above black keys.
+// Standard piano layout — q, r, i, å, ¨ are unused:
+//    w  e     t  y  u     o  p
+//   a  s  d  f  g  h  j  k  l  ö  ä  '
+// Indexed in parallel with BLACK_NOTES ('' = gap or unbound):
+const KB_UPPER_CHROMATIC = ['w','e','','t','y','u','','o','p','','','','',''];
 
 export class Keyboard {
   /**
@@ -33,26 +52,30 @@ export class Keyboard {
    * @param {import('../state/AppState.js').AppState} state
    */
   constructor(keyboardEl, octaveEl, state) {
-    this.keyboardEl = keyboardEl;
-    this.octaveEl   = octaveEl;
-    this.state      = state;
-    this.octave     = 4;
-    this._heldKeys  = new Set();
-    this._audioReady = false;
+    this.keyboardEl  = keyboardEl;
+    this.octaveEl    = octaveEl;
+    this.state       = state;
+    this.octave      = 4;
+    this.keyFolding  = false;
+    this._heldKeys   = new Set();
     // Per-note voice slot claimed from the pool, for matching noteOff to the right slot
-    this._heldSlots = new Map(); // midiNote → VoiceSlot
+    this._heldSlots  = new Map(); // midiNote → VoiceSlot
     // In record mode: track when each key was pressed and which step it wrote to
-    this._recordNoteOnTime  = new Map(); // midiNote → AudioContext time of noteOn
-    this._recordNoteOnStep  = new Map(); // midiNote → { stepIndex, pageOffset }
+    this._recordNoteOnTime = new Map(); // midiNote → AudioContext time of noteOn
+    this._recordNoteOnStep = new Map(); // midiNote → { stepIndex, pageOffset }
+    // Dynamic key → midiNote map (rebuilt on folding/scale/octave change)
+    this._keyMap = new Map();
 
     this._buildOctaveControls();
     this._build();
     this._bindKeyboard();
 
-    // Rebuild key colors when scale or selected track changes
-    state.on('scaleChanged',  () => this._applyScale());
-    state.on('trackSelected', () => this._applyScale());
-    // Clear held-note record state when recording stops
+    // Ensure state has the folding flag (may not exist on first load)
+    if (state.keyFolding === undefined) state.keyFolding = false;
+
+    state.on('scaleChanged',     () => { this._applyScale(); this._updateKeyLabels(); });
+    state.on('trackSelected',    () => { this._applyScale(); this._updateKeyLabels(); });
+    state.on('keyFoldingChanged',({ on }) => { this.keyFolding = on; this._applyScale(); this._updateKeyLabels(); });
     state.on('recordingChanged', ({ recording }) => {
       if (!recording) {
         this._recordNoteOnTime.clear();
@@ -66,16 +89,9 @@ export class Keyboard {
     return this.octave * 12;
   }
 
-  /**
-   * Ensure AudioContext is running before scheduling notes.
-   * Returns a promise that resolves once resume is complete.
-   * Calling this repeatedly is safe — resume() is idempotent.
-   */
   async _ensureAudio() {
     const ctx = this.state.project.audio.context;
-    if (ctx.state === 'suspended') {
-      await ctx.resume();
-    }
+    if (ctx.state === 'suspended') await ctx.resume();
   }
 
   _buildOctaveControls() {
@@ -106,16 +122,31 @@ export class Keyboard {
     return noteInScale(midiNote, track.scaleIndex ?? 0, track.leadNote ?? 0);
   }
 
+  /** Returns ascending in-scale MIDI notes starting from rootNote, enough to fill both rows. */
+  _getScaleNotes() {
+    const notes = [];
+    for (let i = 0; i < 36 && notes.length < KB_LOWER.length; i++) {
+      const midi = this._rootNote + i;
+      if (this._isInScale(midi)) notes.push(midi);
+    }
+    return notes;
+  }
+
   _build() {
     this.keyboardEl.innerHTML = '';
     const wrapper = document.createElement('div');
     wrapper.className = 'keyboard-inner';
 
-    WHITE_NOTES.forEach((semitone) => {
+    WHITE_NOTES.forEach((semitone, wi) => {
       const midi = this._rootNote + semitone;
-      const key = document.createElement('div');
+      const key  = document.createElement('div');
       key.className = 'key white-key';
       key.dataset.note = midi;
+      key.dataset.whiteIndex = wi;
+
+      const lbl = document.createElement('span');
+      lbl.className = 'key-label';
+      key.appendChild(lbl);
 
       key.addEventListener('mousedown', () => this._noteOn(midi));
       key.addEventListener('mouseup',   () => this._noteOff(midi));
@@ -123,13 +154,18 @@ export class Keyboard {
       wrapper.appendChild(key);
     });
 
-    BLACK_NOTES.forEach((semitone) => {
+    BLACK_NOTES.forEach((semitone, bi) => {
       if (semitone === -1) return;
       const midi = this._rootNote + semitone;
-      const key = document.createElement('div');
+      const key  = document.createElement('div');
       key.className = 'key black-key';
       key.dataset.note = midi;
+      key.dataset.blackIndex = bi;
       key.style.left = `${this._blackKeyOffset(semitone)}%`;
+
+      const lbl = document.createElement('span');
+      lbl.className = 'key-label';
+      key.appendChild(lbl);
 
       key.addEventListener('mousedown', () => this._noteOn(midi));
       key.addEventListener('mouseup',   () => this._noteOff(midi));
@@ -140,13 +176,95 @@ export class Keyboard {
     this.keyboardEl.appendChild(wrapper);
     if (this._octaveDisplay) this._octaveDisplay.textContent = `C${this.octave}`;
     this._applyScale();
+    this._updateKeyLabels();
   }
 
   _applyScale() {
     this.keyboardEl.querySelectorAll('.key').forEach(key => {
-      const midi = parseInt(key.dataset.note, 10);
+      const midi    = parseInt(key.dataset.note, 10);
       const blocked = !this._isInScale(midi);
       key.classList.toggle('scale-blocked', blocked);
+    });
+  }
+
+  _updateKeyLabels() {
+    this._keyMap.clear();
+    this.keyboardEl.querySelectorAll('.key-label').forEach(l => { l.textContent = ''; });
+
+    if (this.keyFolding) {
+      this._applyFoldedMap();
+    } else {
+      this._applyChromaticMap();
+    }
+  }
+
+  _applyChromaticMap() {
+    // Bottom row → white keys in order
+    for (let i = 0; i < KB_LOWER.length && i < WHITE_NOTES.length; i++) {
+      const midi = this._rootNote + WHITE_NOTES[i];
+      this._keyMap.set(KB_LOWER[i], midi);
+    }
+
+    // Top row → black keys at their natural positions (aligned with BLACK_NOTES slots)
+    for (let i = 0; i < KB_UPPER_CHROMATIC.length; i++) {
+      const key = KB_UPPER_CHROMATIC[i];
+      if (!key || BLACK_NOTES[i] === -1) continue;
+      this._keyMap.set(key, this._rootNote + BLACK_NOTES[i]);
+    }
+
+    // Label white keys with their lower-row key
+    this.keyboardEl.querySelectorAll('.key.white-key').forEach(key => {
+      const wi  = parseInt(key.dataset.whiteIndex, 10);
+      const lbl = key.querySelector('.key-label');
+      if (lbl && wi < KB_LOWER.length) lbl.textContent = KB_LOWER[wi];
+    });
+
+    // Label black keys with their upper-row key (look up by semitone offset)
+    const semitoneToUpperKey = new Map();
+    for (let i = 0; i < KB_UPPER_CHROMATIC.length; i++) {
+      const k = KB_UPPER_CHROMATIC[i];
+      if (k && BLACK_NOTES[i] !== -1) semitoneToUpperKey.set(BLACK_NOTES[i], k);
+    }
+    this.keyboardEl.querySelectorAll('.key.black-key').forEach(key => {
+      const semitone = parseInt(key.dataset.note, 10) - this._rootNote;
+      const lbl      = key.querySelector('.key-label');
+      if (lbl) lbl.textContent = semitoneToUpperKey.get(semitone) ?? '';
+    });
+  }
+
+  _applyFoldedMap() {
+    const scaleNotes = this._getScaleNotes();
+
+    // Lower row → in-scale notes 0..N
+    for (let i = 0; i < KB_LOWER.length && i < scaleNotes.length; i++) {
+      this._keyMap.set(KB_LOWER[i], scaleNotes[i]);
+    }
+    // Upper row → same notes +24 (2 octaves up)
+    for (let i = 0; i < KB_UPPER.length && i < scaleNotes.length; i++) {
+      if (KB_UPPER[i]) this._keyMap.set(KB_UPPER[i], scaleNotes[i] + 24);
+    }
+
+    // Build label map: keys that share the same scale degree show "lower/upper" on their
+    // respective piano keys so the mirroring is obvious.
+    const pairByMidi = new Map();
+    for (let i = 0; i < KB_LOWER.length && i < scaleNotes.length; i++) {
+      const lo = scaleNotes[i];
+      const hi = lo + 24;
+      const lk = KB_LOWER[i];
+      const uk = i < KB_UPPER.length ? KB_UPPER[i] : null;
+      const label = uk ? `${lk}/${uk}` : lk;
+      pairByMidi.set(lo, label);
+      pairByMidi.set(hi, label);
+    }
+    // Upper-row-only notes beyond the lower row's reach
+    for (let i = KB_LOWER.length; i < KB_UPPER.length && i < scaleNotes.length; i++) {
+      pairByMidi.set(scaleNotes[i] + 24, KB_UPPER[i]);
+    }
+
+    this.keyboardEl.querySelectorAll('.key').forEach(key => {
+      const midi = parseInt(key.dataset.note, 10);
+      const lbl  = key.querySelector('.key-label');
+      if (lbl) lbl.textContent = pairByMidi.get(midi) ?? '';
     });
   }
 
@@ -157,33 +275,28 @@ export class Keyboard {
   }
 
   async _noteOn(midiNote) {
-    if (!this._isInScale(midiNote)) return;  // blocked by active scale
+    if (!this._isInScale(midiNote)) return;
     if (this._heldKeys.has(midiNote)) return;
     this._heldKeys.add(midiNote);
 
-    // Ensure context is running — on the very first gesture this awaits resume().
-    // Subsequent calls return immediately because ctx.state === 'running'.
+    const keyEl = this.keyboardEl.querySelector(`.key[data-note="${midiNote}"]`);
+    if (keyEl) keyEl.classList.add('held');
+
     await this._ensureAudio();
 
     const ctx   = this.state.project.audio.context;
     const track = this.state.selectedTrack;
+    const time  = ctx.currentTime + 0.015;
 
-    // Small lookahead so the audio thread always has a valid future slot.
-    // 0.015s is enough to avoid glitches without audible delay.
-    const time = ctx.currentTime + 0.015;
-
-    // Claim a voice slot from the pool so keyboard notes don't stack on slot 0
-    const voice = track._pool?.nextVoice() ?? null;
+    const voice    = track._pool?.nextVoice() ?? null;
     const machine  = voice?.machine  ?? track.machine;
     const envelope = voice?.envelope ?? track.envelope;
-    // Mark the slot busy for a generous live-play window (will be updated on noteOff)
     if (voice) voice.claim(time + 30);
     this._heldSlots.set(midiNote, voice);
 
     machine?.noteOn(midiNote, 100, time);
     envelope.noteOn(time);
 
-    // Write into the record-tracked step when recording, else the manually selected step
     const stepIndex = this.state.recording
       ? (this.state.recordStepIndex ?? -1)
       : this.state.selectedStepIndex;
@@ -193,16 +306,12 @@ export class Keyboard {
         step.note   = midiNote;
         step.active = true;
 
-        // In record mode, capture timing offset as nudge.
-        // Compare actual play time to when the step was scheduled to fire.
-        // Clamp to ±99% of one step interval.
         if (this.state.recording && this.state.lastStepScheduledTime !== null) {
           const secondsPerTick = track.sequencer.clock._secondsPerTick;
           const offsetTicks    = (ctx.currentTime - this.state.lastStepScheduledTime) / secondsPerTick;
           step.nudge = Math.max(-0.99, Math.min(0.99, offsetTicks));
         }
 
-        // In record mode, remember when this note started so _noteOff can write step.length
         if (this.state.recording) {
           this._recordNoteOnTime.set(midiNote, ctx.currentTime);
           this._recordNoteOnStep.set(midiNote, {
@@ -224,19 +333,20 @@ export class Keyboard {
     if (!this._heldKeys.has(midiNote)) return;
     this._heldKeys.delete(midiNote);
 
+    const keyEl = this.keyboardEl.querySelector(`.key[data-note="${midiNote}"]`);
+    if (keyEl) keyEl.classList.remove('held');
+
     await this._ensureAudio();
 
     const ctx   = this.state.project.audio.context;
     const track = this.state.selectedTrack;
     const time  = ctx.currentTime + 0.015;
 
-    // Use the slot that was claimed on noteOn for this key
     const voice    = this._heldSlots.get(midiNote) ?? null;
     const machine  = voice?.machine  ?? track.machine;
     const envelope = voice?.envelope ?? track.envelope;
     this._heldSlots.delete(midiNote);
 
-    // Update busy-until time to the actual release tail
     if (voice) {
       const release = envelope.getParam('env.release') ?? 0.3;
       voice.claim(time + release);
@@ -245,7 +355,6 @@ export class Keyboard {
     machine?.noteOff(time);
     envelope.noteOff(time);
 
-    // In record mode: compute how long the key was held and write to step.length
     if (this.state.recording && this._recordNoteOnTime.has(midiNote)) {
       const onTime    = this._recordNoteOnTime.get(midiNote);
       const info      = this._recordNoteOnStep.get(midiNote);
@@ -256,7 +365,6 @@ export class Keyboard {
       const secondsPerTick = track.sequencer.clock._secondsPerTick;
       const lengthTicks    = Math.max(1 / 16, holdSec / secondsPerTick);
 
-      // Only write if the page hasn't changed since noteOn (step is still reachable)
       if (info && info.pageOffset === track.sequencer.pageOffset) {
         const step = track.sequencer.getVisibleSteps()[info.stepIndex];
         if (step) {
@@ -274,25 +382,28 @@ export class Keyboard {
   _bindKeyboard() {
     document.addEventListener('keydown', (e) => {
       if (e.repeat) return;
-      // Don't intercept keyboard when typing in an input/select
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
-      const wi = KB_WHITE.indexOf(e.key);
-      if (wi !== -1) this._noteOn(this._rootNote + WHITE_NOTES[wi]);
-      const bi = KB_BLACK.indexOf(e.key);
-      if (bi !== -1 && BLACK_NOTES[bi] !== -1) this._noteOn(this._rootNote + BLACK_NOTES[bi]);
+      const midi = this._keyMap.get(e.key);
+      if (midi !== undefined) this._noteOn(midi);
     });
 
     document.addEventListener('keyup', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
-      const wi = KB_WHITE.indexOf(e.key);
-      if (wi !== -1) this._noteOff(this._rootNote + WHITE_NOTES[wi]);
-      const bi = KB_BLACK.indexOf(e.key);
-      if (bi !== -1 && BLACK_NOTES[bi] !== -1) this._noteOff(this._rootNote + BLACK_NOTES[bi]);
+      const midi = this._keyMap.get(e.key);
+      if (midi !== undefined) this._noteOff(midi);
     });
+  }
+
+  /** Toggle keyboard folding on/off. Called from the SCALES tab. */
+  setKeyFolding(on) {
+    this.keyFolding = on;
+    this._applyScale();
+    this._updateKeyLabels();
   }
 
   render() {
     if (this._octaveDisplay) this._octaveDisplay.textContent = `C${this.octave}`;
     this._applyScale();
+    this._updateKeyLabels();
   }
 }

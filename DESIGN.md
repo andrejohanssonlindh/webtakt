@@ -319,7 +319,14 @@ Each track has two scale fields serialised in `Track.toJSON()`:
 - `_applyScale()` adds/removes `.scale-blocked` CSS class on every key element, visually graying them out. Called on `scaleChanged` and `trackSelected` events.
 - The sequencer does **not** filter notes — steps already programmed with out-of-scale notes still play. Scale only affects live input.
 
-**UI (SCALES tab):** Scale dropdown (160 px wide, searchable) + 12-button root picker displayed side by side. A chromatic strip below shows which pitch classes are active in the current scale/root combination, updating live.
+**UI (SCALES tab):** Scale dropdown (160 px wide, searchable) + 12-button root picker displayed side by side. A chromatic strip below shows which pitch classes are active in the current scale/root combination, updating live. Below the preview strip, a **KEYBOARD FOLD** toggle enables folded mode.
+
+**Keyboard layout (Swedish physical layout):**
+- Bottom row: `a s d f g h j k l ö ä '` (12 keys)
+- Top row:    `q w e r t y u i o p å ¨` (12 keys)
+- Chromatic mode: bottom row → white keys in order; top row → black keys in order. Key labels shown on each piano key.
+- Folded mode: bottom row → in-scale notes 0–11 ascending; top row → same notes +2 octaves. Each piano key shows "lower/upper" pair (e.g. `a/q`) on both the lower note and its octave-up partner.
+- `AppState.keyFolding` (boolean) — global fold state, toggled from the SCALES tab, broadcast via `keyFoldingChanged` event. Keyboard subscribes and rebuilds its `_keyMap`.
 
 ---
 
