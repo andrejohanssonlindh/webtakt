@@ -8,7 +8,7 @@ The panel header has two zones in a single row:
 
 | Tab | Content |
 |---|---|
-| MACHINE | Grid of all machine types; click to swap machine on the selected track |
+| MACHINE | Search input + grouped grid (Drums / Melodic / Sampler) of all machine types; click to swap machine on the selected track |
 | SOUNDS | Sound library: save/load named snapshots (machine + signal chain). Tag filter chips + scrollable list. |
 | SCALES | Scale dropdown + root note picker (12 buttons) + chromatic preview strip |
 | TRIG | Note display, REMOVE NOTE, RESET TRIG, condition/chance/length/nudge/detune/tone knobs. NUDGE is only shown when a step is selected. QUANTIZE knob (0–100%) is shown when no step is selected. |

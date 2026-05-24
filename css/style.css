@@ -1387,12 +1387,63 @@ body {
 
 /* ─── MACHINE TAB ────────────────────────────────────────── */
 
+.machine-search-wrap {
+  width: 100%;
+  padding: 4px 2px 6px;
+  box-sizing: border-box;
+}
+
+.machine-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-bright);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  outline: none;
+}
+
+.machine-search:focus {
+  border-color: var(--accent-dim);
+}
+
+.machine-search::placeholder {
+  color: var(--text-dim);
+}
+
+/* Three-column outer layout: Drums | Melodic | Sampler */
+.machine-grid-wrap {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  align-items: start;
+}
+
+.machine-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.machine-group-heading {
+  font-size: 9px;
+  font-family: var(--font-label);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 0 2px 4px;
+}
+
 .machine-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+  gap: 4px;
   width: 100%;
-  padding: 2px;
 }
 
 .machine-card {

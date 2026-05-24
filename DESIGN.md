@@ -56,6 +56,7 @@ js/
     SamplerMachine.js   — Sample playback: load file or record mic, trim/reverse/loop
     CymbalMachine.js    — Crash/ride cymbal: inharmonic oscs + HPF + resonant BP
     WoodMachine.js      — Clave/wood block/cowbell: dual resonant bandpass + click
+    ClappMachine.js     — 808-style clap: 3 staggered noise bursts through bandpass
     WavetableMachine.js — Wavetable oscillator with morphing (8-entry bank via PeriodicWave)
     WavetableSamplerMachine.js — Two-sample wavetable: morph between sample A and B via AudioWorklet
     KarplusMachine.js   — Karplus-Strong plucked string (noise burst + comb filter)
@@ -161,7 +162,7 @@ UI (reads AppState, calls Track/Sequencer/Machine methods)
 | Steps total | 64 per track |
 | Steps visible | 16 (one page) |
 | Step pages | Per-track page nav UI built |
-| Machines | SynthMachine, KickSilkMachine, KickHardMachine, SnareMachine, HiHatMachine, FMMachine, SwarmMachine, NoiseMachine, TransientMachine, SamplerMachine, WavetableSamplerMachine, CymbalMachine, WoodMachine, WavetableMachine, KarplusMachine, BassMachine, CombMachine, ChordMachine active; DrumMachine stubbed |
+| Machines | SynthMachine, KickSilkMachine, KickHardMachine, SnareMachine, HiHatMachine, FMMachine, SwarmMachine, NoiseMachine, TransientMachine, SamplerMachine, WavetableSamplerMachine, CymbalMachine, WoodMachine, ClappMachine, WavetableMachine, KarplusMachine, BassMachine, CombMachine, ChordMachine active; DrumMachine stubbed |
 | Filter | Main filter (LP/HP/BP/Notch/Peaking/Allpass) + base filter (HPF+LPF), FilterViz with env ghost |
 | Pan | Per-track stereo pan, p-lockable + LFO-assignable |
 | Delay | Per-track feedback delay, p-lockable + LFO-assignable |

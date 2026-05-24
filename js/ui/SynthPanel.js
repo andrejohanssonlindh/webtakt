@@ -342,7 +342,7 @@ export class SynthPanel {
     if (p.path === 'punch')            return Math.round(v * 100) + '%';
     if (p.path === 'punch.decay')      return (v * 1000).toFixed(0) + 'ms';
     if (p.path === 'snap')             return Math.round(v * 100) + '%';
-    if (p.path === 'tone')             return Math.round(v * 100) + '%';
+    if (p.path === 'tone')             return p.max > 1 ? Math.round(v) + 'Hz' : Math.round(v * 100) + '%';
     if (p.path === 'noise.cutoff')     return Math.round(v) + 'Hz';
     if (p.path === 'cutoff')           return Math.round(v) + 'Hz';
     // NoiseMachine
@@ -1242,60 +1242,124 @@ export class SynthPanel {
     this._content.appendChild(wrapper);
   }
 
-  // Machine definitions shown in the machine tab
-  static MACHINE_DEFS = [
-    { type: 'synth',     label: 'Synth',     desc: 'Dual osc + sub' },
-    { type: 'bass',      label: 'Bass',      desc: 'Bassline + glide + drive' },
-    { type: 'chord',     label: 'Chord',     desc: '4-voice chord sequencer' },
-    { type: 'wavetable', label: 'Wavetable', desc: 'Morphing wavetable osc' },
-    { type: 'swarm',     label: 'Swarm',     desc: '7 saws + drift' },
-    { type: 'fm',        label: 'FM',        desc: '4-op FM synth' },
-    { type: 'karplus',   label: 'Karplus',   desc: 'Plucked string' },
-    { type: 'comb',      label: 'Comb',      desc: 'Resonator / comb filter' },
-    { type: 'kick.silk', label: 'Kick Silk', desc: 'Clean sine + pitch sweep' },
-    { type: 'kick.hard', label: 'Kick Hard', desc: 'Sub + saturation + drive' },
-    { type: 'snare',     label: 'Snare',     desc: 'Tone + noise' },
-    { type: 'hihat',     label: 'HiHat',     desc: 'Inharmonic oscs' },
-    { type: 'cymbal',    label: 'Cymbal',    desc: 'Crash / ride cymbal' },
-    { type: 'wood',      label: 'Wood',      desc: 'Clave / rimshot / cowbell' },
-    { type: 'transient', label: 'Transient', desc: 'Click + body sweep' },
-    { type: 'noise',     label: 'Noise',     desc: 'Shaped noise + crush' },
-    { type: 'sampler',     label: 'Sampler',    desc: 'Load file or record mic' },
-    { type: 'wt-sampler', label: 'WT Sampler', desc: 'Morph between two samples' },
+  // Machine definitions shown in the machine tab, grouped
+  static MACHINE_GROUPS = [
+    {
+      label: 'Drums',
+      defs: [
+        { type: 'kick.silk', label: 'Kick Silk', desc: 'Clean sine + pitch sweep' },
+        { type: 'kick.hard', label: 'Kick Hard', desc: 'Sub + saturation + drive' },
+        { type: 'snare',     label: 'Snare',     desc: 'Tone + noise' },
+        { type: 'hihat',     label: 'HiHat',     desc: 'Inharmonic oscs' },
+        { type: 'cymbal',    label: 'Cymbal',    desc: 'Crash / ride cymbal' },
+        { type: 'clapp',     label: 'Clapp',     desc: '808-style layered clap' },
+        { type: 'wood',      label: 'Wood',      desc: 'Clave / rimshot / cowbell' },
+        { type: 'transient', label: 'Transient', desc: 'Click + body sweep' },
+        { type: 'noise',     label: 'Noise',     desc: 'Shaped noise + crush' },
+      ],
+    },
+    {
+      label: 'Melodic',
+      defs: [
+        { type: 'synth',     label: 'Synth',     desc: 'Dual osc + sub' },
+        { type: 'bass',      label: 'Bass',      desc: 'Bassline + glide + drive' },
+        { type: 'chord',     label: 'Chord',     desc: '4-voice chord sequencer' },
+        { type: 'wavetable', label: 'Wavetable', desc: 'Morphing wavetable osc' },
+        { type: 'swarm',     label: 'Swarm',     desc: '7 saws + drift' },
+        { type: 'fm',        label: 'FM',        desc: '4-op FM synth' },
+        { type: 'karplus',   label: 'Karplus',   desc: 'Plucked string' },
+        { type: 'comb',      label: 'Comb',      desc: 'Resonator / comb filter' },
+      ],
+    },
+    {
+      label: 'Sampler',
+      defs: [
+        { type: 'sampler',    label: 'Sampler',    desc: 'Load file or record mic' },
+        { type: 'wt-sampler', label: 'WT Sampler', desc: 'Morph between two samples' },
+      ],
+    },
   ];
+
+  // Flat list for backward-compat (MACHINE_DEFS referenced from tests / external code)
+  static get MACHINE_DEFS() {
+    return SynthPanel.MACHINE_GROUPS.flatMap(g => g.defs);
+  }
 
   _renderMachineTab(track) {
     const current = track.machine?.type ?? 'synth';
 
-    const grid = document.createElement('div');
-    grid.className = 'machine-grid';
+    // ── Search input ──────────────────────────────────────────
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'machine-search-wrap';
+    const searchInput = document.createElement('input');
+    searchInput.type        = 'text';
+    searchInput.placeholder = 'Filter machines…';
+    searchInput.className   = 'machine-search';
+    searchWrap.appendChild(searchInput);
+    this._content.appendChild(searchWrap);
 
-    SynthPanel.MACHINE_DEFS.forEach(def => {
-      const btn = document.createElement('button');
-      btn.className = 'machine-card btn';
-      btn.classList.toggle('selected', def.type === current);
+    // ── Grid container ────────────────────────────────────────
+    const gridWrap = document.createElement('div');
+    gridWrap.className = 'machine-grid-wrap';
+    this._content.appendChild(gridWrap);
 
-      btn.innerHTML = `
-        <span class="machine-card-label">${def.label}</span>
-        <span class="machine-card-desc">${def.desc}</span>
-      `;
+    const allCards = []; // { el, def, groupColEl }
 
-      btn.addEventListener('click', () => {
-        if (def.type === current) return;
-        track.setMachine(def.type);
-        // Re-emit trackSelected so TrackRow also updates its type label
-        this.state.emit('trackSelected', {
-          index: this.state.selectedTrackIndex,
-          track,
+    SynthPanel.MACHINE_GROUPS.forEach(group => {
+      const col = document.createElement('div');
+      col.className = 'machine-group';
+      gridWrap.appendChild(col);
+
+      const heading = document.createElement('div');
+      heading.className   = 'machine-group-heading';
+      heading.textContent = group.label;
+      col.appendChild(heading);
+
+      const grid = document.createElement('div');
+      grid.className = 'machine-grid';
+      col.appendChild(grid);
+
+      group.defs.forEach(def => {
+        const btn = document.createElement('button');
+        btn.className = 'machine-card btn';
+        btn.classList.toggle('selected', def.type === current);
+        btn.innerHTML = `
+          <span class="machine-card-label">${def.label}</span>
+          <span class="machine-card-desc">${def.desc}</span>
+        `;
+
+        btn.addEventListener('click', () => {
+          if (def.type === current) return;
+          track.setMachine(def.type);
+          this.state.emit('trackSelected', {
+            index: this.state.selectedTrackIndex,
+            track,
+          });
+          this._renderContent();
         });
-        // Stay on machine tab — just re-render content to update selection
-        this._renderContent();
-      });
 
-      grid.appendChild(btn);
+        grid.appendChild(btn);
+        allCards.push({ el: btn, def, colEl: col });
+      });
     });
 
-    this._content.appendChild(grid);
+    // ── Filter logic ──────────────────────────────────────────
+    searchInput.addEventListener('input', () => {
+      const q = searchInput.value.trim().toLowerCase();
+      allCards.forEach(({ el, def }) => {
+        const match = !q
+          || def.label.toLowerCase().includes(q)
+          || def.desc.toLowerCase().includes(q)
+          || def.type.toLowerCase().includes(q);
+        el.style.display = match ? '' : 'none';
+      });
+      // Hide entire group column when all its cards are hidden
+      SynthPanel.MACHINE_GROUPS.forEach(group => {
+        const cards = allCards.filter(c => group.defs.some(d => d.type === c.def.type));
+        const anyVisible = cards.some(c => c.el.style.display !== 'none');
+        if (cards[0]?.colEl) cards[0].colEl.style.display = anyVisible ? '' : 'none';
+      });
+    });
   }
 
   /**

@@ -109,16 +109,18 @@ export class WoodMachine extends Machine {
       try { this._clickGain.disconnect();                } catch (_) {}
     }
 
+    const amp = velScale * 2;
+
     // Ring1
     this._ring1Gain = this.context.createGain();
-    this._ring1Gain.gain.setValueAtTime((1 - mix) * velScale, t);
+    this._ring1Gain.gain.setValueAtTime((1 - mix) * amp, t);
     this._ring1Gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
     this._ring1.connect(this._ring1Gain);
     this._ring1Gain.connect(this.outputGain);
 
     // Ring2
     this._ring2Gain = this.context.createGain();
-    this._ring2Gain.gain.setValueAtTime(mix * velScale, t);
+    this._ring2Gain.gain.setValueAtTime(mix * amp, t);
     this._ring2Gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
     this._ring2.connect(this._ring2Gain);
     this._ring2Gain.connect(this.outputGain);
@@ -126,7 +128,7 @@ export class WoodMachine extends Machine {
     // Click burst — very short
     if (clickAmt > 0.001) {
       this._clickGain = this.context.createGain();
-      this._clickGain.gain.setValueAtTime(clickAmt * velScale, t);
+      this._clickGain.gain.setValueAtTime(clickAmt * amp, t);
       this._clickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.004);
       this._clickOsc.connect(this._clickGain);
       this._clickGain.connect(this.outputGain);

@@ -69,7 +69,16 @@ Parameters: `tune` (base Hz, LFO+plock), `tone` (HP cutoff, LFO+plock), `body` (
 
 ### WoodMachine (`type: 'wood'`)
 Clave / wood block / rimshot / cowbell. Two resonant bandpass filters (ring1, ring2) driven by a looping noise source through per-note decay gains, plus a sine click burst. `mix` knob blends between the two resonator bands.
+Internal amplitude is scaled ×2 vs velocity (hardcoded in `noteOn`) so the machine sits at a comparable level to other drums without requiring the `output.level` knob to be cranked.
 Parameters: `freq1`, `freq2`, `ring` (Q), `mix`, `decay`, `click`, `click.freq`, `output.level`. Frequencies and ring Q are LFO+plock targets.
+
+### ClappMachine (`type: 'clapp'`)
+808-style synthesized clap. Three short noise bursts staggered by `spread` ms simulate the layered hand-clap character of a TR-808. All bursts pass through a shared persistent bandpass filter.
+```
+AudioBufferSourceNode × 3 (one-shot) → BandpassFilter (persistent) → ampGain (per-burst exp decay) → outputGain → [Filter]
+```
+First two bursts are short transients (~12 ms); the third carries the decay tail. `spread` controls the inter-burst gap (0–30 ms).
+Parameters: `tone` (BP center Hz, LFO+plock), `snap` (BP Q, LFO+plock), `decay`, `spread`, `output.level`.
 
 ### TransientMachine
 Transient-focused drum machine (details TBD).

@@ -51,6 +51,7 @@ import { SwarmMachine }     from '../machines/SwarmMachine.js';
 import { SamplerMachine }   from '../machines/SamplerMachine.js';
 import { CymbalMachine }    from '../machines/CymbalMachine.js';
 import { WoodMachine }      from '../machines/WoodMachine.js';
+import { ClappMachine }     from '../machines/ClappMachine.js';
 import { WavetableMachine } from '../machines/WavetableMachine.js';
 import { KarplusMachine }   from '../machines/KarplusMachine.js';
 import { BassMachine }      from '../machines/BassMachine.js';
@@ -80,6 +81,7 @@ const MACHINES = {
   sampler:    SamplerMachine,
   cymbal:     CymbalMachine,
   wood:       WoodMachine,
+  clapp:      ClappMachine,
   wavetable:  WavetableMachine,
   karplus:    KarplusMachine,
   bass:       BassMachine,
