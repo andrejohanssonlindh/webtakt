@@ -161,6 +161,8 @@ export class VoicePool {
     if (chosen !== 0) {
       const machineJSON = this._slots[0].machine.toJSON();
       slot.machine.fromJSON(machineJSON);
+      // Sync binary buffers that can't round-trip through JSON (e.g. WavetableSamplerMachine)
+      slot.machine.syncFrom?.( this._slots[0].machine);
       const envJSON = this._slots[0].envelope.toJSON();
       slot.envelope.fromJSON(envJSON);
     }
@@ -200,6 +202,7 @@ export class VoicePool {
     const json = this._slots[0].machine.toJSON();
     for (let i = 1; i < this._slots.length; i++) {
       this._slots[i].machine.fromJSON(json);
+      this._slots[i].machine.syncFrom?.(this._slots[0].machine);
     }
     const envJson = this._slots[0].envelope.toJSON();
     for (let i = 1; i < this._slots.length; i++) {

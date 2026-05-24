@@ -110,9 +110,10 @@ export class Envelope {
       const trueCut = this._filter.getParam('filter.cutoff');
       const baseCut = overrides['filter.cutoff'] ?? trueCut;
 
-      // modDepth: how many Hz above (or below) baseCut the peak reaches.
-      // Positive envAmt opens the filter; negative closes it.
-      const modDepth   = baseCut * envAmt;
+      // Positive envAmt sweeps toward 20000 Hz, negative toward 20 Hz.
+      // 100% always reaches the limit of the range from the current cutoff position.
+      const headroom   = envAmt >= 0 ? (20000 - baseCut) : (baseCut - 20);
+      const modDepth   = headroom * envAmt;
       const peakCut    = baseCut + modDepth;
       const sustainCut = baseCut + modDepth * fs;
 
@@ -146,7 +147,8 @@ export class Envelope {
 
       const envAmt  = this._filter.getParam('filter.envAmount');
       const baseCut = this._filter.getParam('filter.cutoff');
-      const modDepth  = baseCut * envAmt;
+      const headroom   = envAmt >= 0 ? (20000 - baseCut) : (baseCut - 20);
+      const modDepth   = headroom * envAmt;
       const peakCut    = baseCut + modDepth;
       const sustainCut = baseCut + modDepth * fs;
 

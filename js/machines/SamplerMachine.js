@@ -213,4 +213,16 @@ export class SamplerMachine extends Machine {
     this.sampleName = obj.sampleName ?? '';
     Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v));
   }
+
+  /**
+   * Copy the AudioBuffer reference from another SamplerMachine instance.
+   * Called by VoicePool.nextVoice() so non-canonical slots stay in sync with slot 0.
+   * AudioBuffers are immutable and safe to share across instances.
+   */
+  syncFrom(other) {
+    if (!(other instanceof SamplerMachine)) return;
+    if (other._buffer && other._buffer !== this._buffer) {
+      this.setBuffer(other._buffer, other.sampleId, other.sampleName);
+    }
+  }
 }

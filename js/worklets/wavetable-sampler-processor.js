@@ -45,6 +45,9 @@ class WavetableSamplerProcessor extends AudioWorkletProcessor {
     this._startA = 0; this._endA = 1; this._gainA = 1;
     this._startB = 0; this._endB = 1; this._gainB = 1;
 
+    // Pending trigger: held until currentTime reaches startTime
+    this._pendingTrigger = null;
+
     this.port.onmessage = e => this._onMessage(e.data);
   }
 
@@ -56,20 +59,25 @@ class WavetableSamplerProcessor extends AudioWorkletProcessor {
       this._bufB = msg.pcm;
       this._lenB = msg.length;
     } else if (msg.type === 'trigger') {
-      this._baseRate = msg.rate ?? 1;   // may be negative for reverse
-      this._loop     = msg.loop ?? false;
-      this._startA = msg.startA ?? 0;
-      this._endA   = msg.endA   ?? 1;
-      this._gainA  = msg.gainA  ?? 1;
-      this._startB = msg.startB ?? 0;
-      this._endB   = msg.endB   ?? 1;
-      this._gainB  = msg.gainB  ?? 1;
-      // Phase 0 = start of region, 1 = end of region
-      this._phase  = this._baseRate >= 0 ? 0 : 1;
-      this._active = true;
+      // Store pending; process() will arm it when currentTime reaches startTime
+      this._pendingTrigger = msg;
     } else if (msg.type === 'stop') {
       this._active = false;
+      this._pendingTrigger = null;
     }
+  }
+
+  _armTrigger(msg) {
+    this._baseRate = msg.rate ?? 1;
+    this._loop     = msg.loop ?? false;
+    this._startA = msg.startA ?? 0;
+    this._endA   = msg.endA   ?? 1;
+    this._gainA  = msg.gainA  ?? 1;
+    this._startB = msg.startB ?? 0;
+    this._endB   = msg.endB   ?? 1;
+    this._gainB  = msg.gainB  ?? 1;
+    this._phase  = this._baseRate >= 0 ? 0 : 1;
+    this._active = true;
   }
 
   /** Read a sample from buf at normalised position p (0–1 within its trim region). */
@@ -92,6 +100,15 @@ class WavetableSamplerProcessor extends AudioWorkletProcessor {
 
     const ch = out[0];
     const n  = ch.length;
+
+    // Arm a pending trigger once currentTime has reached its scheduled startTime
+    if (this._pendingTrigger) {
+      const startTime = this._pendingTrigger.startTime ?? 0;
+      if (currentTime >= startTime) {
+        this._armTrigger(this._pendingTrigger);
+        this._pendingTrigger = null;
+      }
+    }
 
     if (!this._active || (!this._bufA && !this._bufB)) {
       ch.fill(0);

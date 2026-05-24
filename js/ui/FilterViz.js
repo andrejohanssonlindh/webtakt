@@ -394,8 +394,9 @@ export class FilterViz {
     const slope      = gp('filter.slope') ?? 0;
     const sustain    = gep('fenv.sustain') ?? 0;
 
-    // Match Envelope.js linear modulation: peak = baseCut + baseCut * envAmt
-    const modDepth      = mainCutoff * envAmt;
+    // Match Envelope.js: positive sweeps toward 20000 Hz, negative toward 20 Hz.
+    const headroom  = envAmt >= 0 ? (20000 - mainCutoff) : (mainCutoff - 20);
+    const modDepth  = headroom * envAmt;
     const peakCutoff    = mainCutoff + modDepth;
     const sustainCutoff = mainCutoff + modDepth * sustain;
 

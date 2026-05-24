@@ -801,6 +801,7 @@ export class SynthPanel {
     rmAllBtn.className = 'btn';
     rmAllBtn.textContent = 'RESET TRIG';
     rmAllBtn.addEventListener('click', () => {
+      step.active    = false;
       step.voices    = [{ note: step.voices[0]?.note ?? 60, velocity: 100, length: 1, nudge: 0 }];
       step.retrigger = null;
       step.chance    = 100;

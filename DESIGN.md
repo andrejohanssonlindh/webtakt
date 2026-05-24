@@ -174,6 +174,14 @@ UI (reads AppState, calls Track/Sequencer/Machine methods)
 
 ## Known Issues / Pending Work
 
+| Fixed | What |
+|---|---|
+| WavetableMachine `pos` | `modulatable` flag removed — `pos` is JS-only (PeriodicWave swap) and cannot be driven by a Web Audio LFO AudioParam. |
+| Trig multi-voice `×` button | `×` hidden on last remaining voice so clicking it doesn't confuse (removing last voice deactivates the step internally). |
+| Filter env amount | Changed from `baseCut * envAmt` (% of current cutoff) to `19980 * envAmt` (% of full 20–20000 Hz range) so depth is consistent at any cutoff position. |
+| WavetableSamplerMachine reliability | VoicePool polyphony introduced 8 slots; non-canonical slots (1–7) never received buffer data since `fromJSON` is JSON-only. Fixed via `syncFrom(slot0)` called in `nextVoice()` — copies `_bufferA/B` references to any slot before it fires. Trigger timing race also fixed: `startTime` embedded in trigger message; worklet holds `_pendingTrigger` and arms in `process()` when `currentTime >= startTime`. |
+| Trig RESET TRIG | Now sets `step.active = false` in addition to resetting voices to one, so the step is fully deactivated. Individual `×` buttons remain on all voices when multiple exist; only the last voice has no `×` (deactivating is done via RESET TRIG). |
+
 ---
 
 ## Extending

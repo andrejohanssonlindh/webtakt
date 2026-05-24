@@ -176,9 +176,10 @@ export class WavetableSamplerMachine extends Machine {
     const velGain = (velocity / 127) * this._params['output.level'];
 
     this._workletNode.port.postMessage({
-      type:   'trigger',
-      rate:   baseRate,
-      loop:   this._params['sample.loop'],
+      type:      'trigger',
+      startTime: time,
+      rate:      baseRate,
+      loop:      this._params['sample.loop'],
       startA, endA, gainA: this._params['sample.gainA'],
       startB, endB, gainB: this._params['sample.gainB'],
     });
@@ -273,5 +274,20 @@ export class WavetableSamplerMachine extends Machine {
     this.sampleNameA = obj.sampleNameA ?? '';
     this.sampleNameB = obj.sampleNameB ?? '';
     Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v));
+  }
+
+  /**
+   * Copy buffer references (and IDs/names) from another WavetableSamplerMachine.
+   * Called by VoicePool.nextVoice() so non-canonical slots stay in sync with slot 0.
+   * AudioBuffers are immutable and safe to share across machine instances.
+   */
+  syncFrom(other) {
+    if (!(other instanceof WavetableSamplerMachine)) return;
+    if (other._bufferA && other._bufferA !== this._bufferA) {
+      this.setBufferA(other._bufferA, other.sampleIdA, other.sampleNameA);
+    }
+    if (other._bufferB && other._bufferB !== this._bufferB) {
+      this.setBufferB(other._bufferB, other.sampleIdB, other.sampleNameB);
+    }
   }
 }

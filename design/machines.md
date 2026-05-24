@@ -109,7 +109,7 @@ Parameters: `osc.detune` (hidden, trig tab), `chord` (enum), `inversion` (JS), `
 ### WavetableMachine (`type: 'wavetable'`)
 Wavetable oscillator with continuous morphing. 8-entry wavetable bank built from `PeriodicWave` (Sine, Triangle, Sawtooth, Square, Pulse25, Bright Saw, Hollow, Vocal/Formant). Two persistent oscillators (_oscA, _oscB) hold adjacent table entries; crossfade GainNodes blend between them. `pos` param (0–7 float) drives the morph — ideal LFO target for wavetable sweeps.
 Sub oscillator (sine, one octave below) mixed independently.
-Parameters: `osc.detune` (hidden, trig tab), `pos` (JS-only plock, LFO-assignable), `sub.level`, `output.level`.
+Parameters: `osc.detune` (hidden, trig tab), `pos` (JS-only plock, not LFO-assignable — PeriodicWave swap has no AudioParam), `sub.level`, `output.level`.
 
 ---
 
