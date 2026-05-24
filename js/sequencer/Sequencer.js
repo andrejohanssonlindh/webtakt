@@ -51,6 +51,10 @@ export class Sequencer {
     this.lastFireTime     = 0;   // performance.now() at last fire
     this.lastFireDuration = 0;   // gate length in ms
 
+    // Active gate windows — read by StepGrid to show sustain dots on steps
+    // Each entry: { absStep, voiceCount, endMs }
+    this._activeGates = [];
+
     this.steps = Array.from({ length: DEFAULT_STEP_COUNT }, (_, i) => new Step(i));
   }
 
@@ -68,7 +72,7 @@ export class Sequencer {
     return this._stepIndex;
   }
 
-  getVisibleSteps() {
+getVisibleSteps() {
     const start = this.pageOffset * STEPS_PER_PAGE;
     // Ensure steps array covers this page
     while (this.steps.length < start + STEPS_PER_PAGE) {
@@ -83,13 +87,14 @@ export class Sequencer {
 
   stop() {
     this.clock.unregister(this._tickBound);
-    this._stepIndex = 0;
-    this._playCount = 0;
+    this._stepIndex  = 0;
+    this._playCount  = 0;
   }
 
   reset() {
-    this._stepIndex = 0;
-    this._playCount = 0;
+    this._stepIndex   = 0;
+    this._playCount   = 0;
+    this._activeGates = [];
   }
 
   _onTick(tickIndex, scheduledTime) {
@@ -151,28 +156,16 @@ export class Sequencer {
   }
 
   _fireStep(step, scheduledTime) {
-    const effectiveNudge = step.nudge * (1 - (this.track.nudgeQuantize ?? 0));
-    const time    = scheduledTime + (effectiveNudge * this.clock._secondsPerTick);
-    const offTime = time + (step.length * this.clock._secondsPerTick);
-
-    // Record wall-clock trigger state for the trig glow animation in TrackRow.
-    const nowMs         = performance.now();
-    const audioNow      = this.clock.audio.context.currentTime;
-    const startOffsetMs = (time - audioNow) * 1000;
-    this.lastFireTime     = nowMs + startOffsetMs;
-    this.lastFireDuration = (offTime - time) * 1000;
-
-    // ── Pick voice slot ────────────────────────────────────────
-    // nextVoice() returns an idle slot or steals the oldest busy one.
-    const voice = this.track._pool?.nextVoice();
-
-    // ── P-lock dispatch ────────────────────────────────────────
+    // ── P-lock dispatch (shared across all voices) ─────────────
     const envOverrides = {};
     const jsRestores   = [];
+    // We need a representative time for filter/pan p-lock restores — use voice[0]
+    const v0nudge  = step.voices[0].nudge * (1 - (this.track.nudgeQuantize ?? 0));
+    const v0time   = scheduledTime + (v0nudge * this.clock._secondsPerTick);
+    const v0off    = v0time + (step.voices[0].length * this.clock._secondsPerTick);
 
     if (step.hasPLocks) {
       const modeMap = this._buildPlockModeMap();
-
       for (const [path, value] of step.plocks) {
         const mode = modeMap.get(path)
           ?? (path.startsWith('env.') || path.startsWith('fenv.') ? 'envelope' : 'js');
@@ -181,76 +174,85 @@ export class Sequencer {
           case 'envelope':
             envOverrides[path] = value;
             break;
-
           case 'filter': {
             const obj = this.track.filter;
             const old = obj.getParam(path);
-            obj.setParam(path, value, time);
-            obj.setParam(path, old,   offTime);
+            obj.setParam(path, value, v0time);
+            obj.setParam(path, old,   v0off);
             break;
           }
-
           case 'audioParam': {
-            // P-lock targets the chosen voice's machine, not the canonical slot.
-            const obj = voice ? voice.machine : this._resolveParamOwner(path);
+            const obj = this._resolveParamOwner(path);
             const old = obj.getParam(path);
-            obj.setParam(path, value, time);
-            jsRestores.push(() => obj.setParam(path, old, offTime));
+            obj.setParam(path, value, v0time);
+            jsRestores.push(() => obj.setParam(path, old, v0off));
             break;
           }
-
           case 'js': {
-            // JS p-locks on machine params target the chosen voice slot.
-            const isMachine = !path.startsWith('filter.') && !path.startsWith('delay.')
-              && !path.startsWith('crush.') && !path.startsWith('reverb.')
-              && !path.startsWith('env.') && !path.startsWith('fenv.');
-            const obj = (voice && isMachine) ? voice.machine : this._resolveParamOwner(path);
+            const obj = this._resolveParamOwner(path);
             const old = obj.getParam(path);
             obj.setParam(path, value);
             jsRestores.push(() => obj.setParam(path, old));
             break;
           }
-
           case 'pan': {
             const panner = this.track.pannerNode;
             const old = panner.pan.value;
-            panner.pan.setValueAtTime(value, time);
-            jsRestores.push(() => panner.pan.setValueAtTime(old, offTime));
+            panner.pan.setValueAtTime(value, v0time);
+            jsRestores.push(() => panner.pan.setValueAtTime(old, v0off));
             break;
           }
-
           case 'trig':
             break;
         }
       }
     }
 
-    const release    = envOverrides['env.release'] ?? this.track.envelope?.getParam('env.release') ?? 0;
-    const oscOffTime = offTime + release;
+    const release = envOverrides['env.release'] ?? this.track.envelope?.getParam('env.release') ?? 0;
 
-    // Mark slot busy until release tail ends
-    if (voice) voice.claim(oscOffTime);
-
-    // Apply trig.tone (semitone transpose)
+    // trig.tone transpose (shared)
     let tone = step.plocks.has('trig.tone') ? step.plocks.get('trig.tone') : (this.track.trigTone ?? 0);
     this.track.lfos.forEach((lfo, i) => {
       if (this.track._lfoDestPaths[i] === 'trig.tone') tone += lfo.getCurrentValue();
     });
-    const finalNote = Math.max(0, Math.min(127, step.note + Math.round(tone)));
 
-    // Fire on the chosen voice slot (machine + envelope), not the canonical track refs
-    const machine  = voice?.machine  ?? this.track.machine;
-    const envelope = voice?.envelope ?? this.track.envelope;
+    // ── Fire each voice ────────────────────────────────────────
+    step.voices.forEach((sv, vi) => {
+      const effectiveNudge = sv.nudge * (1 - (this.track.nudgeQuantize ?? 0));
+      const time    = scheduledTime + (effectiveNudge * this.clock._secondsPerTick);
+      const offTime = time + (sv.length * this.clock._secondsPerTick);
+      const oscOffTime = offTime + release;
 
-    machine?.noteOn(finalNote, step.velocity, time, offTime);
-    machine?.noteOff(oscOffTime);
-    envelope?.scheduleNote(time, offTime, envOverrides);
+      // Record wall-clock trigger state for the trig glow (using first voice)
+      if (vi === 0) {
+        const nowMs         = performance.now();
+        const audioNow      = this.clock.audio.context.currentTime;
+        const startOffsetMs = (time - audioNow) * 1000;
+        this.lastFireTime     = nowMs + startOffsetMs;
+        this.lastFireDuration = (offTime - time) * 1000;
 
-    // Notify LFOs (phase retrigger, advanced ADSR depth)
-    const ampParams = envelope?._params ?? {};
-    this.track.lfos.forEach(lfo => {
-      lfo.noteOn(time, offTime, { ...ampParams, ...envOverrides });
-      lfo.noteOff(offTime);
+        // Record active gate for sustain-dot rendering in StepGrid
+        const gateMs = (offTime - time) * 1000;
+        this._activeGates = this._activeGates.filter(g => g.endMs > nowMs);
+        this._activeGates.push({ absStep: this._stepIndex, voiceCount: step.voices.length, endMs: nowMs + startOffsetMs + gateMs });
+      }
+
+      const voice    = this.track._pool?.nextVoice();
+      if (voice) voice.claim(oscOffTime);
+
+      const finalNote = Math.max(0, Math.min(127, sv.note + Math.round(tone)));
+      const machine   = voice?.machine  ?? this.track.machine;
+      const envelope  = voice?.envelope ?? this.track.envelope;
+
+      machine?.noteOn(finalNote, sv.velocity, time, offTime);
+      machine?.noteOff(oscOffTime);
+      envelope?.scheduleNote(time, offTime, envOverrides);
+
+      const ampParams = envelope?._params ?? {};
+      this.track.lfos.forEach(lfo => {
+        lfo.noteOn(time, offTime, { ...ampParams, ...envOverrides });
+        lfo.noteOff(offTime);
+      });
     });
 
     jsRestores.forEach(fn => fn());

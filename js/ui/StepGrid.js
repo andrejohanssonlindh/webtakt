@@ -80,10 +80,10 @@ export class StepGrid {
         } else {
           // Add note: find the lowest note among all active steps; fall back to 36 (C2)
           const allSteps = track.sequencer.steps;
-          const activeNotes = allSteps.filter(s => s.active).map(s => s.note);
+          const activeNotes = allSteps.filter(s => s.active).map(s => s.voices[0]?.note ?? 60);
           const lowestNote = activeNotes.length > 0 ? Math.min(...activeNotes) : 36;
           target.active = true;
-          target.note   = lowestNote;
+          target.voices = [{ note: lowestNote, velocity: 100, length: 1, nudge: 0 }];
         }
 
         this.state.emit('stepChanged', {
@@ -154,9 +154,50 @@ export class StepGrid {
     const numEl = cell.querySelector('.step-num');
     if (numEl) numEl.textContent = absIndex + 1;
 
+    // Voice dots — up to 8 slots, one per recorded voice
+    const MAX_VOICE_DOTS = 8;
+    let dotsEl = cell.querySelector('.step-voice-dots');
+    if (!dotsEl) {
+      dotsEl = document.createElement('span');
+      dotsEl.className = 'step-voice-dots';
+      cell.appendChild(dotsEl);
+    }
+    dotsEl.innerHTML = '';
+    const voiceCount = step.active ? Math.min(step.voices.length, MAX_VOICE_DOTS) : 0;
+
+    // Sum voices from all gates that are still ringing and didn't originate on this step.
+    // endMs is a wall-clock expiry, so loop wrap and pause are handled automatically:
+    // a held note sustains into the next loop pass as long as it hasn't expired.
+    const nowMs  = performance.now();
+    const gates  = seq._activeGates ?? [];
+    const rawSustain = gates
+      .filter(g => g.absStep !== absIndex && g.endMs > nowMs)
+      .reduce((sum, g) => sum + g.voiceCount, 0);
+    const sustainCount = Math.min(rawSustain, MAX_VOICE_DOTS);
+
+    // Green dots for this step's own voices, then white for sustained voices.
+    // sustainCount is additive on top of voiceCount (step 10 with 2 green + 3 white → 5 dots).
+    const totalActive = Math.min(voiceCount + sustainCount, MAX_VOICE_DOTS);
+    for (let d = 0; d < MAX_VOICE_DOTS; d++) {
+      const dot = document.createElement('span');
+      if (d < voiceCount) {
+        dot.className = 'step-voice-dot active';
+      } else if (d < totalActive) {
+        dot.className = 'step-voice-dot sustain';
+      } else {
+        dot.className = 'step-voice-dot';
+      }
+      dotsEl.appendChild(dot);
+    }
+
     cell.title = step.active
-      ? `Step ${absIndex + 1}: note ${step.note}, vel ${step.velocity}`
+      ? `Step ${absIndex + 1}: ${step.voices.length} voice${step.voices.length > 1 ? 's' : ''} — ${step.voices.map(v => this._noteName(v.note)).join(', ')}`
       : `Step ${absIndex + 1}: empty`;
+  }
+
+  _noteName(midi) {
+    const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+    return names[midi % 12] + Math.floor(midi / 12 - 1);
   }
 
   /**

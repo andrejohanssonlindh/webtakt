@@ -303,21 +303,37 @@ export class Keyboard {
     if (stepIndex >= 0) {
       const step = track.sequencer.getVisibleSteps()[stepIndex];
       if (step) {
-        step.note   = midiNote;
-        step.active = true;
-
-        if (this.state.recording && this.state.lastStepScheduledTime !== null) {
-          const secondsPerTick = track.sequencer.clock._secondsPerTick;
-          const offsetTicks    = (ctx.currentTime - this.state.lastStepScheduledTime) / secondsPerTick;
-          step.nudge = Math.max(-0.99, Math.min(0.99, offsetTicks));
-        }
-
         if (this.state.recording) {
+          // Append mode: add a new voice (or reuse voice 0 if step was empty)
+          let nudge = 0;
+          if (this.state.lastStepScheduledTime !== null) {
+            const secondsPerTick = track.sequencer.clock._secondsPerTick;
+            const offsetTicks    = (ctx.currentTime - this.state.lastStepScheduledTime) / secondsPerTick;
+            nudge = Math.max(-0.99, Math.min(0.99, offsetTicks));
+          }
+
+          let voiceIndex;
+          if (!step.active) {
+            // First note: fill voice 0
+            step.voices[0] = { note: midiNote, velocity: 100, length: 1, nudge };
+            step.active = true;
+            voiceIndex = 0;
+          } else {
+            // Subsequent notes: append a new voice
+            step.addVoice(midiNote, 100, 1, nudge);
+            voiceIndex = step.voices.length - 1;
+          }
+
           this._recordNoteOnTime.set(midiNote, ctx.currentTime);
           this._recordNoteOnStep.set(midiNote, {
             stepIndex,
+            voiceIndex,
             pageOffset: track.sequencer.pageOffset,
           });
+        } else {
+          // Edit mode: overwrite voice 0
+          step.voices[0].note = midiNote;
+          step.active = true;
         }
 
         this.state.emit('stepChanged', {
@@ -367,8 +383,8 @@ export class Keyboard {
 
       if (info && info.pageOffset === track.sequencer.pageOffset) {
         const step = track.sequencer.getVisibleSteps()[info.stepIndex];
-        if (step) {
-          step.length = lengthTicks;
+        if (step && step.voices[info.voiceIndex]) {
+          step.voices[info.voiceIndex].length = lengthTicks;
           this.state.emit('stepChanged', {
             trackIndex: this.state.selectedTrackIndex,
             stepIndex:  info.stepIndex,

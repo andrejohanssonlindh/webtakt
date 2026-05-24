@@ -740,48 +740,68 @@ export class SynthPanel {
       return;
     }
 
-    // ── Note display row ──
-    const noteRow = document.createElement('div');
-    noteRow.className = 'trig-note-row';
+    // ── Voice cards ──
+    const voicesSection = document.createElement('div');
+    voicesSection.className = 'trig-voices';
 
-    const noteLbl = document.createElement('span');
-    noteLbl.className = 'trig-note-label';
-    noteLbl.textContent = 'NOTE';
+    const _fmtLenShort = ticks => {
+      if (ticks < 1) return Math.round(ticks * 16) + '/16';
+      if (Number.isInteger(ticks)) return ticks + 'b';
+      return ticks.toFixed(1) + 'b';
+    };
 
-    const noteVal = document.createElement('span');
-    noteVal.className = 'trig-note-value';
-    noteVal.textContent = step.active ? this._noteName(step.note) : '—';
+    const rebuildVoices = () => {
+      voicesSection.innerHTML = '';
+      step.voices.forEach((sv, vi) => {
+        const card = document.createElement('div');
+        card.className = 'trig-voice-card';
 
-    noteRow.appendChild(noteLbl);
-    noteRow.appendChild(noteVal);
-    panel.appendChild(noteRow);
+        const noteSpan = document.createElement('span');
+        noteSpan.className = 'trig-voice-note';
+        noteSpan.textContent = this._noteName(sv.note);
+
+        const lenSpan = document.createElement('span');
+        lenSpan.className = 'trig-voice-len';
+        lenSpan.textContent = _fmtLenShort(sv.length);
+
+        const nudgeSpan = document.createElement('span');
+        nudgeSpan.className = 'trig-voice-nudge';
+        nudgeSpan.textContent = sv.nudge === 0 ? '' : (sv.nudge > 0 ? '+' : '') + sv.nudge.toFixed(2);
+
+        const rmBtn = document.createElement('button');
+        rmBtn.className = 'trig-voice-rm';
+        rmBtn.textContent = '×';
+        rmBtn.title = 'Remove voice';
+        rmBtn.addEventListener('click', () => {
+          step.removeVoice(vi);
+          this.state.emit('stepChanged', {
+            trackIndex: this.state.selectedTrackIndex,
+            stepIndex:  this.state.selectedStepIndex,
+            step,
+          });
+          this._renderContent();
+        });
+
+        card.appendChild(noteSpan);
+        card.appendChild(lenSpan);
+        if (sv.nudge !== 0) card.appendChild(nudgeSpan);
+        card.appendChild(rmBtn);
+        voicesSection.appendChild(card);
+      });
+    };
+
+    rebuildVoices();
+    panel.appendChild(voicesSection);
 
     // ── Action buttons ──
     const btnRow = document.createElement('div');
     btnRow.className = 'trig-btn-row';
 
-    const rmNoteBtn = document.createElement('button');
-    rmNoteBtn.className = 'btn';
-    rmNoteBtn.textContent = 'REMOVE NOTE';
-    rmNoteBtn.disabled = !step.active;
-    rmNoteBtn.addEventListener('click', () => {
-      step.active = false;
-      this.state.emit('stepChanged', {
-        trackIndex: this.state.selectedTrackIndex,
-        stepIndex:  this.state.selectedStepIndex,
-        step,
-      });
-      this._renderContent();
-    });
-
     const rmAllBtn = document.createElement('button');
     rmAllBtn.className = 'btn';
     rmAllBtn.textContent = 'RESET TRIG';
     rmAllBtn.addEventListener('click', () => {
-      // Preserve note and active state — only reset trig settings
-      step.velocity  = 100;
-      step.length    = 1;
-      step.nudge     = 0;
+      step.voices    = [{ note: step.voices[0]?.note ?? 60, velocity: 100, length: 1, nudge: 0 }];
       step.retrigger = null;
       step.chance    = 100;
       step.condition = Condition.create('always');
@@ -794,7 +814,6 @@ export class SynthPanel {
       this._renderContent();
     });
 
-    btnRow.appendChild(rmNoteBtn);
     btnRow.appendChild(rmAllBtn);
     panel.appendChild(btnRow);
 
