@@ -116,11 +116,8 @@ export class Envelope {
       const peakCut    = baseCut + modDepth;
       const sustainCut = baseCut + modDepth * fs;
 
-      const freq = this._filter.node.frequency;
-      this._scheduleADS(freq, time, fa, fd, peakCut, sustainCut);
-      // Release ramps back to the true (non-p-locked) cutoff so subsequent steps
-      // are not affected by this step's p-locked cutoff.
-      this._scheduleR(freq, offTime, sustainCut, fr, trueCut);
+      // Schedule across primary node + all slope stages via Filter.scheduleFrequency
+      this._filter.scheduleFrequency(time, fa, fd, peakCut, sustainCut, offTime, fr, trueCut);
     }
   }
 

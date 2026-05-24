@@ -1,43 +1,37 @@
 /**
  * CombMachine.js
  * --------------
- * Resonator / comb filter synthesizer. An exciter signal (white noise or
- * an impulse) is fed continuously through a tuned comb filter (DelayNode +
- * feedback) to produce metallic, bell, or vocal-formant textures.
+ * Pitched resonator — bell, marimba, gamelan, music box.
  *
- * Unlike KarplusMachine (pluck/decay), CombMachine is sustained — the
- * resonator runs as long as the note is held. The track Envelope controls
- * amplitude normally.
+ * Two decaying sinusoidal partials are synthesised into an AudioBuffer on each
+ * noteOn and played back once. This is numerically stable and pitch-accurate
+ * (unlike a DelayNode feedback loop). The character of the instrument is shaped
+ * by the ratio and relative decay of the two partials, plus a short noise burst
+ * ("strike") at the attack.
  *
- * Two exciter types:
- *   'noise'   — continuous white noise: airy, vocal, wind-instrument character
- *   'impulse' — single-sample impulse at noteOn: bell/metallic ring
+ * Partial structure:
+ *   partial 1 — fundamental (MIDI note frequency)
+ *   partial 2 — fundamental × ratio  (inharmonic interval)
  *
- * Persistent node architecture — comb filter runs continuously.
+ * Example ratio presets:
+ *   1.0   — unison / pure tone (flute-like)
+ *   2.756 — church bell minor-third partial
+ *   4.0   — marimba (4th harmonic, decays 6× faster)
+ *   2.0   — octave (vibraphone-like)
  *
  * Audio graph:
- *   _exciter (noise, persistent) → _exGain → _inputGain ─┐
- *   _impulseSrc (per-note)       → _inputGain             ┤
- *   DelayNode (_comb)            ← FeedbackGain ← _combLP ←┘
- *   _comb → outputGain → [Filter]
+ *   BufferSourceNode (pre-synthesised per note) → outputGain → [Filter]
  *
  * Parameters:
- *   'freq'         — comb filter resonant frequency Hz (note-tracked + offset)
- *   'feedback'     — feedback amount (0–0.98): brightness and sustain
- *   'damping'      — LP cutoff in feedback (200–20000 Hz): brightness
- *   'exciter'      — 'noise' | 'impulse'
- *   'excite.level' — exciter level (0–1)
- *   'excite.tone'  — LP on exciter noise (200–20000 Hz)
+ *   'ratio'        — frequency ratio of partial 2 to partial 1 (0.5–8)
+ *   'decay'        — decay time of partial 1 in seconds (0.1–8)
+ *   'decay2'       — decay time of partial 2 relative to partial 1 (0.1–2 ×)
+ *   'mix'          — blend 0=partial1 only, 1=partial2 only (0–1)
+ *   'strike'       — noise burst level at attack (0–1)
  *   'output.level' — 0–1
  */
 
-import { Machine }        from './Machine.js';
-import { getNoiseBuffer } from '../util/AudioBuffers.js';
-
-const _noiseCache = { buf: null };
-const _getNoise   = ctx => getNoiseBuffer(ctx, _noiseCache, 2.0);
-
-const MIN_DELAY = 0.0005; // ~20 Hz minimum resonant frequency (1/20000 sr buffer)
+import { Machine } from './Machine.js';
 
 export class CombMachine extends Machine {
   constructor(context) {
@@ -46,152 +40,130 @@ export class CombMachine extends Machine {
     this.label = 'Comb';
 
     this._params = {
-      'freq':          440,
-      'feedback':      0.88,
-      'damping':       8000,
-      'exciter':       'noise',
-      'excite.level':  0.3,
-      'excite.tone':   6000,
-      'output.level':  0.8,
+      'ratio':        2.756,
+      'decay':        1.8,
+      'decay2':       0.35,
+      'mix':          0.4,
+      'strike':       0.6,
+      'output.level': 0.8,
     };
-
-    this._currentFreq = 440;
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
 
-    // ── Comb filter ──
-    this._comb = context.createDelay(2);
-    this._comb.delayTime.value = 1 / this._params['freq'];
-
-    this._combLP = context.createBiquadFilter();
-    this._combLP.type            = 'lowpass';
-    this._combLP.frequency.value = this._params['damping'];
-    this._combLP.Q.value         = 0.7071;
-
-    this._fbGain = context.createGain();
-    this._fbGain.gain.value = this._params['feedback'];
-
-    // Feedback loop: comb → combLP → fbGain → comb
-    this._comb.connect(this._combLP);
-    this._combLP.connect(this._fbGain);
-    this._fbGain.connect(this._comb);
-
-    // Comb output → master
-    this._comb.connect(this.outputGain);
-
-    // ── Noise exciter ──
-    this._noiseSrc        = context.createBufferSource();
-    this._noiseSrc.buffer = _getNoise(context);
-    this._noiseSrc.loop   = true;
-    this._noiseSrc.start();
-
-    // Exciter LP filter
-    this._exLP = context.createBiquadFilter();
-    this._exLP.type            = 'lowpass';
-    this._exLP.frequency.value = this._params['excite.tone'];
-    this._exLP.Q.value         = 0.7071;
-    this._noiseSrc.connect(this._exLP);
-
-    // Exciter level gain
-    this._exGain = context.createGain();
-    this._exGain.gain.value = this._params['exciter'] === 'noise' ? this._params['excite.level'] : 0;
-    this._exLP.connect(this._exGain);
-    this._exGain.connect(this._comb);
-
-    // Per-note impulse (for 'impulse' mode)
-    this._impulseSrc = null;
+    this._activeSrc = null;
   }
 
   noteOn(midiNote, velocity, time) {
-    const velScale = velocity / 127;
-    const freq     = Machine.midiToFreq(midiNote);
-    this._currentFreq = freq;
-
-    // Update comb delay time for this pitch
-    const delayTime = Math.max(MIN_DELAY, 1 / freq);
-    this._comb.delayTime.setValueAtTime(delayTime, time);
-
-    const mode = this._params['exciter'];
-
-    if (mode === 'impulse') {
-      // Brief noise burst to excite the resonator at this pitch
-      const buf   = _getNoise(this.context);
-      const impSrc = this.context.createBufferSource();
-      impSrc.buffer = buf;
-      impSrc.loop   = false;
-
-      const impGain = this.context.createGain();
-      impGain.gain.setValueAtTime(this._params['excite.level'] * velScale * 4, time);
-      // Very short gate — just needs to knock the resonator
-      impGain.gain.exponentialRampToValueAtTime(0.001, time + 0.01);
-
-      impSrc.connect(impGain);
-      impGain.connect(this._comb);
-      impSrc.start(time);
-
-      const cleanupMs = 100 + Math.max(time - this.context.currentTime, 0) * 1000;
-      setTimeout(() => {
-        try { impSrc.stop();       } catch (_) {}
-        try { impGain.disconnect(); } catch (_) {}
-      }, cleanupMs);
-
-      // Silence continuous noise in impulse mode
-      this._exGain.gain.setValueAtTime(0, time);
-    } else {
-      // Noise mode — set exciter level
-      this._exGain.gain.setValueAtTime(this._params['excite.level'] * velScale, time);
+    if (this._activeSrc) {
+      try { this._activeSrc.stop(time); } catch (_) {}
+      this._activeSrc = null;
     }
+
+    const velScale   = velocity / 127;
+    const sampleRate = this.context.sampleRate;
+    const freq       = Machine.midiToFreq(midiNote);
+
+    const ratio      = this._params['ratio'];
+    const decay1     = this._params['decay'];
+    const decay2     = decay1 * this._params['decay2'];
+    const mix        = this._params['mix'];          // 0 = p1 only, 1 = p2 only
+    const strikeAmt  = this._params['strike'];
+
+    // Total length: render until both partials are inaudible (-72 dB)
+    const longerDecay = Math.max(decay1, decay2);
+    const totalLen    = Math.min(
+      Math.ceil(sampleRate * (longerDecay * 5 + 0.05)),
+      sampleRate * 12
+    );
+
+    const buf = this.context.createBuffer(1, totalLen, sampleRate);
+    const out = buf.getChannelData(0);
+
+    // ── Partial 1: fundamental ──
+    const w1     = 2 * Math.PI * freq / sampleRate;
+    const env1   = Math.exp(-1 / (decay1 * sampleRate));   // per-sample decay factor
+    const amp1   = (1 - mix) * velScale;
+
+    // ── Partial 2: inharmonic overtone ──
+    const freq2  = freq * ratio;
+    const w2     = 2 * Math.PI * freq2 / sampleRate;
+    const env2   = Math.exp(-1 / (decay2 * sampleRate));
+    const amp2   = mix * velScale;
+
+    // ── Strike: very short bandpass noise burst ──
+    // Rendered directly into out[] then left to decay with the sinusoids
+    const strikeSamples = Math.min(Math.round(sampleRate * 0.008), totalLen);
+    if (strikeAmt > 0) {
+      // One-pole LP + HP to make a bandpass centred near partial 1–2 midpoint
+      const centreHz   = freq * Math.sqrt(ratio);    // geometric mean of the two partials
+      const lpC        = 2 * Math.PI * Math.min(centreHz * 2, 18000) / sampleRate;
+      const lpA        = lpC / (1 + lpC);
+      const hpC        = 2 * Math.PI * Math.max(freq * 0.5, 40) / sampleRate;
+      const hpA        = 1 / (1 + hpC);
+      let lp = 0, hp = 0, hpPrev = 0;
+      const strikeDecay = Math.exp(-1 / (0.003 * sampleRate));
+      let strikeEnv = strikeAmt * velScale;
+      for (let i = 0; i < strikeSamples; i++) {
+        const noise = Math.random() * 2 - 1;
+        lp = lpA * noise + (1 - lpA) * lp;
+        const hpIn = lp;
+        hp = hpA * (hp + hpIn - hpPrev);
+        hpPrev = hpIn;
+        out[i] += hp * strikeEnv;
+        strikeEnv *= strikeDecay;
+      }
+    }
+
+    // ── Sum decaying sinusoids into buffer ──
+    let a1 = amp1, a2 = amp2;
+    for (let n = 0; n < totalLen; n++) {
+      out[n] += a1 * Math.sin(w1 * n) + a2 * Math.sin(w2 * n);
+      a1 *= env1;
+      a2 *= env2;
+    }
+
+    // ── Normalise peak to 0.95 ──
+    let peak = 0;
+    for (let i = 0; i < totalLen; i++) peak = Math.max(peak, Math.abs(out[i]));
+    if (peak > 0.95) {
+      const s = 0.95 / peak;
+      for (let i = 0; i < totalLen; i++) out[i] *= s;
+    }
+
+    const src  = this.context.createBufferSource();
+    src.buffer = buf;
+    src.loop   = false;
+    src.connect(this.outputGain);
+    src.start(time);
+    src.stop(time + totalLen / sampleRate + 0.05);
+
+    src.onended = () => {
+      try { src.disconnect(); } catch (_) {}
+      if (this._activeSrc === src) this._activeSrc = null;
+    };
+
+    this._activeSrc = src;
   }
 
-  noteOff(time) {
-    // Fade out exciter on note release; comb resonance decays naturally from feedback
-    if (this._params['exciter'] === 'noise') {
-      this._exGain.gain.setTargetAtTime(0, time, 0.02);
-    }
-  }
+  noteOff(time) {} // Self-decaying
 
   connect(destinationNode) { this.outputGain.connect(destinationNode); }
 
   disconnect() {
-    try { this._noiseSrc.stop(); } catch (_) {}
+    if (this._activeSrc) {
+      try { this._activeSrc.stop(); } catch (_) {}
+      try { this._activeSrc.disconnect(); } catch (_) {}
+      this._activeSrc = null;
+    }
     this.outputGain.disconnect();
   }
 
   setParam(path, value, time) {
     this._params[path] = value;
-    const t = time ?? this.context.currentTime;
-
-    switch (path) {
-      case 'freq':
-        // Update comb delay time (absolute freq override, not note-tracked here)
-        this._comb.delayTime.setTargetAtTime(Math.max(MIN_DELAY, 1 / value), t, 0.005);
-        break;
-      case 'feedback':
-        this._fbGain.gain.setTargetAtTime(value, t, 0.005);
-        break;
-      case 'damping':
-        this._combLP.frequency.setTargetAtTime(value, t, 0.01);
-        break;
-      case 'excite.level':
-        if (this._params['exciter'] === 'noise') {
-          this._exGain.gain.setTargetAtTime(value, t, 0.01);
-        }
-        break;
-      case 'excite.tone':
-        this._exLP.frequency.setTargetAtTime(value, t, 0.01);
-        break;
-      case 'exciter':
-        // Switch mode — silence or restore noise exciter
-        if (value === 'noise') {
-          this._exGain.gain.setTargetAtTime(this._params['excite.level'], t, 0.01);
-        } else {
-          this._exGain.gain.setTargetAtTime(0, t, 0.01);
-        }
-        break;
-      case 'output.level':
-        this.outputGain.gain.setValueAtTime(value, t);
-        break;
+    if (path === 'output.level') {
+      const t = time ?? this.context.currentTime;
+      this.outputGain.gain.setValueAtTime(value, t);
     }
   }
 
@@ -199,21 +171,17 @@ export class CombMachine extends Machine {
 
   getParamList() {
     return [
-      { path: 'feedback',     label: 'Feedback',    type: 'number', min: 0,    max: 0.98,  default: 0.88, modulatable: true,  lfoMin: 0,    lfoMax: 0.98,  plockMode: 'audioParam' },
-      { path: 'damping',      label: 'Damping',     type: 'number', min: 200,  max: 20000, default: 8000, modulatable: true,  lfoMin: 200,  lfoMax: 20000, plockMode: 'audioParam' },
-      { path: 'exciter',      label: 'Exciter',     type: 'enum',   options: ['noise','impulse'],                                                          plockMode: 'js'        },
-      { path: 'excite.level', label: 'Excite Lvl',  type: 'number', min: 0,    max: 1,     default: 0.3,  modulatable: true,  lfoMin: 0,    lfoMax: 1,     plockMode: 'audioParam' },
-      { path: 'excite.tone',  label: 'Excite Tone', type: 'number', min: 200,  max: 20000, default: 6000, modulatable: true,  lfoMin: 200,  lfoMax: 20000, plockMode: 'audioParam' },
-      { path: 'output.level', label: 'Level',       type: 'number', min: 0,    max: 1,     default: 0.8,  modulatable: true,  lfoMin: 0,    lfoMax: 1,     plockMode: 'audioParam' },
+      { path: 'ratio',        label: 'Ratio',      type: 'number', min: 0.5,  max: 8,   default: 2.756, modulatable: false,                               plockMode: 'js'        },
+      { path: 'decay',        label: 'Decay',      type: 'number', min: 0.1,  max: 8,   default: 1.8,   modulatable: true,  lfoMin: 0.1,  lfoMax: 8,      plockMode: 'js'        },
+      { path: 'decay2',       label: 'Decay 2',    type: 'number', min: 0.1,  max: 2,   default: 0.35,  modulatable: false,                               plockMode: 'js'        },
+      { path: 'mix',          label: 'Mix',        type: 'number', min: 0,    max: 1,   default: 0.4,   modulatable: true,  lfoMin: 0,    lfoMax: 1,      plockMode: 'js'        },
+      { path: 'strike',       label: 'Strike',     type: 'number', min: 0,    max: 1,   default: 0.6,   modulatable: false,                               plockMode: 'js'        },
+      { path: 'output.level', label: 'Level',      type: 'number', min: 0,    max: 1,   default: 0.8,   modulatable: true,  lfoMin: 0,    lfoMax: 1,      plockMode: 'audioParam' },
     ];
   }
 
   resolveAudioParam(path) {
     switch (path) {
-      case 'feedback':     return this._fbGain.gain;
-      case 'damping':      return this._combLP.frequency;
-      case 'excite.level': return this._exGain.gain;
-      case 'excite.tone':  return this._exLP.frequency;
       case 'output.level': return this.outputGain.gain;
       default: return null;
     }

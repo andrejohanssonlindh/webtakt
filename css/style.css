@@ -144,6 +144,18 @@ body {
   50%       { opacity: 0.55; }
 }
 
+#btn-drum {
+  min-width: 52px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+#btn-drum.drum-active {
+  background: #1a2a40;
+  border-color: #5599ee;
+  color: #5599ee;
+}
+
 .bpm-label {
   color: var(--text-dim);
   font-size: 9px;
@@ -2621,4 +2633,32 @@ body {
 
 .mixer-strip .knob-label {
   font-size: 7px;
+}
+
+.mixer-fx-toggles {
+  display: flex;
+  gap: 3px;
+  width: 100%;
+}
+
+.mixer-fx-toggle {
+  flex: 1;
+  padding: 2px 0;
+  font-family: var(--font-ui);
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+
+.mixer-fx-toggle.on {
+  background: #0e2e2e;
+  border-color: #7ec8c8;
+  color: #7ec8c8;
 }

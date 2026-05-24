@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Webtakt — Test Results</title>
+  <style>
+    body { background: #111; color: #ccc; font-family: monospace; padding: 1.5rem; }
+    h1   { color: #fff; }
+    #log { white-space: pre; font-size: 0.82rem; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <h1>Test Results</h1>
+  <pre id="log"></pre>
+  <script>
+    const raw = localStorage.getItem('webtakt_test_results');
+    if (!raw) {
+      document.getElementById('log').textContent = 'No results found. Run tests/index.html first.';
+    } else {
+      const data = JSON.parse(raw);
+      const lines = [`Timestamp: ${data.timestamp}`, ''];
+      for (const s of data.suites) {
+        lines.push(`── ${s.name} ──`);
+        for (const t of s.tests) {
+          const icon = t.status === 'pass' ? '✓' : '✗';
+          lines.push(`  ${icon} ${t.name}${t.error ? '\n      ERROR: ' + t.error : ''} (${t.ms}ms)`);
+        }
+        lines.push('');
+      }
+      const pass = data.suites.flatMap(s => s.tests).filter(t => t.status === 'pass').length;
+      const fail = data.suites.flatMap(s => s.tests).filter(t => t.status === 'fail').length;
+      lines.push(`${pass} passed, ${fail} failed`);
+      const el = document.getElementById('log');
+      el.textContent = lines.join('\n');
+      el.style.color = fail > 0 ? '#f88' : '#8f8';
+    }
+  </script>
+</body>
+</html>

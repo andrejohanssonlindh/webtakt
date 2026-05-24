@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Webtakt — Audio Tests</title>
+  <style>
+    body {
+      background: #111;
+      color: #ccc;
+      font-family: monospace;
+      padding: 1.5rem;
+    }
+    h1 { color: #fff; margin-bottom: 0.5rem; }
+    p  { color: #888; margin: 0 0 1rem; font-size: 0.85rem; }
+    button {
+      background: #333;
+      color: #fff;
+      border: 1px solid #555;
+      padding: 0.5rem 1.2rem;
+      font-family: monospace;
+      font-size: 1rem;
+      cursor: pointer;
+      border-radius: 3px;
+      margin-bottom: 1rem;
+    }
+    button:hover { background: #444; }
+    button:disabled { opacity: 0.4; cursor: default; }
+    #status {
+      color: #888;
+      font-size: 0.85rem;
+      margin-bottom: 0.5rem;
+      min-height: 1.2em;
+    }
+    #results {
+      white-space: pre;
+      font-size: 0.82rem;
+      line-height: 1.5;
+      background: #1a1a1a;
+      padding: 1rem;
+      border-radius: 4px;
+      border: 1px solid #333;
+      min-height: 4rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>Webtakt Audio Tests</h1>
+  <p>Runs against OfflineAudioContext — no speakers required. Results are saved to localStorage.</p>
+  <button id="run">Run All Tests</button>
+  <button id="copy" style="display:none">Copy Results</button>
+  <button id="save" style="display:none">Save to File</button>
+  <div id="status">Ready.</div>
+  <pre id="results"></pre>
+
+  <script type="module">
+    import { runAll } from './runner.js';
+
+    // Import all test suites so they register via suite() / test() calls
+    import './tests/lfo.js';
+    import './tests/plocks.js';
+    import './tests/machines/synth.js';
+    import './tests/machines/kick_silk.js';
+    import './tests/machines/kick_hard.js';
+    import './tests/machines/snare.js';
+    import './tests/machines/hihat.js';
+    import './tests/machines/fm.js';
+    import './tests/machines/bass.js';
+    import './tests/machines/karplus.js';
+    import './tests/machines/noise.js';
+    import './tests/machines/transient.js';
+    import './tests/machines/cymbal.js';
+    import './tests/machines/wood.js';
+    import './tests/machines/wavetable.js';
+    import './tests/machines/comb.js';
+    import './tests/machines/chord.js';
+    import './tests/machines/swarm.js';
+
+    const btn    = document.getElementById('run');
+    const copy   = document.getElementById('copy');
+    const save   = document.getElementById('save');
+    const status = document.getElementById('status');
+    const pre    = document.getElementById('results');
+
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      copy.style.display = 'none';
+      status.textContent = 'Running…';
+      try {
+        const results = await runAll();
+        const pass = results.suites.flatMap(s => s.tests).filter(t => t.status === 'pass').length;
+        const fail = results.suites.flatMap(s => s.tests).filter(t => t.status === 'fail').length;
+        status.textContent = `Done — ${pass} passed, ${fail} failed.`;
+        status.style.color = fail > 0 ? '#f88' : '#8f8';
+        copy.style.display = '';
+        save.style.display = '';
+      } catch (e) {
+        status.textContent = `Runner error: ${e.message}`;
+        status.style.color = '#f88';
+        console.error(e);
+      }
+      btn.disabled = false;
+    });
+
+    copy.addEventListener('click', () => {
+      navigator.clipboard.writeText(pre.textContent).then(() => {
+        copy.textContent = 'Copied!';
+        setTimeout(() => { copy.textContent = 'Copy Results'; }, 1500);
+      });
+    });
+
+    save.addEventListener('click', () => {
+      const blob = new Blob([pre.textContent], { type: 'text/plain' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      const ts   = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      a.href     = url;
+      a.download = `webtakt-test-results-${ts}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>

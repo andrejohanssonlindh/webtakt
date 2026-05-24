@@ -288,9 +288,9 @@ export class FilterViz {
     const mainGain   = gp('filter.gain') ?? 0;
     const baseLPF    = gp('base.lpf') ?? 20000;
     const baseHPF    = gp('base.hpf') ?? 20;
+    const slope      = gp('filter.slope') ?? 0;
 
     if (this._showBase) {
-      // Draw base LPF + HPF combined (dim)
       const lpfCurve = buildCurve('lowpass',  baseLPF, 0.7071);
       const hpfCurve = buildCurve('highpass', baseHPF, 0.7071);
       const baseCombined = combineCurves(lpfCurve, hpfCurve);
@@ -303,8 +303,28 @@ export class FilterViz {
       ctx.stroke();
     }
 
-    // ── Main filter curve ────────────────────────────────────
-    const mainCurve = buildCurve(mainType, mainCutoff, mainQ, mainGain);
+    // ── Main filter curve (with slope) ───────────────────────────
+    // slope 0–1 → 1–4 effective poles; extra stages blend in continuously.
+    // Stage i wet = clamp((slope - i/3) * 3, 0, 1).
+    const EXTRA = 7; // must match Filter.js EXTRA_STAGES
+    const buildSlopedCurve = (type, cutoff, Q, gain_db) => {
+      const pts = [];
+      for (let i = 0; i <= N; i++) {
+        const t   = i / N;
+        const hz  = FREQ_MIN * Math.pow(FREQ_MAX / FREQ_MIN, t);
+        let mag   = _evalBiquad(type, cutoff, Q, SR, hz, gain_db);
+        for (let s = 0; s < EXTRA; s++) {
+          const wet = Math.max(0, Math.min(1, (slope - s / EXTRA) * EXTRA));
+          if (wet > 0) {
+            mag *= (1 - wet) + wet * _evalBiquad(type, cutoff, Q, SR, hz, gain_db);
+          }
+        }
+        const db = Math.max(DB_MIN, Math.min(DB_MAX, _magToDb(mag)));
+        pts.push({ x: pad.l + t * cw, y: pad.t + (1 - (db - DB_MIN) / (DB_MAX - DB_MIN)) * ch });
+      }
+      return pts;
+    };
+    const mainCurve = buildSlopedCurve(mainType, mainCutoff, mainQ, mainGain);
 
     // Fill under main filter
     ctx.beginPath();
@@ -365,24 +385,23 @@ export class FilterViz {
     const gp = (path) => this._getParam ? this._getParam(path) : filter.getParam(path);
 
     const envAmt  = gp('filter.envAmount') ?? 0;
-    if (Math.abs(envAmt) < 0.01) return;  // nothing to show
+    if (Math.abs(envAmt) < 0.01) return;
 
     const mainType   = gp('filter.type');
     const mainCutoff = gp('filter.cutoff');
     const mainQ      = gp('filter.resonance');
     const mainGain   = gp('filter.gain') ?? 0;
+    const slope      = gp('filter.slope') ?? 0;
     const sustain    = gep('fenv.sustain') ?? 0;
 
-    // The envelope modulates cutoff on a log scale.
-    // Peak shift = envAmt × full-range. At sustain the shift = envAmt × sustain.
-    // Show two ghost curves: attack peak (envAmt × 1.0) and sustain level (envAmt × sustain).
-    // The envelope modulation range is ±4 octaves (same as Envelope.js convention).
-    const OCTAVES = 4;
-    const peakCutoff    = mainCutoff * Math.pow(2,  envAmt * OCTAVES);
-    const sustainCutoff = mainCutoff * Math.pow(2,  envAmt * OCTAVES * sustain);
+    // Match Envelope.js linear modulation: peak = baseCut + baseCut * envAmt
+    const modDepth      = mainCutoff * envAmt;
+    const peakCutoff    = mainCutoff + modDepth;
+    const sustainCutoff = mainCutoff + modDepth * sustain;
 
     const clampCutoff = hz => Math.max(FREQ_MIN, Math.min(FREQ_MAX * 0.99, hz));
     const SR = 44100;
+    const EXTRA = 7;
 
     const buildCurve = (cutoff) => {
       const N = Math.max(Math.round(cw), 128);
@@ -390,8 +409,12 @@ export class FilterViz {
       for (let i = 0; i <= N; i++) {
         const t  = i / N;
         const hz = FREQ_MIN * Math.pow(FREQ_MAX / FREQ_MIN, t);
-        const mag = _evalBiquad(mainType, clampCutoff(cutoff), mainQ, SR, hz, mainGain);
-        const db  = Math.max(DB_MIN, Math.min(DB_MAX, _magToDb(mag)));
+        let mag  = _evalBiquad(mainType, clampCutoff(cutoff), mainQ, SR, hz, mainGain);
+        for (let s = 0; s < EXTRA; s++) {
+          const wet = Math.max(0, Math.min(1, (slope - s / EXTRA) * EXTRA));
+          if (wet > 0) mag *= (1 - wet) + wet * _evalBiquad(mainType, clampCutoff(cutoff), mainQ, SR, hz, mainGain);
+        }
+        const db = Math.max(DB_MIN, Math.min(DB_MAX, _magToDb(mag)));
         pts.push({
           x: pad.l + t * cw,
           y: pad.t + (1 - (db - DB_MIN) / (DB_MAX - DB_MIN)) * ch,

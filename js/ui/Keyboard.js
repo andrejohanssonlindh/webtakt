@@ -81,6 +81,7 @@ export class Keyboard {
         this._recordNoteOnTime.clear();
         this._recordNoteOnStep.clear();
         this._heldSlots.clear();
+        this._heldKeys.clear();
       }
     });
   }
@@ -399,15 +400,151 @@ export class Keyboard {
     document.addEventListener('keydown', (e) => {
       if (e.repeat) return;
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+
+      // Drum mode: digit keys 1–N trigger that track at C4
+      if (this.state.drumMode && !e.shiftKey) {
+        const m = e.code.match(/^Digit(\d)$/);
+        if (m) {
+          const trackIndex = parseInt(m[1]) - 1;
+          const track = this.state.project.tracks[trackIndex];
+          if (track) { this._drumNoteOn(trackIndex); return; }
+        }
+      }
+
       const midi = this._keyMap.get(e.key);
       if (midi !== undefined) this._noteOn(midi);
     });
 
     document.addEventListener('keyup', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+
+      if (this.state.drumMode && !e.shiftKey) {
+        const m = e.code.match(/^Digit(\d)$/);
+        if (m) {
+          const trackIndex = parseInt(m[1]) - 1;
+          const track = this.state.project.tracks[trackIndex];
+          if (track) { this._drumNoteOff(trackIndex); return; }
+        }
+      }
+
       const midi = this._keyMap.get(e.key);
       if (midi !== undefined) this._noteOff(midi);
     });
+  }
+
+  /** Fire a note on a specific track at C4 (drum finger-drumming). */
+  async _drumNoteOn(trackIndex) {
+    const track = this.state.project.tracks[trackIndex];
+    if (!track) return;
+    const drumKey = `drum_${trackIndex}`;
+    if (this._heldKeys.has(drumKey)) return;
+    this._heldKeys.add(drumKey);
+
+    await this._ensureAudio();
+    const ctx  = this.state.project.audio.context;
+    const time = ctx.currentTime + 0.015;
+
+    const voice    = track._pool?.nextVoice() ?? null;
+    const machine  = voice?.machine  ?? track.machine;
+    const envelope = voice?.envelope ?? track.envelope;
+    if (voice) voice.claim(time + 30);
+    this._heldSlots.set(drumKey, { voice, track });
+
+    machine?.noteOn(60, 100, time);
+    envelope.noteOn(time);
+
+    // Record mode: write C4 into the step currently playing on this track
+    if (this.state.recording) {
+      const seq = track.sequencer;
+      const justFired = (seq._stepIndex - 1 + seq.stepCount) % seq.stepCount;
+      const pageStart = seq.pageOffset * 16;
+      const visIdx    = justFired - pageStart;
+      if (visIdx >= 0 && visIdx < 16) {
+        const step = seq.getVisibleSteps()[visIdx];
+        if (step) {
+          let nudge = 0;
+          if (seq.lastScheduledTime) {
+            const secondsPerTick = seq.clock._secondsPerTick;
+            const offsetTicks    = (ctx.currentTime - seq.lastScheduledTime) / secondsPerTick;
+            nudge = Math.max(-0.99, Math.min(0.99, offsetTicks));
+          }
+
+          let voiceIndex;
+          if (!step.active) {
+            step.voices[0] = { note: 60, velocity: 100, length: 1, nudge };
+            step.active = true;
+            voiceIndex = 0;
+          } else {
+            step.addVoice(60, 100, 1, nudge);
+            voiceIndex = step.voices.length - 1;
+          }
+
+          this._recordNoteOnTime.set(drumKey, ctx.currentTime);
+          this._recordNoteOnStep.set(drumKey, {
+            stepIndex: visIdx,
+            voiceIndex,
+            pageOffset: seq.pageOffset,
+            trackIndex,
+          });
+
+          this.state.emit('stepChanged', {
+            trackIndex,
+            stepIndex: visIdx,
+            step,
+          });
+        }
+      }
+    }
+  }
+
+  async _drumNoteOff(trackIndex) {
+    const drumKey = `drum_${trackIndex}`;
+    if (!this._heldKeys.has(drumKey)) return;
+    this._heldKeys.delete(drumKey);
+
+    await this._ensureAudio();
+    const ctx  = this.state.project.audio.context;
+    const time = ctx.currentTime + 0.015;
+
+    const slot = this._heldSlots.get(drumKey);
+    this._heldSlots.delete(drumKey);
+    if (!slot) return;
+
+    const { voice, track } = slot;
+    const machine  = voice?.machine  ?? track.machine;
+    const envelope = voice?.envelope ?? track.envelope;
+
+    if (voice) {
+      const release = envelope.getParam('env.release') ?? 0.3;
+      voice.claim(time + release);
+    }
+    machine?.noteOff(time);
+    envelope.noteOff(time);
+
+    // Record mode: write note length back into the step
+    if (this.state.recording && this._recordNoteOnTime.has(drumKey)) {
+      const onTime = this._recordNoteOnTime.get(drumKey);
+      const info   = this._recordNoteOnStep.get(drumKey);
+      this._recordNoteOnTime.delete(drumKey);
+      this._recordNoteOnStep.delete(drumKey);
+
+      const seq            = track.sequencer;
+      const holdSec        = ctx.currentTime - onTime;
+      const secondsPerTick = seq.clock._secondsPerTick;
+      const lengthTicks    = Math.max(1 / 16, holdSec / secondsPerTick);
+
+      if (info && info.pageOffset === seq.pageOffset) {
+        const step = seq.getVisibleSteps()[info.stepIndex];
+        if (step && step.voices[info.voiceIndex]) {
+          step.voices[info.voiceIndex].length = lengthTicks;
+          this.state.emit('stepChanged', {
+            trackIndex: info.trackIndex,
+            stepIndex:  info.stepIndex,
+            step,
+          });
+        }
+      }
+    }
   }
 
   /** Toggle keyboard folding on/off. Called from the SCALES tab. */

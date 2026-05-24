@@ -1193,6 +1193,38 @@ export class SynthPanel {
         this._activeWidgets.push(knob);
       });
 
+      // ── FX on/off toggles ──
+      const fxToggles = document.createElement('div');
+      fxToggles.className = 'mixer-fx-toggles';
+
+      [
+        { fx: track.delayFX,    label: 'DLY'   },
+        { fx: track.bitcrushFX, label: 'CRUSH' },
+        { fx: track.reverbFX,   label: 'REV'   },
+      ].forEach(({ fx, label: fxLabel }) => {
+        const btn = document.createElement('button');
+        btn.className = 'mixer-fx-toggle';
+        const update = () => {
+          const on = fx.enabled ?? false;
+          btn.textContent = fxLabel;
+          btn.classList.toggle('on', on);
+        };
+        update();
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          fx.setEnabled(!fx.enabled);
+          update();
+          // Keep the header FX bar in sync when this is the selected track
+          if (i === this.state.selectedTrackIndex) {
+            this._fxBar.querySelectorAll('._updateState').forEach(el => el._updateState?.());
+            this._fxBar.querySelectorAll('[data-fxtab]').forEach(wrap => wrap._updateState?.());
+          }
+        });
+        fxToggles.appendChild(btn);
+      });
+
+      strip.appendChild(fxToggles);
+
       // Click strip to select track
       strip.addEventListener('click', (e) => {
         if (e.target.closest('.knob-canvas')) return;
@@ -1412,6 +1444,10 @@ export class SynthPanel {
     const resKnob    = mkKnob('filter.resonance',  'RES',   0.1, 20,    1,    false, v => v.toFixed(1));
     const gainKnob   = mkKnob('filter.gain',       'GAIN',  -30, 30,    0,    true,  v => (v >= 0 ? '+' : '') + v.toFixed(1) + 'dB');
     const envAmtKnob = mkKnob('filter.envAmount',  'ENV',   -1,  1,     0.3,  true,  v => (v >= 0 ? '+' : '') + Math.round(v * 100) + '%');
+    const slopeKnob  = mkKnob('filter.slope',      'SLOPE', 0,   1,     0,    false, v => {
+      const poles = 1 + Math.round(v * 7);
+      return poles + 'P/' + (poles * 12) + 'dB';
+    });
 
     gainKnob.el.style.display = getFilterParam('filter.type') === 'peaking' ? '' : 'none';
 
@@ -1419,11 +1455,13 @@ export class SynthPanel {
     mainKnobRow.appendChild(resKnob.el);
     mainKnobRow.appendChild(gainKnob.el);
     mainKnobRow.appendChild(envAmtKnob.el);
-    this._activeWidgets.push(cutoffKnob, resKnob, gainKnob, envAmtKnob);
+    mainKnobRow.appendChild(slopeKnob.el);
+    this._activeWidgets.push(cutoffKnob, resKnob, gainKnob, envAmtKnob, slopeKnob);
     this._knobByPath.set('filter.cutoff',    cutoffKnob);
     this._knobByPath.set('filter.resonance', resKnob);
     this._knobByPath.set('filter.gain',      gainKnob);
     this._knobByPath.set('filter.envAmount', envAmtKnob);
+    this._knobByPath.set('filter.slope',     slopeKnob);
 
     // ── Base filter knobs — below main knobs in the left column
     const baseKnobRow = document.createElement('div');

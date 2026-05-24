@@ -44,6 +44,7 @@ export class AppState {
     this.activeLFOIndex     = 0;
     this.selectedStepIndex  = -1;
     this.recording              = false;
+    this.drumMode               = false;
     this.lastStepScheduledTime  = null;   // AudioContext time of the most recently fired step
     this._listeners             = new Map();  // event → Set<callback>
   }
@@ -52,6 +53,12 @@ export class AppState {
   setRecording(on) {
     this.recording = on;
     this.emit('recordingChanged', { recording: on });
+  }
+
+  /** Toggle drum mode on/off. */
+  setDrumMode(on) {
+    this.drumMode = on;
+    this.emit('drumModeChanged', { drumMode: on });
   }
 
   get selectedTrack() {

@@ -17,6 +17,7 @@
       <button id="btn-play" class="btn">▶ PLAY</button>
       <button id="btn-rec" class="btn">⏺ REC</button>
       <button id="btn-tape" class="btn">⏺ TAPE</button>
+      <button id="btn-drum" class="btn">DRUM</button>
       <div class="sep"></div>
       <span class="bpm-label">BPM</span>
       <span id="bpm-display">120</span>
@@ -218,6 +219,18 @@
           recorder.save(name.trim() || 'webtakt-recording');
         });
       }
+    });
+
+    // ── Drum mode ─────────────────────────────────────────────
+    const btnDrum = document.getElementById('btn-drum');
+
+    btnDrum.addEventListener('click', () => {
+      audio.resume();
+      state.setDrumMode(!state.drumMode);
+    });
+
+    state.on('drumModeChanged', ({ drumMode }) => {
+      btnDrum.classList.toggle('drum-active', drumMode);
     });
 
     bpmSlider.addEventListener('input', () => {
@@ -475,7 +488,7 @@
         _goToPage(num - 1);
         return;
       }
-      if (!isNaN(num) && num >= 1 && num <= project.tracks.length && !e.shiftKey) {
+      if (!isNaN(num) && num >= 1 && num <= project.tracks.length && !e.shiftKey && !state.drumMode) {
         const track = project.tracks[num - 1];
         track.muted ? track.unmute() : track.mute();
         trackRow.render();

@@ -50,6 +50,7 @@ export class Sequencer {
     // Wall-clock trigger state — read by TrackRow for the trig glow animation
     this.lastFireTime     = 0;   // performance.now() at last fire
     this.lastFireDuration = 0;   // gate length in ms
+    this.lastScheduledTime = 0;  // AudioContext time of the most recently scheduled tick
 
     // Active gate windows — read by StepGrid to show sustain dots on steps
     // Each entry: { absStep, voiceCount, endMs }
@@ -98,6 +99,7 @@ getVisibleSteps() {
   }
 
   _onTick(tickIndex, scheduledTime) {
+    this.lastScheduledTime = scheduledTime;
     const step = this.steps[this._stepIndex];
 
     if (step.active) {

@@ -1,43 +1,35 @@
 /**
  * KarplusMachine.js
  * -----------------
- * Karplus-Strong plucked string synthesis. A short noise burst excites a
- * tuned comb filter (DelayNode + feedback loop with LP filter), which
- * models the resonance and decay of a plucked string.
+ * Karplus-Strong plucked string synthesis.
  *
- * The delay time is computed from the MIDI note frequency at noteOn to
- * track pitch accurately. The LP filter in the feedback path models string
- * stiffness — lower cutoff = warmer, rounder sound (nylon); higher cutoff
- * = brighter, harder sound (steel).
+ * The algorithm is implemented entirely in JavaScript (not via WebAudio feedback
+ * loops, which are unstable in OfflineAudioContext and accumulate floating-point
+ * DC drift over time). On each noteOn, the full decay is synthesised into an
+ * AudioBuffer and played back via a BufferSourceNode — this is the standard
+ * reliable approach for browser Karplus-Strong.
  *
- * This machine is self-enveloping: the pluck decays naturally from the
- * comb filter's feedback loss. The track Envelope is still in-chain for
- * optional additional shaping.
- *
- * Audio graph (per note):
- *   ExciterGain (noise burst, per-note) ──────────────────────────────┐
- *   DelayNode (_delay, per-note) ← FeedbackGain ← LP (_fbLP) ←───────┤
- *                                                                      ↓
- *   DelayNode → _outputGain → [Filter]
- *
- * The delay time = 1/freq − LP correction offset. A new set of nodes
- * is created per noteOn because delay time changes mid-sustain would
- * detune the pitch.
+ * Algorithm:
+ *   1. Fill a wavetable of length = round(sampleRate / freq) with band-limited
+ *      noise (lowpass-filtered white noise to model exciter tone).
+ *   2. Repeatedly apply the Karplus-Strong update rule across the wavetable until
+ *      amplitude falls below a threshold:
+ *        y[n] = feedback × 0.5 × (y[n] + y[(n+1) % L])   [average filter]
+ *      The average filter (b = [0.5, 0.5]) acts as the string's loss mechanism.
+ *      'damping' controls how much LP filtering: fully warm = 0.5/0.5 average;
+ *      fully bright = pass-through (no averaging).
+ *   3. The resulting PCM is loaded into an AudioBuffer and played once.
  *
  * Parameters:
- *   'damping'      — LP cutoff in feedback path Hz (200–20000): warmth/brightness
- *   'feedback'     — feedback gain (0.8–0.999): how long the string rings
- *   'excite'       — noise burst length in ms (1–50): pluck character
- *   'excite.tone'  — LP filter on exciter noise (200–20000 Hz): pluck brightness
- *   'stretch'      — slight pitch detune on feedback in cents (-12 to +12): chorus
+ *   'damping'      — blend 0–1: 0 = no damping (bright), 1 = full averaging (warm)
+ *   'feedback'     — loop gain 0.8–0.999: how many cycles before silence
+ *   'excite'       — noise burst length in ms (1–50): affects attack character
+ *   'excite.tone'  — LP cutoff on initial noise (200–20000 Hz): pluck brightness
+ *   'stretch'      — pitch stretch in cents (-12 to +12): slight detune/chorus
  *   'output.level' — 0–1
  */
 
-import { Machine }        from './Machine.js';
-import { getNoiseBuffer } from '../util/AudioBuffers.js';
-
-const _noiseCache = { buf: null };
-const _getNoise   = ctx => getNoiseBuffer(ctx, _noiseCache, 0.1);
+import { Machine } from './Machine.js';
 
 export class KarplusMachine extends Machine {
   constructor(context) {
@@ -46,7 +38,7 @@ export class KarplusMachine extends Machine {
     this.label = 'Karplus';
 
     this._params = {
-      'damping':      6000,
+      'damping':      0.5,
       'feedback':     0.985,
       'excite':       8,
       'excite.tone':  8000,
@@ -57,104 +49,93 @@ export class KarplusMachine extends Machine {
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
 
-    // Hold references to active per-note nodes so they can be cleaned up
-    this._activeNodes = null;
+    this._activeSrc = null;
   }
 
   noteOn(midiNote, velocity, time) {
+    // Stop any previous note
+    if (this._activeSrc) {
+      try { this._activeSrc.stop(time); } catch (_) {}
+      this._activeSrc = null;
+    }
+
     const velScale   = velocity / 127;
-    const freq       = Machine.midiToFreq(midiNote);
-    // Karplus-Strong: delay time = 1/freq. Subtract a small correction for
-    // the LP filter group delay (approximately 1 sample at low cutoff).
     const sampleRate = this.context.sampleRate;
-    const delayTime  = Math.max(1 / freq - 1 / sampleRate, 0.0001);
 
-    const exciteMs   = this._params['excite'];
-    const exciteDur  = exciteMs / 1000;
+    // Apply stretch: slightly detune the frequency used for wavetable length
+    const freq       = Machine.midiToFreq(midiNote);
+    const stretchRatio = Math.pow(2, this._params['stretch'] / 1200);
+    const effFreq    = freq * stretchRatio;
 
-    // Stop and disconnect previous note nodes
-    if (this._activeNodes) {
-      const { exciterSrc, exciterLP, exciterGain, delay, fbLP, fbGain } = this._activeNodes;
-      const stopTime = time + exciteDur + 0.01;
-      // Schedule a fade — exponential decay will have handled cleanup already,
-      // but we need to disconnect to avoid double-output on rapid retriggering.
-      const now = this.context.currentTime;
-      setTimeout(() => {
-        try { exciterSrc.stop();          } catch (_) {}
-        try { exciterGain.disconnect();   } catch (_) {}
-        try { exciterLP.disconnect();     } catch (_) {}
-        try { delay.disconnect();         } catch (_) {}
-        try { fbLP.disconnect();          } catch (_) {}
-        try { fbGain.disconnect();        } catch (_) {}
-      }, Math.max(0, (stopTime - now) * 1000 + 50));
-      this._activeNodes = null;
+    const period     = Math.round(sampleRate / effFreq);   // wavetable length in samples
+    const feedback   = this._params['feedback'];
+    const damping    = this._params['damping'];             // 0=bright, 1=warm
+    const exciteCut  = this._params['excite.tone'];
+    // excite ms: how long to inject noise. Longer = softer, bowed attack. Shorter = sharp pluck.
+    const exciteLen  = Math.max(period, Math.round(sampleRate * this._params['excite'] / 1000));
+
+    // ── 1. Generate exciter: band-limited white noise ──
+    // One-pole lowpass: y[n] = alpha*x[n] + (1-alpha)*y[n-1]
+    const rcAlpha    = (2 * Math.PI * exciteCut / sampleRate);
+    const lpAlpha    = rcAlpha / (1 + rcAlpha);
+
+    const wavetable  = new Float32Array(exciteLen);
+    let   lpState    = 0;
+    for (let i = 0; i < exciteLen; i++) {
+      const noise = Math.random() * 2 - 1;
+      lpState     = lpAlpha * noise + (1 - lpAlpha) * lpState;
+      wavetable[i] = lpState;
     }
 
-    // ── Exciter: short noise burst ──
-    const exciterSrc    = this.context.createBufferSource();
-    exciterSrc.buffer   = _getNoise(this.context);
-    exciterSrc.loop     = false;
+    // Normalise wavetable to [-1, 1]
+    let peak = 0;
+    for (let i = 0; i < exciteLen; i++) peak = Math.max(peak, Math.abs(wavetable[i]));
+    if (peak > 0) for (let i = 0; i < exciteLen; i++) wavetable[i] /= peak;
 
-    const exciterLP       = this.context.createBiquadFilter();
-    exciterLP.type        = 'lowpass';
-    exciterLP.frequency.value = this._params['excite.tone'];
-    exciterLP.Q.value     = 0.7071;
+    // ── 2. Run Karplus-Strong iterations until inaudible ──
+    // decay threshold: amplitude < -60 dB relative to velScale
+    const threshold  = 0.001 * velScale;
+    // max samples to generate (cap at 10 s to avoid huge buffers)
+    const maxSamples = Math.min(sampleRate * 10, Math.ceil(
+      period * Math.log(threshold) / Math.log(feedback * (1 - damping * 0.5))
+    ));
+    const totalLen   = Math.max(period * 4, isFinite(maxSamples) && maxSamples > 0 ? maxSamples : sampleRate * 3);
 
-    const exciterGain     = this.context.createGain();
-    exciterGain.gain.setValueAtTime(velScale, time);
-    exciterGain.gain.setValueAtTime(0, time + exciteDur);
+    const buf        = this.context.createBuffer(1, totalLen, sampleRate);
+    const out        = buf.getChannelData(0);
 
-    exciterSrc.connect(exciterLP);
-    exciterLP.connect(exciterGain);
+    // Copy initial exciter noise into the output buffer
+    for (let i = 0; i < exciteLen; i++) out[i] = wavetable[i] * velScale;
 
-    // ── Comb filter: tuned delay + feedback LP ──
-    const delay       = this.context.createDelay(2);
-    delay.delayTime.value = delayTime;
+    // Karplus-Strong update: weighted average of two consecutive samples one period back.
+    // avgCoeff=0.5 → full two-point average (warm/lossy); avgCoeff=0 → copy only (bright).
+    const avgCoeff   = damping * 0.5;   // 0..0.5
+    const passCoeff  = 1 - avgCoeff;    // 0.5..1
 
-    const fbLP        = this.context.createBiquadFilter();
-    fbLP.type         = 'lowpass';
-    fbLP.frequency.value = this._params['damping'];
-    fbLP.Q.value      = 0.7071;
-
-    const fbGain      = this.context.createGain();
-    fbGain.gain.value = this._params['feedback'];
-
-    // Apply stretch (slight detune on feedback loop — subtle chorusing)
-    if (this._params['stretch'] !== 0) {
-      const detuneRatio = Math.pow(2, this._params['stretch'] / 1200);
-      delay.delayTime.value = delayTime * detuneRatio;
+    // KS update starts after the exciter region; uses period (not exciteLen) as the delay
+    for (let n = exciteLen; n < totalLen; n++) {
+      // y[n-L] and y[n-L+1] are both already written (they are in the past)
+      out[n] = feedback * (passCoeff * out[n - period] + avgCoeff * out[n - period + 1]);
     }
 
-    // Feedback loop: delay → fbLP → fbGain → delay (back into itself)
-    delay.connect(fbLP);
-    fbLP.connect(fbGain);
-    fbGain.connect(delay);
+    // Scale to avoid clipping the output gain stage
+    const outPeak = (() => { let p = 0; for (let i = 0; i < totalLen; i++) p = Math.max(p, Math.abs(out[i])); return p; })();
+    if (outPeak > 0.98) { const s = 0.98 / outPeak; for (let i = 0; i < totalLen; i++) out[i] *= s; }
 
-    // Exciter feeds into delay
-    exciterGain.connect(delay);
+    // ── 3. Play back the buffer ──
+    const src    = this.context.createBufferSource();
+    src.buffer   = buf;
+    src.loop     = false;
+    src.connect(this.outputGain);
+    src.start(time);
+    src.stop(time + totalLen / sampleRate + 0.05);
 
-    // Delay output → master output
-    delay.connect(this.outputGain);
+    src.onended = () => {
+      try { src.disconnect(); } catch (_) {}
+      if (this._activeSrc === src) this._activeSrc = null;
+    };
 
-    exciterSrc.start(time);
-
-    this._activeNodes = { exciterSrc, exciterLP, exciterGain, delay, fbLP, fbGain };
-
-    // Auto-cleanup after ~feedback decay time
-    // feedback^n = 0.001 → n = log(0.001)/log(feedback)
-    const fb = this._params['feedback'];
-    const decayCycles = fb > 0.001 ? Math.log(0.001) / Math.log(fb) : 100;
-    const decayTime   = decayCycles / freq;
-    const cleanupMs   = (exciteDur + decayTime + 0.3) * 1000 + Math.max(time - this.context.currentTime, 0) * 1000;
-    const nodes       = this._activeNodes;
-    setTimeout(() => {
-      try { nodes.exciterSrc.stop();        } catch (_) {}
-      try { nodes.exciterGain.disconnect(); } catch (_) {}
-      try { nodes.exciterLP.disconnect();   } catch (_) {}
-      try { nodes.delay.disconnect();       } catch (_) {}
-      try { nodes.fbLP.disconnect();        } catch (_) {}
-      try { nodes.fbGain.disconnect();      } catch (_) {}
-    }, cleanupMs);
+    this._activeSrc = src;
   }
 
   noteOff(time) {} // Self-decaying
@@ -162,29 +143,27 @@ export class KarplusMachine extends Machine {
   connect(destinationNode) { this.outputGain.connect(destinationNode); }
 
   disconnect() {
-    if (this._activeNodes) {
-      const { exciterSrc, exciterGain, exciterLP, delay, fbLP, fbGain } = this._activeNodes;
-      try { exciterSrc.stop();        } catch (_) {}
-      try { exciterGain.disconnect(); } catch (_) {}
-      try { exciterLP.disconnect();   } catch (_) {}
-      try { delay.disconnect();       } catch (_) {}
-      try { fbLP.disconnect();        } catch (_) {}
-      try { fbGain.disconnect();      } catch (_) {}
-      this._activeNodes = null;
+    if (this._activeSrc) {
+      try { this._activeSrc.stop(); } catch (_) {}
+      try { this._activeSrc.disconnect(); } catch (_) {}
+      this._activeSrc = null;
     }
     this.outputGain.disconnect();
   }
 
   setParam(path, value, time) {
     this._params[path] = value;
-    // All params are JS-only — read at noteOn time. No live AudioParam to update.
+    if (path === 'output.level') {
+      const t = time ?? this.context.currentTime;
+      this.outputGain.gain.setValueAtTime(value, t);
+    }
   }
 
   getParam(path) { return this._params[path]; }
 
   getParamList() {
     return [
-      { path: 'damping',      label: 'Damping',     type: 'number', min: 200,  max: 20000, default: 6000,  plockMode: 'js' },
+      { path: 'damping',      label: 'Damping',     type: 'number', min: 0,    max: 1,     default: 0.5,   plockMode: 'js' },
       { path: 'feedback',     label: 'Feedback',    type: 'number', min: 0.8,  max: 0.999, default: 0.985, plockMode: 'js' },
       { path: 'excite',       label: 'Excite',      type: 'number', min: 1,    max: 50,    default: 8,     plockMode: 'js' },
       { path: 'excite.tone',  label: 'Excite Tone', type: 'number', min: 200,  max: 20000, default: 8000,  plockMode: 'js' },
