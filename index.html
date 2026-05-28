@@ -104,6 +104,7 @@
     import { SynthPanel }    from './js/ui/SynthPanel.js';
     import { ModWheel }      from './js/ui/ModWheel.js';
     import { Keyboard }      from './js/ui/Keyboard.js';
+    import { Oscilloscope }  from './js/ui/Oscilloscope.js';
 
     // ── Boot ────────────────────────────────────────────────
     const audio    = new AudioEngine();
@@ -117,6 +118,8 @@
     const trackRow   = new TrackRow(document.getElementById('track-row'), state);
     const synthPanel = new SynthPanel(document.getElementById('synth-panel'), state, library, _openModal, project.sampleStore, audio.context);
     const stepGrid   = new StepGrid(document.getElementById('step-grid'), state);
+    const oscilloscope = new Oscilloscope(synthPanel.scopeCanvas, audio.analyser);
+    oscilloscope.start();
     const modWheel   = new ModWheel(document.getElementById('mod-wheels'), state);
     const keyboard   = new Keyboard(
       document.getElementById('keyboard'),

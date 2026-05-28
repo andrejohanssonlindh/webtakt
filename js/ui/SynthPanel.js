@@ -86,6 +86,12 @@ export class SynthPanel {
 
     header.appendChild(this._tabBar);
 
+    // Oscilloscope canvas — fills the gap between tab bar and FX block
+    this.scopeCanvas = document.createElement('canvas');
+    this.scopeCanvas.className = 'oscilloscope';
+    this.scopeCanvas.height = 48;
+    header.appendChild(this.scopeCanvas);
+
     // FX toggle block — always visible on the right
     this._fxBar = document.createElement('div');
     this._fxBar.className = 'fx-bar';

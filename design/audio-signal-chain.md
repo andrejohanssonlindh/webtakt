@@ -19,6 +19,7 @@ VoiceSlot ×4 (each slot is fully isolated before the shared filter):
                     → AudioEngine.fxBus (GainNode)
                       → AudioEngine.masterGain
                         → AudioContext.destination
+                        → AudioEngine.analyser (AnalyserNode — parallel tap, no audio output)
 
 Each Envelope also drives Filter.node.frequency directly (filter envelope modulation).
 All 4 envelopes modulate the same shared filter frequency param — they race-cancel correctly

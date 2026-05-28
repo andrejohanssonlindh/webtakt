@@ -93,9 +93,15 @@ export class SnareMachine extends Machine {
     const decay    = this._params['decay'];
     const tune     = this._params['tune'];
 
-    // Disconnect old per-note amps
-    if (this._bodyAmp)  { try { this._bodyAmp.disconnect();  } catch (_) {} }
-    if (this._noiseAmp) { try { this._noiseAmp.disconnect(); } catch (_) {} }
+    // Disconnect old per-note amps — both the source→amp and amp→output connections
+    if (this._bodyAmp)  {
+      try { this._toneGain.disconnect(this._bodyAmp); } catch (_) {}
+      try { this._bodyAmp.disconnect(); } catch (_) {}
+    }
+    if (this._noiseAmp) {
+      try { this._snapGain.disconnect(this._noiseAmp); } catch (_) {}
+      try { this._noiseAmp.disconnect(); } catch (_) {}
+    }
 
     // Pitch drop on persistent osc
     this._tuneOsc.frequency.setValueAtTime(tune, t);

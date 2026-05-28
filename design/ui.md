@@ -18,6 +18,16 @@ The panel header has two zones in a single row:
 | LFO | LFO sub-selector (LFO 1, LFO 2, …, +) capped at 220px wide, destination dropdown (grouped), speed/depth/waveform knobs |
 | MIXER | All-tracks mixer island: one strip per track showing Level, DLY wet, CRUSH wet, REV wet, and DJ Filter knobs. Clicking a strip selects that track. |
 
+### Oscilloscope Strip (centre of header, always visible)
+
+A `<canvas class="oscilloscope">` sits between the tab bar and the FX block, filling all remaining horizontal space via `flex: 1`.
+
+- Taps `AudioEngine.analyser` — an `AnalyserNode` connected in parallel from `masterGain` (does not alter the audio path).
+- Rendered by `js/ui/Oscilloscope.js`: `requestAnimationFrame` loop, reads `fftSize=2048` float time-domain buffer.
+- Zero-crossing trigger: scans for the first upward zero crossing before plotting, so the waveform stays locked and stable.
+- Canvas pixel width tracks its CSS layout width via `ResizeObserver` so drawing is never stretched.
+- Amber (`#e8a020`) waveform on near-black background to match the app palette.
+
 ### FX Block (right side of header, always visible, teal)
 
 Three stacked toggle units — DLY / CRUSH / REV — sit in `.fx-bar` on the right, separated by a left border. See [`fx.md`](fx.md) for full detail.

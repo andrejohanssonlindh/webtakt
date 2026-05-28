@@ -100,12 +100,14 @@ export class KickHardMachine extends Machine {
     const punch     = this._params['punch'];
     const pd        = this._params['punch.decay'];
 
-    // Disconnect old per-note nodes if still alive
+    // Disconnect old per-note nodes — both source→amp and amp→output
     if (this._bodyGain) {
+      try { this._tuneOsc.disconnect(this._bodyGain); } catch (_) {}
       try { this._bodyGain.disconnect(); } catch (_) {}
       this._bodyGain = null;
     }
     if (this._subGain) {
+      try { this._subOsc.disconnect(this._subGain); } catch (_) {}
       try { this._subGain.disconnect(); } catch (_) {}
       this._subGain = null;
     }

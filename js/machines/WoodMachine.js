@@ -50,7 +50,7 @@ export class WoodMachine extends Machine {
       'decay':        0.08,
       'click':        0.6,
       'click.freq':   3000,
-      'output.level': 0.85,
+      'output.level': 1.0,
     };
 
     this.outputGain = context.createGain();
@@ -109,7 +109,7 @@ export class WoodMachine extends Machine {
       try { this._clickGain.disconnect();                } catch (_) {}
     }
 
-    const amp = velScale * 2;
+    const amp = velScale * 8;
 
     // Ring1
     this._ring1Gain = this.context.createGain();
@@ -199,7 +199,7 @@ export class WoodMachine extends Machine {
       { path: 'decay',        label: 'Decay',      type: 'number', min: 0.001, max: 0.4,   default: 0.08,                                                   plockMode: 'js'        },
       { path: 'click',        label: 'Click',      type: 'number', min: 0,     max: 1,     default: 0.6,                                                    plockMode: 'js'        },
       { path: 'click.freq',   label: 'Click Freq', type: 'number', min: 500,   max: 12000, default: 3000, modulatable: true,  lfoMin: 500,   lfoMax: 12000, plockMode: 'audioParam' },
-      { path: 'output.level', label: 'Level',      type: 'number', min: 0,     max: 1,     default: 0.85, modulatable: true,  lfoMin: 0,     lfoMax: 1,     plockMode: 'audioParam' },
+      { path: 'output.level', label: 'Level',      type: 'number', min: 0,     max: 1,     default: 1.0,  modulatable: true,  lfoMin: 0,     lfoMax: 1,     plockMode: 'audioParam' },
     ];
   }
 

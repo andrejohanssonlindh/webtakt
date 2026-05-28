@@ -408,6 +408,17 @@ body {
   min-width: 0;
 }
 
+/* Oscilloscope strip — fills gap between tab bar and FX block */
+.oscilloscope {
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  display: block;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  background: #0d0d0d;
+}
+
 /* FX toggle block — right side of header */
 .fx-bar {
   display: flex;

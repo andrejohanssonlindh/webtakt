@@ -65,8 +65,9 @@ export class KickSilkMachine extends Machine {
     const punch    = this._params['punch'];
     const pd       = this._params['punch.decay'];
 
-    // Disconnect old bodyGain if still connected
+    // Disconnect old bodyGain — both source→amp and amp→output
     if (this._bodyGain) {
+      try { this._tuneOsc.disconnect(this._bodyGain); } catch (_) {}
       try { this._bodyGain.disconnect(); } catch (_) {}
       this._bodyGain = null;
     }

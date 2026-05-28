@@ -36,7 +36,7 @@ css/
   style.css
 js/
   core/
-    AudioEngine.js      — AudioContext, master gain, FX bus placeholder
+    AudioEngine.js      — AudioContext, master gain, FX bus, AnalyserNode (master output tap)
     Clock.js            — BPM clock, tick scheduling via AudioContext.currentTime
     GlobalRecorder.js   — MediaRecorder wrapper tapping masterGain
   sequencer/
@@ -76,6 +76,7 @@ js/
     StepGrid.js         — 16-step grid (current page), click to select, dblclick to add lowest note
     SynthPanel.js       — Tabbed panel: MACHINE / TRIG / SYNTH / FILTER / AMP / LFO
     FilterViz.js        — Canvas widget: frequency response curve + base filter + env ghost
+    Oscilloscope.js     — Canvas waveform strip: time-domain display of master output with zero-crossing trigger
     ModWheel.js         — 2 assignable mod wheels: drag or scroll (left/right screen halves → MW1/MW2)
     Keyboard.js         — Piano keyboard (2 octaves), octave shift, live note trigger
     KnobWidget.js       — Rotary knob widget, supports bipolar, p-lock highlight, drag interaction

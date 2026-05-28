@@ -29,9 +29,16 @@ export class AudioEngine {
     this.masterGain = this.context.createGain();
     this.masterGain.gain.value = 0.8;
 
+    // Analyser — tapped in parallel from masterGain (does not affect audio path)
+    this.analyser = this.context.createAnalyser();
+    this.analyser.fftSize = 2048;
+    this.analyser.smoothingTimeConstant = 0;
+
     // Signal flow: fxBus → masterGain → destination
+    //                                 ↘ analyser (parallel, silent branch)
     this.fxBus.connect(this.masterGain);
     this.masterGain.connect(this.context.destination);
+    this.masterGain.connect(this.analyser);
   }
 
   /** Call once on first user gesture to unblock AudioContext. */

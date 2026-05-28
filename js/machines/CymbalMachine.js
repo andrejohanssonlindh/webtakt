@@ -41,23 +41,24 @@ export class CymbalMachine extends Machine {
     this.label = 'Cymbal';
 
     this._params = {
-      'tune':         200,
-      'tone':         4000,
-      'body':         1000,
+      'tune':         300,
+      'tone':         1500,
+      'body':         3500,
       'resonance':    3.0,
       'decay':        0.15,
       'mid.decay':    0.6,
       'open.decay':   2.5,
       'mode':         'closed',
-      'output.level': 0.7,
+      'output.level': 0.5,
     };
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
 
-    // Mix gain — normalise by voice count
+    // Mix gain — normalise by voice count, then boost to compensate for
+    // filter attenuation (HPF + BP strip most energy from the square waves).
     this._mixGain = context.createGain();
-    this._mixGain.gain.value = 1 / RATIOS.length;
+    this._mixGain.gain.value = (1 / RATIOS.length) * 4;
 
     // Six inharmonic square oscillators
     this._oscs = RATIOS.map(ratio => {
@@ -69,14 +70,14 @@ export class CymbalMachine extends Machine {
       return osc;
     });
 
-    // Persistent HP filter — controls brightness (tone)
+    // Persistent HP filter — cuts low rumble below the oscillator cluster
     this._hpf = context.createBiquadFilter();
     this._hpf.type            = 'highpass';
     this._hpf.frequency.value = this._params['tone'];
     this._hpf.Q.value         = 0.7071;
     this._mixGain.connect(this._hpf);
 
-    // Persistent bandpass — metallic body resonance
+    // Persistent bandpass — metallic body resonance, centred above HPF cutoff
     this._bp = context.createBiquadFilter();
     this._bp.type            = 'bandpass';
     this._bp.frequency.value = this._params['body'];
@@ -155,15 +156,15 @@ export class CymbalMachine extends Machine {
 
   getParamList() {
     return [
-      { path: 'tune',         label: 'Tune',        type: 'number', min: 100,  max: 800,   default: 200,  modulatable: true,  lfoMin: 100,  lfoMax: 800,   plockMode: 'audioParam' },
-      { path: 'tone',         label: 'Tone',         type: 'number', min: 500,  max: 16000, default: 4000, modulatable: true,  lfoMin: 500,  lfoMax: 16000, plockMode: 'audioParam' },
-      { path: 'body',         label: 'Body',         type: 'number', min: 200,  max: 4000,  default: 1000, modulatable: true,  lfoMin: 200,  lfoMax: 4000,  plockMode: 'audioParam' },
+      { path: 'tune',         label: 'Tune',        type: 'number', min: 100,  max: 800,   default: 300,  modulatable: true,  lfoMin: 100,  lfoMax: 800,   plockMode: 'audioParam' },
+      { path: 'tone',         label: 'Tone',         type: 'number', min: 200,  max: 8000,  default: 1500, modulatable: true,  lfoMin: 200,  lfoMax: 8000,  plockMode: 'audioParam' },
+      { path: 'body',         label: 'Body',         type: 'number', min: 500,  max: 16000, default: 3500, modulatable: true,  lfoMin: 500,  lfoMax: 16000, plockMode: 'audioParam' },
       { path: 'resonance',    label: 'Resonance',    type: 'number', min: 0.5,  max: 12,    default: 3.0,  modulatable: true,  lfoMin: 0.5,  lfoMax: 12,    plockMode: 'audioParam' },
       { path: 'decay',        label: 'Decay',        type: 'number', min: 0.05, max: 0.5,   default: 0.15,                                                  plockMode: 'js'        },
       { path: 'mid.decay',    label: 'Mid Decay',    type: 'number', min: 0.1,  max: 2.0,   default: 0.6,                                                   plockMode: 'js'        },
       { path: 'open.decay',   label: 'Open Decay',   type: 'number', min: 0.5,  max: 8.0,   default: 2.5,                                                   plockMode: 'js'        },
       { path: 'mode',         label: 'Mode',         type: 'enum',   options: ['closed','mid','open'],                                                       plockMode: 'js'        },
-      { path: 'output.level', label: 'Level',        type: 'number', min: 0,    max: 1,     default: 0.7,  modulatable: true,  lfoMin: 0,    lfoMax: 1,     plockMode: 'audioParam' },
+      { path: 'output.level', label: 'Level',        type: 'number', min: 0,    max: 1,     default: 0.5,  modulatable: true,  lfoMin: 0,    lfoMax: 1,     plockMode: 'audioParam' },
     ];
   }
 

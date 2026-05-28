@@ -178,16 +178,25 @@ export class VoicePool {
   setMachine(makeMachine) {
     this._makeMachine = makeMachine;
 
-    // Capture canonical JSON before destroying anything
+    // Capture canonical JSON before destroying anything — only reapply if the
+    // new machine is the same type (same-type rebuild). Cross-type swaps must
+    // not bleed params like output.level from the old machine onto the new one.
     const canonicalJSON = this._slots[0].machine.toJSON();
+    const oldType = canonicalJSON.type;
 
     for (let i = 0; i < this._slots.length; i++) {
       const slot = this._slots[i];
       // Disconnect old machine from the slot's envelope ampGain
       slot.machine.disconnect();
-      // Build new machine, restore params, and reconnect to slot's envelope gate
+      // Cancel any in-flight envelope automation so the new machine isn't
+      // silenced by a long release tail from the previous machine type.
+      const g = slot.envelope.ampGain.gain;
+      g.cancelScheduledValues(this._context.currentTime);
+      g.setValueAtTime(0, this._context.currentTime);
+      slot._freeAt = 0;
+      // Build new machine and reconnect to slot's envelope gate
       const newMachine = makeMachine(this._context);
-      newMachine.fromJSON(canonicalJSON);
+      if (newMachine.type === oldType) newMachine.fromJSON(canonicalJSON);
       newMachine.connect(slot.envelope.ampGain);
       slot.machine = newMachine;
     }

@@ -35,13 +35,14 @@ The tests run entirely in-browser against `OfflineAudioContext` (no speakers, no
 
 ```
 tests/
-  index.html          — test runner page (Run button, Copy/Save)
-  results.html        — legacy stub (results now rendered in index.html)
-  runner.js           — harness: OfflineAudioContext factory, measurement helpers, runner loop
-  TEST_DESIGN.md      — this file
+  index.html              — test runner page (Run button, Copy/Save)
+  results.html            — legacy stub (results now rendered in index.html)
+  runner.js               — harness: OfflineAudioContext factory, measurement helpers, runner loop
+  TEST_DESIGN.md          — this file
   tests/
-    lfo.js            — LFO modulation and TRG mode tests
-    plocks.js         — p-lock apply and restore tests
+    lfo.js                — LFO core behaviour: depth=0 baseline, depth=100 variation, TRG determinism
+    lfo_machine_params.js — LFO wiring tests for every modulatable param on every machine + signal chain
+    plocks.js             — p-lock apply and restore tests
     machines/
       synth.js
       kick_silk.js
@@ -109,7 +110,7 @@ FFT-based energy in a frequency band. Buffer is peak-normalised before FFT to pr
 
 ## Per-suite test strategy
 
-### LFO (`tests/lfo.js`)
+### LFO core (`tests/lfo.js`)
 
 | Test | Method | Rationale |
 |---|---|---|
@@ -120,6 +121,22 @@ FFT-based energy in a frequency band. Buffer is peak-normalised before FFT to pr
 **Target param:** `output.level` — chosen because it is a direct AudioParam connection (`plockMode: 'audioParam'`, `resolveAudioParam` returns `outputGain.gain`). `filter.cutoff` uses `plockMode: 'envelope'` which routes through `scheduleNote()`, creating contention with the envelope's own filter frequency scheduling.
 
 **Removed test:** "LFO depth=100 mean differs from depth=0 mean" — a symmetric sine LFO at depth=100 averages to zero modulation over a full cycle, so the mean RMS across 4 steps is identical for both. The max/min ratio test captures the same information more robustly.
+
+### LFO machine params (`tests/lfo_machine_params.js`)
+
+One test file that covers every `modulatable: true` param that has an AudioParam backing (`resolveAudioParam ≠ null`) across all machines and the shared signal chain (Filter, DelayFX, BitcrushFX, ReverbFX, amp.pan).
+
+**Exclusions (by design):**
+- JS-only params (`plockMode:'js'`, `resolveAudioParam → null`): `CombMachine.decay/mix`, `NoiseMachine.color`, `SwarmMachine.spread/noise.amount/noise.color`, `ChordMachine.spread`, `TransientMachine.pitch`, `FMMachine.op*.ratio`. The LFO cannot write to these via WebAudio.
+- `filter.cutoff`: envelope ramps overwrite it (see §"Known limitations").
+- `output.level` on synth: already covered in `lfo.js`.
+- `wt-sampler.morph`: AudioWorklet not available in OfflineAudioContext.
+
+**Test approach:**
+- **Level params** (output.level, sub.level, op*.level, body.level, crush.wet, delay.wet, reverb.wet, etc.): `rms` max/min ratio > 1.08–1.12 across 4 steps at 3 Hz LFO.
+- **Frequency params** (tune, cutoff, tone, freq1/2, etc.): `bandEnergy` in the relevant band, max/min ratio > 1.10.
+- **Detune / pitch-drift params** (osc.detune, op*.detune): `bandpassRms` at the note fundamental, or just confirms RMS > 0 (detune can't silence).
+- **Structural params** (delay.time, crush.rate, reverb.damp, delay.feedback): confirms RMS > 0 (signal reaches output with LFO connected).
 
 ### P-locks (`tests/plocks.js`)
 
