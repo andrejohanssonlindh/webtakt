@@ -112,7 +112,8 @@ export class TransientMachine extends Machine {
     if (this._bodyAmp)   { try { this._bodyAmp.disconnect();   } catch (_) {} }
 
     // ── Click burst ──
-    this._clickOsc.frequency.setValueAtTime(clickFreq, t);
+    // Do NOT setValueAtTime on frequency here — that would cancel any LFO modulation.
+    // The persistent _clickOsc already tracks click.freq via setParam / LFO AudioParam.
     this._clickGain = this.context.createGain();
     this._clickGain.gain.setValueAtTime(velScale, t);
     this._clickGain.gain.exponentialRampToValueAtTime(0.001, t + clickDec);
@@ -120,9 +121,10 @@ export class TransientMachine extends Machine {
     this._clickGain.connect(this.outputGain);
 
     // ── Noise click ──
+    // _noiseClickGain.gain is the LFO target; per-note envelope uses velocity only.
     if (nClick > 0.001) {
       this._noiseGain = this.context.createGain();
-      this._noiseGain.gain.setValueAtTime(nClick * velScale, t);
+      this._noiseGain.gain.setValueAtTime(velScale, t);
       this._noiseGain.gain.exponentialRampToValueAtTime(0.001, t + clickDec * 2);
       this._noiseClickGain.connect(this._noiseGain);
       this._noiseGain.connect(this.outputGain);
