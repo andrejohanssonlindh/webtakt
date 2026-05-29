@@ -59,6 +59,7 @@ js/
     ClappMachine.js     — 808-style clap: 3 staggered noise bursts through bandpass
     WavetableMachine.js — Wavetable oscillator with morphing (8-entry bank via PeriodicWave)
     WavetableSamplerMachine.js — Two-sample wavetable: morph between sample A and B via AudioWorklet
+    SampleSwarmMachine.js — 7-voice sample swarm: one sample played through 7 detuned BufferSourceNodes with spread + drift (type: 'sample-swarm')
     KarplusMachine.js   — Karplus-Strong plucked string (noise burst + comb filter)
     BassMachine.js      — Bassline voice: saw/sq + sub + drive + portamento + accent
     CombMachine.js      — Pitched resonator: two decaying sinusoidal partials (bell/marimba/gamelan)
@@ -87,6 +88,7 @@ js/
       SoundLibraryPanel.js    — SOUNDS tab content: tag filter chips + scrollable sound card list
       SamplerPanel.js         — Custom SYNTH tab for SamplerMachine: file picker, mic record, waveform + trim handles
       WavetableSamplerPanel.js — Custom SYNTH tab for WavetableSamplerMachine: dual file pickers + morph/speed/level controls
+      SampleSwarmPanel.js     — Custom SYNTH tab for SampleSwarmMachine: SamplerPanel + swarm knob row
   state/
     Track.js            — Owns VoicePool + sequencer + filter + FX chain + LFOs + pannerNode
     Project.js          — 8–12 tracks (dynamic), BPM, export/import JSON file
@@ -163,7 +165,7 @@ UI (reads AppState, calls Track/Sequencer/Machine methods)
 | Steps total | 64 per track |
 | Steps visible | 16 (one page) |
 | Step pages | Per-track page nav UI built |
-| Machines | SynthMachine, KickSilkMachine, KickHardMachine, SnareMachine, HiHatMachine, FMMachine, SwarmMachine, NoiseMachine, TransientMachine, SamplerMachine, WavetableSamplerMachine, CymbalMachine, WoodMachine, ClappMachine, WavetableMachine, KarplusMachine, BassMachine, CombMachine, ChordMachine active; DrumMachine stubbed |
+| Machines | SynthMachine, KickSilkMachine, KickHardMachine, SnareMachine, HiHatMachine, FMMachine, SwarmMachine, NoiseMachine, TransientMachine, SamplerMachine, WavetableSamplerMachine, SampleSwarmMachine, CymbalMachine, WoodMachine, ClappMachine, WavetableMachine, KarplusMachine, BassMachine, CombMachine, ChordMachine active; DrumMachine stubbed |
 | Filter | Main filter (LP/HP/BP/Notch/Peaking/Allpass) + base filter (HPF+LPF), FilterViz with env ghost |
 | Pan | Per-track stereo pan, p-lockable + LFO-assignable |
 | Delay | Per-track feedback delay, p-lockable + LFO-assignable |

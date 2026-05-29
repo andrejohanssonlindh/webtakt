@@ -2392,7 +2392,6 @@ body {
   gap: 8px;
   padding: 6px 8px;
   width: 100%;
-  height: 100%;
 }
 
 .sampler-topbar {
@@ -2443,8 +2442,8 @@ body {
 }
 
 .sampler-canvas-wrap {
-  flex: 1;
-  min-height: 80px;
+  height: 80px;
+  flex-shrink: 0;
   position: relative;
   border: 1px solid var(--border);
   border-radius: var(--radius);

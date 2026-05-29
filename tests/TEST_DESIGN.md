@@ -60,6 +60,7 @@ tests/
       comb.js
       chord.js
       swarm.js
+      sample_swarm.js
 ```
 
 ---
@@ -127,7 +128,7 @@ FFT-based energy in a frequency band. Buffer is peak-normalised before FFT to pr
 One test file that covers every `modulatable: true` param that has an AudioParam backing (`resolveAudioParam ≠ null`) across all machines and the shared signal chain (Filter, DelayFX, BitcrushFX, ReverbFX, amp.pan).
 
 **Exclusions (by design):**
-- JS-only params (`plockMode:'js'`, `resolveAudioParam → null`): `CombMachine.decay/mix`, `NoiseMachine.color`, `SwarmMachine.spread/noise.amount/noise.color`, `ChordMachine.spread`, `TransientMachine.pitch`, `FMMachine.op*.ratio`. The LFO cannot write to these via WebAudio.
+- JS-only params (`plockMode:'js'`, `resolveAudioParam → null`): `CombMachine.decay/mix`, `NoiseMachine.color`, `SwarmMachine.spread/noise.amount/noise.color`, `SampleSwarmMachine.spread/swarm.detune/noise.amount/noise.color`, `ChordMachine.spread`, `TransientMachine.pitch`, `FMMachine.op*.ratio`. The LFO cannot write to these via WebAudio.
 - `filter.cutoff`: envelope ramps overwrite it (see §"Known limitations").
 - `output.level` on synth: already covered in `lfo.js`.
 - `wt-sampler.morph`: AudioWorklet not available in OfflineAudioContext.
@@ -178,6 +179,8 @@ Additional machine-specific tests:
 **`wt-sampler` not tested.** Uses an AudioWorklet processor (`wavetable-sampler-processor.js`). AudioWorklet is not available in `OfflineAudioContext` in Firefox. Machine produces silence in tests; excluded from index.html.
 
 **`sampler` not tested.** Requires loading an audio file or mic input before it produces sound. No mechanism to inject a buffer in the test harness currently.
+
+**`sample-swarm` tested with synthetic buffer.** Unlike `sampler`, the machine architecture allows injecting a programmatically created `AudioBuffer` via `track.machine.setBuffer()`. Tests create a 0.5s sine tone as the source buffer. LFO tests for `height` and `output.level` (both AudioParam-backed) are included in `lfo_machine_params.js`; `spread`, `swarm.detune`, `noise.amount`, and `noise.color` are JS-only and cannot carry a Web Audio LFO.
 
 **filter.cutoff LFO not directly testable.** The `filter.cutoff` param uses `plockMode: 'envelope'` — it is modulated via scheduled `linearRampToValueAtTime` calls in `Envelope.scheduleNote`, not via a permanent LFO → AudioParam connection. The LFO does connect to `filter.node.frequency` via `resolveAudioParam`, but the envelope's ramps overwrite it. The LFO tests use `output.level` instead, which has a clean direct AudioParam connection.
 

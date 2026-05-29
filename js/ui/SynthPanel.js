@@ -22,6 +22,7 @@ import { BPM_DIVISIONS }           from '../signal/LFO.js';
 import { SoundLibraryPanel }       from './panels/SoundLibraryPanel.js';
 import { SamplerPanel }            from './panels/SamplerPanel.js';
 import { WavetableSamplerPanel }   from './panels/WavetableSamplerPanel.js';
+import { SampleSwarmPanel }        from './panels/SampleSwarmPanel.js';
 
 export class SynthPanel {
   /**
@@ -364,8 +365,9 @@ export class SynthPanel {
     if (p.path === 'click.freq')       return Math.round(v) + 'Hz';
     if (p.path === 'click.decay')      return (v * 1000).toFixed(0) + 'ms';
     if (p.path === 'noise.click')      return Math.round(v * 100) + '%';
-    // SwarmMachine
+    // SwarmMachine / SampleSwarmMachine
     if (p.path === 'spread')           return Math.round(v) + '¢';
+    if (p.path === 'swarm.detune')     return Math.round(v) + '¢';
     if (p.path === 'noise.amount')     return Math.round(v) + '¢';
     if (p.path === 'noise.color')      return Math.round(v * 100) + '%';
     // CymbalMachine
@@ -1280,8 +1282,9 @@ export class SynthPanel {
     {
       label: 'Sampler',
       defs: [
-        { type: 'sampler',    label: 'Sampler',    desc: 'Load file or record mic' },
-        { type: 'wt-sampler', label: 'WT Sampler', desc: 'Morph between two samples' },
+        { type: 'sampler',      label: 'Sampler',    desc: 'Load file or record mic' },
+        { type: 'wt-sampler',   label: 'WT Sampler', desc: 'Morph between two samples' },
+        { type: 'sample-swarm', label: 'Smp Swarm',  desc: '7-voice sample swarm cluster' },
       ],
     },
   ];
@@ -1405,6 +1408,11 @@ export class SynthPanel {
     if (track.machine.type === 'wt-sampler') {
       const ctx = this._makePanelContext(track);
       new WavetableSamplerPanel(this._content, ctx, this.sampleStore, this.audioContext);
+      return;
+    }
+    if (track.machine.type === 'sample-swarm') {
+      const ctx = this._makePanelContext(track);
+      new SampleSwarmPanel(this._content, ctx, this.sampleStore, this.audioContext);
       return;
     }
     const ctx = this._makePanelContext(track);

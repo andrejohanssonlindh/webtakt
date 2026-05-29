@@ -58,6 +58,7 @@ import { BassMachine }      from '../machines/BassMachine.js';
 import { CombMachine }      from '../machines/CombMachine.js';
 import { ChordMachine }     from '../machines/ChordMachine.js';
 import { WavetableSamplerMachine } from '../machines/WavetableSamplerMachine.js';
+import { SampleSwarmMachine }     from '../machines/SampleSwarmMachine.js';
 import { Filter }        from '../signal/Filter.js';
 import { Envelope }      from '../signal/Envelope.js';
 import { VoicePool }     from '../signal/VoicePool.js';
@@ -87,7 +88,8 @@ const MACHINES = {
   bass:       BassMachine,
   comb:       CombMachine,
   chord:      ChordMachine,
-  'wt-sampler': WavetableSamplerMachine,
+  'wt-sampler':     WavetableSamplerMachine,
+  'sample-swarm':   SampleSwarmMachine,
 };
 
 export class Track {
@@ -540,7 +542,7 @@ export class Track {
     this.machine.fromJSON(obj.machine ?? {});
 
     // Restore sampler buffer asynchronously if we have a store reference
-    if (this.machine.type === 'sampler' && this.machine.sampleId && this.sampleStore) {
+    if ((this.machine.type === 'sampler' || this.machine.type === 'sample-swarm') && this.machine.sampleId && this.sampleStore) {
       this.sampleStore.load(this.machine.sampleId, this.audio.context).then(buf => {
         if (buf) this.machine.setBuffer(buf, this.machine.sampleId, this.machine.sampleName);
       });

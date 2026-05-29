@@ -197,6 +197,29 @@ Pitch interpolation: the effective root is `rootA × (1 − morph) + rootB × mo
 
 ---
 
+### SampleSwarmMachine (`type: 'sample-swarm'`)
+
+Seven-voice sample swarm. One root voice plays the loaded buffer at nominal pitch; six swarm voices are spread symmetrically above and below it in cents (the `spread` param). All seven sources are `AudioBufferSourceNode` instances spawned fresh per `noteOn` — no persistent oscillators.
+
+Sample controls mirror `SamplerMachine`: `sample.start/end/speed/gain/root`, `sample.reverse`, `sample.loop`, `sample.pitch`.
+
+Swarm controls mirror `SwarmMachine`:
+- `spread` — cent gap between adjacent pairs (0–100¢)
+- `swarm.detune` — random per-trigger jitter added to every voice's initial detune (0–50¢)
+- `height` — level of the 6 swarm voices relative to root (0–1), AudioParam-backed
+- `noise.amount` — drift depth applied by the `setInterval` drift timer (0–50¢)
+- `noise.color` — drift timer rate: 0=slow (800ms), 1=fast (50ms)
+
+Gain architecture: all 7 sources sum into `_mix` (normalised by 1/7), then `outputGain`. Velocity and `sample.gain` are applied to `outputGain` at each `noteOn`.
+
+`syncFrom(other)` copies the `AudioBuffer` reference — used by `VoicePool.nextVoice()` so non-canonical slots stay in sync with slot 0.
+
+**Custom panel:** `SampleSwarmPanel.js` — embeds `SamplerPanel` (waveform + sample controls) above a swarm knob row (Spread, Detune, Height, Noise Amt, Noise Rate).
+
+**Files:** `js/machines/SampleSwarmMachine.js`, `js/ui/panels/SampleSwarmPanel.js`
+
+---
+
 ## Hidden Param Pattern
 
 Params with `hidden: true` in `getParamList()` are skipped by `_renderParamList` but remain available for p-locking, LFO assignment, and sequencer dispatch. Used for `osc.detune` (moved to TRIG tab). Reuse this pattern for any param that belongs in a different tab from its machine's default grid.

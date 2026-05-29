@@ -32,6 +32,7 @@
  *   TransientMachine      : click.freq, noise.click
  *   NoiseMachine          : color.freq, body.freq, body.level
  *   SwarmMachine          : height
+ *   SampleSwarmMachine    : height, output.level (buffer injected as synthetic sine)
  *   FMMachine             : op1.level, op1.detune, op2.level, op2.feedback, op2.detune,
  *                           op3.level, op3.detune, op4.level, op4.detune
  *   WavetableMachine      : sub.level
@@ -495,6 +496,35 @@ suite('LFO — SwarmMachine params', () => {
 
   test('output.level LFO produces RMS variation', async () => {
     await assertLFOVariation('swarm', 'output.level');
+  });
+
+});
+
+// ─── SampleSwarmMachine ──────────────────────────────────────────────────────────
+// height and output.level are AudioParam-backed; tested with a synthetic buffer.
+// spread, swarm.detune, noise.amount, noise.color are JS-only → LFO cannot connect.
+
+function makeSineBufferSS(ctx, freqHz = 261.63, durationSec = 0.5) {
+  const len  = Math.ceil(ctx.sampleRate * durationSec);
+  const buf  = ctx.createBuffer(1, len, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) data[i] = 0.5 * Math.sin(2 * Math.PI * i * freqHz / ctx.sampleRate);
+  return buf;
+}
+
+suite('LFO — SampleSwarmMachine params', () => {
+
+  test('height LFO produces RMS variation', async () => {
+    await assertLFOVariation('sample-swarm', 'height', track => {
+      track.machine.setBuffer(makeSineBufferSS(track.audio.context), 'ss-h', 'h.wav');
+      track.machine.setParam('height', 0.5);
+    });
+  });
+
+  test('output.level LFO produces RMS variation', async () => {
+    await assertLFOVariation('sample-swarm', 'output.level', track => {
+      track.machine.setBuffer(makeSineBufferSS(track.audio.context), 'ss-o', 'o.wav');
+    });
   });
 
 });
