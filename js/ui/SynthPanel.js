@@ -395,6 +395,10 @@ export class SynthPanel {
     if (p.path === 'excite')           return Math.round(v) + 'ms';
     if (p.path === 'excite.tone')      return Math.round(v) + 'Hz';
     if (p.path === 'stretch')          return (v >= 0 ? '+' : '') + Math.round(v) + '¢';
+    // MarimbaMachine
+    if (p.path === 'decay1' || p.path === 'decay2' || p.path === 'decay3') return (v * 1000).toFixed(0) + 'ms';
+    if (p.path === 'p2ratio' || p.path === 'p3ratio') return 'x' + v.toFixed(2);
+    if (p.path === 'mallet.tone')      return Math.round(v) + 'Hz';
     // BassMachine
     if (p.path === 'glide')            return Math.round(v) + 'ms';
     if (p.path === 'accent')           return Math.round(v);
@@ -1276,6 +1280,7 @@ export class SynthPanel {
         { type: 'swarm',     label: 'Swarm',     desc: '7 saws + drift' },
         { type: 'fm',        label: 'FM',        desc: '4-op FM synth' },
         { type: 'karplus',   label: 'Karplus',   desc: 'Plucked string' },
+        { type: 'marimba',   label: 'Marimba',   desc: 'Inharmonic bar percussion' },
         { type: 'comb',      label: 'Comb',      desc: 'Resonator / comb filter' },
       ],
     },

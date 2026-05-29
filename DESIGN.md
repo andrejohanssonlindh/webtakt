@@ -61,6 +61,7 @@ js/
     WavetableSamplerMachine.js — Two-sample wavetable: morph between sample A and B via AudioWorklet
     SampleSwarmMachine.js — 7-voice sample swarm: one sample played through 7 detuned BufferSourceNodes with spread + drift (type: 'sample-swarm')
     KarplusMachine.js   — Karplus-Strong plucked string (noise burst + comb filter)
+    MarimbaMachine.js   — Marimba bar: 3 tuned inharmonic sine partials (ratios ~1×/3.9×/9.9×) + mallet noise burst, each partial with independent decay
     BassMachine.js      — Bassline voice: saw/sq + sub + drive + portamento + accent
     CombMachine.js      — Pitched resonator: two decaying sinusoidal partials (bell/marimba/gamelan)
     ChordMachine.js     — 4-voice chord synth: 11 chord types, inversions, p-lockable per step
@@ -165,7 +166,7 @@ UI (reads AppState, calls Track/Sequencer/Machine methods)
 | Steps total | 64 per track |
 | Steps visible | 16 (one page) |
 | Step pages | Per-track page nav UI built |
-| Machines | SynthMachine, KickSilkMachine, KickHardMachine, SnareMachine, HiHatMachine, FMMachine, SwarmMachine, NoiseMachine, TransientMachine, SamplerMachine, WavetableSamplerMachine, SampleSwarmMachine, CymbalMachine, WoodMachine, ClappMachine, WavetableMachine, KarplusMachine, BassMachine, CombMachine, ChordMachine active; DrumMachine stubbed |
+| Machines | SynthMachine, KickSilkMachine, KickHardMachine, SnareMachine, HiHatMachine, FMMachine, SwarmMachine, NoiseMachine, TransientMachine, SamplerMachine, WavetableSamplerMachine, SampleSwarmMachine, CymbalMachine, WoodMachine, ClappMachine, WavetableMachine, KarplusMachine, MarimbaMachine, BassMachine, CombMachine, ChordMachine active; DrumMachine stubbed |
 | Filter | Main filter (LP/HP/BP/Notch/Peaking/Allpass) + base filter (HPF+LPF), FilterViz with env ghost |
 | Pan | Per-track stereo pan, p-lockable + LFO-assignable |
 | Delay | Per-track feedback delay, p-lockable + LFO-assignable |

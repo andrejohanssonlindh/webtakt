@@ -59,6 +59,7 @@ import { CombMachine }      from '../machines/CombMachine.js';
 import { ChordMachine }     from '../machines/ChordMachine.js';
 import { WavetableSamplerMachine } from '../machines/WavetableSamplerMachine.js';
 import { SampleSwarmMachine }     from '../machines/SampleSwarmMachine.js';
+import { MarimbaMachine }         from '../machines/MarimbaMachine.js';
 import { Filter }        from '../signal/Filter.js';
 import { Envelope }      from '../signal/Envelope.js';
 import { VoicePool }     from '../signal/VoicePool.js';
@@ -85,6 +86,7 @@ const MACHINES = {
   clapp:      ClappMachine,
   wavetable:  WavetableMachine,
   karplus:    KarplusMachine,
+  marimba:    MarimbaMachine,
   bass:       BassMachine,
   comb:       CombMachine,
   chord:      ChordMachine,
