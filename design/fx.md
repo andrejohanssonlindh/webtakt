@@ -9,9 +9,12 @@ Each effect has a **wet** knob (0–1) that blends parallel dry+wet. At wet=0 th
 
 ## DelayFX (`js/signal/DelayFX.js`)
 Stereo feedback delay.
-- `delay.time` (10ms–1s), `delay.feedback` (0–95%), `delay.wet` (0–1).
-- All three params are LFO-assignable and p-lockable.
+- `delay.syncMode` (`ms` | `bpm`): selects whether delay time is set manually or locked to tempo.
+  - `ms` mode: `delay.time` knob (1ms–2s), LFO-assignable and p-lockable.
+  - `bpm` mode: `delay.bpmDiv` division selector (1/32–4/1 quarter-note multiples). Time recalculates automatically when BPM changes.
+- `delay.feedback` (0–95%) and `delay.wet` (0–1) are LFO-assignable and p-lockable in both modes.
 - Internal: `DelayNode` + feedback `GainNode` loop. Max delay 2s.
+- `Track.onBpmChanged(bpm)` propagates BPM changes from `Project.setBPM` → all track FX.
 
 ## BitcrushFX (`js/signal/BitcrushFX.js`)
 Bit-depth reduction + rate smear.
@@ -22,7 +25,10 @@ Bit-depth reduction + rate smear.
 
 ## ReverbFX (`js/signal/ReverbFX.js`)
 Convolution reverb with a synthesised exponential-decay noise IR.
-- `reverb.decay` (0.1–8s) and `reverb.predelay` (0–100ms) rebuild the IR on change — track-level only, not p-lockable.
+- `reverb.decay` (0.1–8s) rebuilds the IR on change — track-level only, not p-lockable.
+- `reverb.syncMode` (`ms` | `bpm`): selects whether pre-delay is set manually or locked to tempo.
+  - `ms` mode: `reverb.predelay` knob (0–500ms), rebuilds IR on change — track-level only.
+  - `bpm` mode: `reverb.bpmDiv` division selector (1/32–1/1). Pre-delay recalculates automatically when BPM changes.
 - `reverb.damp` (200–20kHz LP on wet) and `reverb.wet` (0–1) are LFO-assignable and p-lockable.
 
 ---
@@ -37,9 +43,9 @@ The on/off state is reflected in the header at all times regardless of which voi
 
 | FX | Content when name clicked |
 |---|---|
-| DLY | Delay Time, Feedback, Wet knobs. All p-lockable + LFO-assignable. |
+| DLY | Sync toggle (ms/bpm). In ms mode: Time knob (p-lockable). In bpm mode: Division picker (1/32–4/1). Feedback + Wet knobs always visible. |
 | CRUSH | Bits, Rate, Wet knobs. Rate + Wet p-lockable + LFO-assignable. Bits track-level only. |
-| REV | Decay, Pre-dly, Damp, Wet knobs. Damp + Wet p-lockable + LFO-assignable. Decay + Pre-dly track-level only. |
+| REV | Decay knob. Sync toggle (ms/bpm). In ms mode: Pre-dly knob. In bpm mode: Pre-div picker (1/32–1/1). Damp + Wet always visible. |
 
 FX tabs use a teal accent (`#7ec8c8`) to distinguish from voice tabs (amber).
 
@@ -48,5 +54,5 @@ FX tabs use a teal accent (`#7ec8c8`) to distinguish from voice tabs (amber).
 ## P-Lock Notes
 
 - All `modulatable: true` FX params are p-lockable and LFO-assignable.
-- `crush.bits`, `reverb.decay`, `reverb.predelay` are `modulatable: false` — they appear in the UI but are always track-level.
+- `crush.bits`, `reverb.decay`, `reverb.predelay`, `delay.syncMode`, `delay.bpmDiv`, `reverb.syncMode`, `reverb.bpmDiv` are `modulatable: false` — always track-level.
 - The sequencer dispatches FX p-locks the same way as filter p-locks: scheduled `setParam(path, value, time)` + restore at `offTime`.

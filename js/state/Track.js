@@ -278,6 +278,12 @@ export class Track {
     this.followSource = trackIndex;
   }
 
+  /** Called by Project when BPM changes — propagates to synced FX. */
+  onBpmChanged(bpm) {
+    this.delayFX.setBpm(bpm);
+    this.reverbFX.setBpm(bpm);
+  }
+
   /**
    * Fire a note on this track immediately (for note-follow triggering).
    * @param {number} note     — MIDI note 0-127
@@ -638,6 +644,7 @@ export class Track {
     this.delayFX.fromJSON(obj.delayFX ?? {});
     this.bitcrushFX.fromJSON(obj.bitcrushFX ?? {});
     this.reverbFX.fromJSON(obj.reverbFX ?? {});
+    this.onBpmChanged(this.clock.bpm);
     this.sequencer.fromJSON(obj.sequencer ?? {});
     this.modWheelTargets = obj.modWheelTargets ?? [null, null];
 

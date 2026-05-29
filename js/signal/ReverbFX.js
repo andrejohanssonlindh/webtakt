@@ -12,10 +12,12 @@
  *   input → convolver → dampFilter → wetGain → output
  *
  * Parameters:
- *   'reverb.decay'    — seconds, 0.1–8.0, default 1.5  (rebuilds IR — track-level only)
- *   'reverb.predelay' — seconds, 0–0.1,   default 0    (rebuilds IR — track-level only)
- *   'reverb.damp'     — Hz, 200–20000,    default 8000 (LP on wet signal, LFO/p-lock ok)
- *   'reverb.wet'      — 0–1,              default 0    (LFO/p-lock ok)
+ *   'reverb.decay'       — seconds, 0.1–8.0, default 1.5  (rebuilds IR — track-level only)
+ *   'reverb.predelay'    — seconds, 0–0.5,   default 0.02 (rebuilds IR — track-level only)
+ *   'reverb.syncMode'    — 'ms' | 'bpm', default 'ms'
+ *   'reverb.bpmDiv'      — beat division string, default '1/16' (used when syncMode='bpm')
+ *   'reverb.damp'        — Hz, 200–20000,    default 8000 (LP on wet signal, LFO/p-lock ok)
+ *   'reverb.wet'         — 0–1,              default 0    (LFO/p-lock ok)
  *
  * Public:
  *   .inputNode / .outputNode
@@ -23,17 +25,28 @@
  *   setParam(path, value, time)
  *   getParam(path) / getParamList()
  *   resolveAudioParam(path)
+ *   setBpm(bpm)          — update BPM for synced pre-delay calculation
  *   toJSON() / fromJSON()
  */
+
+const DIV_QN = { '1/32':0.125, '1/16':0.25, '1/8':0.5, '1/4':1, '1/2':2, '1/1':4, '2/1':8, '4/1':16 };
+export const REVERB_DIVISIONS = ['1/32','1/16','1/8','1/4','1/2','1/1'];
+
+function divToSeconds(div, bpm) {
+  return (DIV_QN[div] ?? 0.25) * 60 / bpm;
+}
 
 export class ReverbFX {
   /** @param {AudioContext} context */
   constructor(context) {
     this.context = context;
+    this._bpm    = 120;
 
     this._params = {
       'reverb.decay':    1.5,
       'reverb.predelay': 0.02,
+      'reverb.syncMode': 'ms',
+      'reverb.bpmDiv':   '1/16',
       'reverb.damp':     8000,
       'reverb.wet':      0,
     };
@@ -117,14 +130,44 @@ export class ReverbFX {
     this._dryGain.gain.setTargetAtTime(dry, t, 0.005);
   }
 
+  /** Update BPM and recalculate pre-delay when in BPM sync mode. */
+  setBpm(bpm) {
+    this._bpm = bpm;
+    if (this._params['reverb.syncMode'] === 'bpm') {
+      this._applyBpmPredelay();
+    }
+  }
+
+  _applyBpmPredelay() {
+    const secs = divToSeconds(this._params['reverb.bpmDiv'], this._bpm);
+    this._params['reverb.predelay'] = Math.min(secs, 0.5);
+    this._buildIR();
+  }
+
   setParam(path, value, time) {
     this._params[path] = value;
     const t = time ?? this.context.currentTime;
 
     switch (path) {
       case 'reverb.decay':
-      case 'reverb.predelay':
         this._buildIR();
+        break;
+      case 'reverb.predelay':
+        if (this._params['reverb.syncMode'] === 'ms') {
+          this._buildIR();
+        }
+        break;
+      case 'reverb.syncMode':
+        if (value === 'bpm') {
+          this._applyBpmPredelay();
+        } else {
+          this._buildIR();
+        }
+        break;
+      case 'reverb.bpmDiv':
+        if (this._params['reverb.syncMode'] === 'bpm') {
+          this._applyBpmPredelay();
+        }
         break;
       case 'reverb.damp':
         this._dampFilter.frequency.setTargetAtTime(value, t, 0.005);
@@ -143,11 +186,14 @@ export class ReverbFX {
   }
 
   getParamList() {
+    const isBpm = this._params['reverb.syncMode'] === 'bpm';
     return [
-      { path: 'reverb.decay',    label: 'Decay',   type: 'number', min: 0.1,  max: 8.0,   default: 1.5,  modulatable: false,                            plockMode: 'js'        },
-      { path: 'reverb.predelay', label: 'Pre-dly', type: 'number', min: 0,    max: 0.1,   default: 0.02, modulatable: false,                            plockMode: 'js'        },
-      { path: 'reverb.damp',     label: 'Damp',    type: 'number', min: 200,  max: 20000, default: 8000, modulatable: true, lfoMin: 200, lfoMax: 20000,  plockMode: 'audioParam' },
-      { path: 'reverb.wet',      label: 'Wet',     type: 'number', min: 0,    max: 1,     default: 0,    modulatable: true, lfoMin: 0,   lfoMax: 1,      plockMode: 'audioParam' },
+      { path: 'reverb.decay',    label: 'Decay',    type: 'number', min: 0.1,  max: 8.0,   default: 1.5,  modulatable: false,                           plockMode: 'js'         },
+      { path: 'reverb.syncMode', label: 'Sync',     type: 'enum',   options: ['ms','bpm'],  default: 'ms', modulatable: false,                           plockMode: 'js'         },
+      { path: 'reverb.predelay', label: 'Pre-dly',  type: 'number', min: 0,    max: 0.5,   default: 0.02, modulatable: false,                           plockMode: 'js',         hidden: isBpm },
+      { path: 'reverb.bpmDiv',   label: 'Pre-div',  type: 'enum',   options: REVERB_DIVISIONS, default: '1/16', modulatable: false,                     plockMode: 'js',         hidden: !isBpm },
+      { path: 'reverb.damp',     label: 'Damp',     type: 'number', min: 200,  max: 20000, default: 8000, modulatable: true, lfoMin: 200, lfoMax: 20000, plockMode: 'audioParam'  },
+      { path: 'reverb.wet',      label: 'Wet',      type: 'number', min: 0,    max: 1,     default: 0,    modulatable: true, lfoMin: 0,   lfoMax: 1,     plockMode: 'audioParam'  },
     ];
   }
 

@@ -108,6 +108,7 @@ export class Project {
   /** @param {number} bpm */
   setBPM(bpm) {
     this.clock.setBPM(bpm);
+    this.tracks.forEach(t => t.onBpmChanged(this.clock.bpm));
   }
 
   start() {
@@ -131,7 +132,10 @@ export class Project {
 
   /** @param {object} obj */
   fromJSON(obj) {
-    if (obj.bpm) this.clock.setBPM(obj.bpm);
+    if (obj.bpm) {
+      this.clock.setBPM(obj.bpm);
+      this.tracks.forEach(t => t.onBpmChanged(this.clock.bpm));
+    }
     if (obj.trackCount) this.setTrackCount(obj.trackCount);
     (obj.tracks ?? []).forEach((trackObj, i) => {
       if (this.tracks[i]) this.tracks[i].fromJSON(trackObj);

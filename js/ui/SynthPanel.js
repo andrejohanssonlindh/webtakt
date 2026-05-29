@@ -454,14 +454,14 @@ export class SynthPanel {
     if (p.path === 'filter.resonance') return v.toFixed(1);
     if (p.path === 'filter.gain')      return (v >= 0 ? '+' : '') + v.toFixed(1) + 'dB';
     if (p.path === 'filter.envAmount') return (v >= 0 ? '+' : '') + (v * 100).toFixed(0) + '%';
-    if (p.path === 'delay.time')       return Math.round(v * 1000) + 'ms';
+    if (p.path === 'delay.time')       return v >= 1 ? v.toFixed(2) + 's' : Math.round(v * 1000) + 'ms';
     if (p.path === 'delay.feedback')   return Math.round(v * 100) + '%';
     if (p.path === 'delay.wet')        return Math.round(v * 100) + '%';
     if (p.path === 'crush.bits')       return Math.round(v) + ' bit';
     if (p.path === 'crush.rate')       return Math.round(v * 100) + '%';
     if (p.path === 'crush.wet')        return Math.round(v * 100) + '%';
     if (p.path === 'reverb.decay')     return v.toFixed(2) + 's';
-    if (p.path === 'reverb.predelay')  return Math.round(v * 1000) + 'ms';
+    if (p.path === 'reverb.predelay')  return v >= 1 ? v.toFixed(2) + 's' : Math.round(v * 1000) + 'ms';
     if (p.path === 'reverb.damp')      return Math.round(v) + 'Hz';
     if (p.path === 'reverb.wet')       return Math.round(v * 100) + '%';
     if (p.path === 'base.lpf')         return Math.round(v) + 'Hz';
@@ -1928,47 +1928,79 @@ export class SynthPanel {
     wrapper.appendChild(knobRow);
 
     fxObj.getParamList().forEach(p => {
-      const canPLock = p.modulatable;  // only modulatable params are p-lockable
+      if (p.hidden) return;
+
+      const canPLock = p.modulatable;
       const hasPLock = canPLock && hasStep && step.plocks.has(p.path);
       const dispVal  = hasPLock ? step.plocks.get(p.path) : fxObj.getParam(p.path);
 
-      const isBipolar = p.min !== undefined && p.max !== undefined && p.min < 0 && p.max > 0 && p.min === -p.max;
-      const fmtFn = fmtOverrides[p.path] ?? (v => this._fmtParam(p, v));
+      if (p.type === 'enum') {
+        // Render as a labelled button group inside the knob row
+        const cell = document.createElement('div');
+        cell.className = 'fx-enum-cell';
 
-      const knob = new KnobWidget({
-        label:   p.label,
-        min:     p.min ?? 0,
-        max:     p.max ?? 1,
-        value:   dispVal ?? p.default ?? p.min ?? 0,
-        bipolar: isBipolar,
-        size:    64,
-        fmt:     fmtFn,
-        onChange: v => {
-          if (canPLock && hasStep) {
-            step.setPLock(p.path, v);
-            knob.setHasPLock(true);
-          } else {
-            fxObj.setParam(p.path, v);
-          }
-        },
-        onRelease: () => {
-          if (canPLock && hasStep) {
-            this.state.emit('stepChanged', {
-              trackIndex: this.state.selectedTrackIndex,
-              stepIndex:  this.state.selectedStepIndex,
-              step,
-            });
-          }
-        },
-      });
-      knob.setHasPLock(hasPLock);
-      knobRow.appendChild(knob.el);
-      this._activeWidgets.push(knob);
-      this._knobByPath.set(p.path, knob);
+        const lbl = document.createElement('div');
+        lbl.className = 'fx-enum-label';
+        lbl.textContent = p.label;
+        cell.appendChild(lbl);
+
+        const btnRow = document.createElement('div');
+        btnRow.className = 'fx-enum-btns';
+
+        (p.options ?? []).forEach(opt => {
+          const b = document.createElement('button');
+          b.className = 'btn fx-enum-btn' + (dispVal === opt ? ' active' : '');
+          b.textContent = opt;
+          b.addEventListener('click', () => {
+            fxObj.setParam(p.path, opt);
+            // Rebuild the tab so hidden flags update
+            this._renderContent();
+          });
+          btnRow.appendChild(b);
+        });
+
+        cell.appendChild(btnRow);
+        knobRow.appendChild(cell);
+
+      } else if (p.type === 'number') {
+        const isBipolar = p.min !== undefined && p.max !== undefined && p.min < 0 && p.max > 0 && p.min === -p.max;
+        const fmtFn = fmtOverrides[p.path] ?? (v => this._fmtParam(p, v));
+
+        const knob = new KnobWidget({
+          label:   p.label,
+          min:     p.min ?? 0,
+          max:     p.max ?? 1,
+          value:   dispVal ?? p.default ?? p.min ?? 0,
+          bipolar: isBipolar,
+          size:    64,
+          fmt:     fmtFn,
+          onChange: v => {
+            if (canPLock && hasStep) {
+              step.setPLock(p.path, v);
+              knob.setHasPLock(true);
+            } else {
+              fxObj.setParam(p.path, v);
+            }
+          },
+          onRelease: () => {
+            if (canPLock && hasStep) {
+              this.state.emit('stepChanged', {
+                trackIndex: this.state.selectedTrackIndex,
+                stepIndex:  this.state.selectedStepIndex,
+                step,
+              });
+            }
+          },
+        });
+        knob.setHasPLock(hasPLock);
+        knobRow.appendChild(knob.el);
+        this._activeWidgets.push(knob);
+        this._knobByPath.set(p.path, knob);
+      }
     });
 
-    // Wet indicator note for non-p-lockable params
-    const nonLockable = fxObj.getParamList().filter(p => !p.modulatable);
+    // Note for non-p-lockable params (exclude enum/sync params from this list)
+    const nonLockable = fxObj.getParamList().filter(p => !p.hidden && !p.modulatable && p.type === 'number');
     if (nonLockable.length > 0) {
       const note = document.createElement('div');
       note.className = 'fx-tab-note';

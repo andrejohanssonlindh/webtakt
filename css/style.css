@@ -1854,6 +1854,36 @@ body {
   padding-top: 4px;
 }
 
+.fx-enum-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.fx-enum-label {
+  font-size: 8px;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.fx-enum-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.fx-enum-btn {
+  font-size: 8px;
+  padding: 3px 7px;
+}
+
+.fx-enum-btn.active {
+  background: var(--accent);
+  color: var(--bg);
+}
+
 /* ─── SCALES TAB LAYOUT ──────────────────────────────────── */
 
 .scales-tab-wrapper {
