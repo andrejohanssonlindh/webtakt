@@ -247,14 +247,7 @@ export class SoundLibrary {
         _defEnv(),
         _noFX()),
 
-      // ── 11. Swarm Cloud (SampleSwarm) ─────────────────────
-      mk('Swarm Cloud', ['swarm', 'pad', 'ambient', 'lush'],
-        { type: 'sample-swarm', params: { 'sample.start': 0, 'sample.end': 1, 'sample.speed': 1, 'sample.gain': 1, 'sample.root': 60, 'sample.reverse': false, 'sample.loop': true, 'sample.pitch': true, 'spread': 22, 'swarm.detune': 8, 'height': 0.75, 'noise.amount': 12, 'noise.color': 0.2, 'output.level': 0.78 } },
-        { params: { 'filter.type': 'lowpass', 'filter.cutoff': 3200, 'filter.resonance': 1.2, 'filter.gain': 0, 'filter.envAmount': 0.1, 'base.lpf': 20000, 'base.hpf': 40 } },
-        { params: { 'env.attack': 0.4, 'env.decay': 0.3, 'env.sustain': 0.9, 'env.release': 1.2, 'fenv.attack': 0.3, 'fenv.decay': 0.5, 'fenv.sustain': 0.0, 'fenv.release': 0.6 } },
-        { delayFX: _defDelay(), bitcrushFX: _defCrush(), reverbFX: { params: { 'reverb.decay': 3.0, 'reverb.predelay': 0.02, 'reverb.damp': 8000, 'reverb.wet': 0.45 }, enabled: true } }),
-
-      // ── 12. Room Snare (Snare) ────────────────────────────
+      // ── 11. Room Snare (Snare) ────────────────────────────
       mk('Room Snare', ['snare', 'drum', 'punchy'],
         { type: 'snare', params: { 'tune': 220, 'decay': 0.22, 'snap': 0.9, 'tone': 0.45, 'noise.cutoff': 2400, 'output.level': 0.88 } },
         { params: { 'filter.type': 'highpass', 'filter.cutoff': 120, 'filter.resonance': 1.0, 'filter.gain': 0, 'filter.envAmount': 0, 'base.lpf': 20000, 'base.hpf': 80 } },
