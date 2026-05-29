@@ -36,7 +36,8 @@ export class WavetableSamplerPanel {
     // Per-slot canvas refs and sizes
     this._canvas  = { A: null, B: null };
     this._cw      = { A: 0, B: 0 };
-    this._dragging = null; // { slot, handle: 'start'|'end' }
+    this._dragging = null; // { slot, handle: 'start'|'end'|'loopStart' }
+    this._loopStartKnob = { A: null, B: null };
 
     // Preview source nodes (one per slot, stopped on next preview)
     this._previewSrc = { A: null, B: null };
@@ -117,6 +118,21 @@ export class WavetableSamplerPanel {
       gainKnob.el.style.setProperty('--knob-label-color', color);
       rootRow.appendChild(gainKnob.el);
       this.ctx.activeWidgets.push(gainKnob);
+
+      const loopStartKnob = new KnobWidget({
+        label: `LpSt ${slot}`, min: 0, max: 1, size: 44,
+        value: m.getParam(`sample.loopStart${slot}`),
+        fmt: v => Math.round(v * 100) + '%',
+        onChange: v => {
+          this.ctx.writeValue(m, `sample.loopStart${slot}`, v, false);
+          this._drawSlot(slot);
+        },
+        onRelease: () => this.ctx.emitStep?.(),
+      });
+      loopStartKnob.el.style.setProperty('--knob-label-color', '#00bcd4');
+      rootRow.appendChild(loopStartKnob.el);
+      this.ctx.activeWidgets.push(loopStartKnob);
+      this._loopStartKnob[slot] = loopStartKnob;
     }
     wrap.appendChild(rootRow);
 
@@ -320,6 +336,24 @@ export class WavetableSamplerPanel {
     }
     gc.stroke();
 
+    // Loop-start handle — cyan dashed (only when loop is on)
+    if (this.machine.getParam('sample.loop')) {
+      const lsNorm = this.machine.getParam(`sample.loopStart${slot}`);
+      const lsClamped = Math.max(sNorm, Math.min(eNorm, lsNorm));
+      const lsX = lsClamped * w;
+      gc.save();
+      gc.strokeStyle = '#00bcd4';
+      gc.lineWidth = 2;
+      gc.setLineDash([4, 3]);
+      gc.beginPath(); gc.moveTo(lsX, 0); gc.lineTo(lsX, h); gc.stroke();
+      gc.setLineDash([]);
+      gc.restore();
+      gc.font = '10px monospace';
+      gc.fillStyle = '#00bcd4';
+      gc.textAlign = lsX < 20 ? 'left' : 'right';
+      gc.fillText('L', lsX + (lsX < 20 ? 3 : -3), 22);
+    }
+
     // Start handle (green tint)
     gc.strokeStyle = '#8bc34a';
     gc.lineWidth = 2;
@@ -346,17 +380,24 @@ export class WavetableSamplerPanel {
     const posN   = (e.clientX - rect.left) / rect.width;
     const posX   = posN * this._cw[slot];
 
-    const sN = this.machine.getParam(`sample.start${slot}`);
-    const eN = this.machine.getParam(`sample.end${slot}`);
-    const sX = sN * this._cw[slot];
-    const eX = eN * this._cw[slot];
+    const sN  = this.machine.getParam(`sample.start${slot}`);
+    const eN  = this.machine.getParam(`sample.end${slot}`);
+    const lsN = this.machine.getParam(`sample.loopStart${slot}`);
+    const sX  = sN  * this._cw[slot];
+    const eX  = eN  * this._cw[slot];
+    const lsX = lsN * this._cw[slot];
+
+    const dS     = Math.abs(posX - sX);
+    const dE     = Math.abs(posX - eX);
+    const dLs    = Math.abs(posX - lsX);
+    const loopOn = this.machine.getParam('sample.loop');
 
     let handle;
-    if (Math.abs(posX - sX) <= SNAP_PX && Math.abs(posX - eX) <= SNAP_PX) {
-      handle = posN < (sN + eN) / 2 ? 'start' : 'end';
-    } else if (Math.abs(posX - sX) <= SNAP_PX) {
+    if (loopOn && dLs <= SNAP_PX && dLs < dS && dLs < dE) {
+      handle = 'loopStart';
+    } else if (dS <= SNAP_PX && dS <= dE) {
       handle = 'start';
-    } else if (Math.abs(posX - eX) <= SNAP_PX) {
+    } else if (dE <= SNAP_PX) {
       handle = 'end';
     } else {
       handle = posN < (sN + eN) / 2 ? 'start' : 'end';
@@ -372,7 +413,14 @@ export class WavetableSamplerPanel {
     const canvas = this._canvas[slot];
     const rect   = canvas.getBoundingClientRect();
     const posN   = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const path   = handle === 'start' ? `sample.start${slot}` : `sample.end${slot}`;
+
+    let path;
+    if (handle === 'loopStart') {
+      path = `sample.loopStart${slot}`;
+      this._loopStartKnob[slot]?.setValue(posN);
+    } else {
+      path = handle === 'start' ? `sample.start${slot}` : `sample.end${slot}`;
+    }
     this.ctx.writeValue(this.machine, path, posN, false);
     this._drawSlot(slot);
   }
@@ -413,6 +461,9 @@ export class WavetableSamplerPanel {
       const newVal = !this.machine.getParam(path);
       this.ctx.writeValue(this.machine, path, newVal, true);
       btn.classList.toggle('active', newVal);
+      if (path === 'sample.loop') {
+        for (const slot of ['A', 'B']) this._drawSlot(slot);
+      }
     });
     wrap.appendChild(btn);
     return wrap;

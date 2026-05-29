@@ -12,7 +12,7 @@
  * Messages in  (from main thread):
  *   { type: 'bufferA', pcm: Float32Array[], length: number }
  *   { type: 'bufferB', pcm: Float32Array[], length: number }
- *   { type: 'trigger', rate, loop, startA, endA, startB, endB }
+ *   { type: 'trigger', rate, loop, startA, endA, loopStartA, startB, endB, loopStartB }
  *   { type: 'stop' }
  *
  * AudioParams (k-rate):
@@ -36,14 +36,15 @@ class WavetableSamplerProcessor extends AudioWorkletProcessor {
     this._lenB  = 0;
 
     // Playhead lives in normalised space [0, 1] relative to the active region
-    this._phase    = 0;
-    this._active   = false;
-    this._loop     = false;
-    this._baseRate = 1;   // samples-per-sample advance (set at trigger)
+    this._phase     = 0;
+    this._active    = false;
+    this._loop      = false;
+    this._firstPass = true;  // true until the first loop wrap — intro region plays once
+    this._baseRate  = 1;     // samples-per-sample advance (set at trigger)
 
-    // Per-buffer trim regions and gains
-    this._startA = 0; this._endA = 1; this._gainA = 1;
-    this._startB = 0; this._endB = 1; this._gainB = 1;
+    // Per-buffer trim regions, loop-start points, and gains
+    this._startA = 0; this._endA = 1; this._loopStartA = 0; this._gainA = 1;
+    this._startB = 0; this._endB = 1; this._loopStartB = 0; this._gainB = 1;
 
     // Pending trigger: held until currentTime reaches startTime
     this._pendingTrigger = null;
@@ -68,16 +69,19 @@ class WavetableSamplerProcessor extends AudioWorkletProcessor {
   }
 
   _armTrigger(msg) {
-    this._baseRate = msg.rate ?? 1;
-    this._loop     = msg.loop ?? false;
-    this._startA = msg.startA ?? 0;
-    this._endA   = msg.endA   ?? 1;
-    this._gainA  = msg.gainA  ?? 1;
-    this._startB = msg.startB ?? 0;
-    this._endB   = msg.endB   ?? 1;
-    this._gainB  = msg.gainB  ?? 1;
-    this._phase  = this._baseRate >= 0 ? 0 : 1;
-    this._active = true;
+    this._baseRate   = msg.rate ?? 1;
+    this._loop       = msg.loop ?? false;
+    this._startA     = msg.startA     ?? 0;
+    this._endA       = msg.endA       ?? 1;
+    this._loopStartA = msg.loopStartA ?? this._startA;
+    this._gainA      = msg.gainA      ?? 1;
+    this._startB     = msg.startB     ?? 0;
+    this._endB       = msg.endB       ?? 1;
+    this._loopStartB = msg.loopStartB ?? this._startB;
+    this._gainB      = msg.gainB      ?? 1;
+    this._phase      = this._baseRate >= 0 ? 0 : 1;
+    this._firstPass  = true;
+    this._active     = true;
   }
 
   /** Read a sample from buf at normalised position p (0–1 within its trim region). */
@@ -132,6 +136,16 @@ class WavetableSamplerProcessor extends AudioWorkletProcessor {
 
     const reverse = rate < 0;
 
+    // Loop-start as a normalised phase fraction within region A and B.
+    // We use an A/B weighted blend (same weight as refRegion) so the
+    // restart point is consistent when morphing between the two buffers.
+    const regionA = (this._endA - this._startA) || 1;
+    const regionB = (this._endB - this._startB) || 1;
+    const loopPhaseA = (this._loopStartA - this._startA) / regionA;
+    const loopPhaseB = (this._loopStartB - this._startB) / regionB;
+    const loopPhase  = Math.max(0, Math.min(1,
+      loopPhaseA * (1 - morph) + loopPhaseB * morph));
+
     for (let i = 0; i < n; i++) {
       if (!this._active) { ch[i] = 0; continue; }
 
@@ -145,11 +159,22 @@ class WavetableSamplerProcessor extends AudioWorkletProcessor {
       this._phase += phaseStep;
 
       if (!reverse && this._phase >= 1) {
-        if (this._loop) this._phase -= 1;
-        else            this._active = false;
-      } else if (reverse && this._phase <= 0) {
-        if (this._loop) this._phase += 1;
-        else            this._active = false;
+        if (this._loop) {
+          this._phase = loopPhase + (this._phase - 1);
+          this._firstPass = false;
+        } else {
+          this._active = false;
+        }
+      } else if (reverse && this._phase <= (this._firstPass ? 0 : loopPhase)) {
+        // First reverse pass goes all the way to 0 (intro plays once).
+        // Subsequent loops only go down to loopPhase then restart at 1.
+        if (this._loop) {
+          const overshoot = (this._firstPass ? 0 : loopPhase) - this._phase;
+          this._phase = 1 - overshoot;
+          this._firstPass = false;
+        } else {
+          this._active = false;
+        }
       }
     }
 

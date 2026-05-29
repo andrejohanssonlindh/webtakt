@@ -29,13 +29,15 @@ export class WavetableSamplerMachine extends Machine {
     this.label = 'WT Sampler';
 
     this._params = {
-      'morph':          0.5,
-      'sample.startA':  0,
-      'sample.endA':    1,
-      'sample.gainA':   1,
-      'sample.startB':  0,
-      'sample.endB':    1,
-      'sample.gainB':   1,
+      'morph':               0.5,
+      'sample.startA':       0,
+      'sample.endA':         1,
+      'sample.loopStartA':   0,
+      'sample.gainA':        1,
+      'sample.startB':       0,
+      'sample.endB':         1,
+      'sample.loopStartB':   0,
+      'sample.gainB':        1,
       'sample.speed':   1,
       'sample.pitch':   true,
       'sample.rootA':   60,
@@ -175,13 +177,16 @@ export class WavetableSamplerMachine extends Machine {
 
     const velGain = (velocity / 127) * this._params['output.level'];
 
+    const loopStartA = Math.max(startA, Math.min(endA, this._params['sample.loopStartA']));
+    const loopStartB = Math.max(startB, Math.min(endB, this._params['sample.loopStartB']));
+
     this._workletNode.port.postMessage({
       type:      'trigger',
       startTime: time,
       rate:      baseRate,
       loop:      this._params['sample.loop'],
-      startA, endA, gainA: this._params['sample.gainA'],
-      startB, endB, gainB: this._params['sample.gainB'],
+      startA, endA, loopStartA, gainA: this._params['sample.gainA'],
+      startB, endB, loopStartB, gainB: this._params['sample.gainB'],
     });
 
     const gainParam  = this._workletNode.parameters.get('gain');
@@ -241,12 +246,14 @@ export class WavetableSamplerMachine extends Machine {
       { path: 'morph',          label: 'Morph',       type: 'number',  min: 0,     max: 1,   default: 0.5,  modulatable: true,  lfoMin: 0, lfoMax: 1,   plockMode: 'audioParam' },
       { path: 'sweep.depth',    label: 'Swp Depth',   type: 'number',  min: 0,     max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
       { path: 'sweep.speed',    label: 'Swp Speed',   type: 'number',  min: 0.05,  max: 20,  default: 0.5,  modulatable: false, plockMode: 'js' },
-      { path: 'sample.startA',  label: 'Start A',     type: 'number',  min: 0,     max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
-      { path: 'sample.endA',    label: 'End A',       type: 'number',  min: 0,     max: 1,   default: 1,    modulatable: false, plockMode: 'js' },
-      { path: 'sample.gainA',   label: 'Gain A',      type: 'number',  min: 0,     max: 4,   default: 1,    modulatable: false, plockMode: 'js' },
-      { path: 'sample.startB',  label: 'Start B',     type: 'number',  min: 0,     max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
-      { path: 'sample.endB',    label: 'End B',       type: 'number',  min: 0,     max: 1,   default: 1,    modulatable: false, plockMode: 'js' },
-      { path: 'sample.gainB',   label: 'Gain B',      type: 'number',  min: 0,     max: 4,   default: 1,    modulatable: false, plockMode: 'js' },
+      { path: 'sample.startA',     label: 'Start A',    type: 'number',  min: 0,     max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
+      { path: 'sample.endA',       label: 'End A',      type: 'number',  min: 0,     max: 1,   default: 1,    modulatable: false, plockMode: 'js' },
+      { path: 'sample.loopStartA', label: 'LpSt A',     type: 'number',  min: 0,     max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
+      { path: 'sample.gainA',      label: 'Gain A',     type: 'number',  min: 0,     max: 4,   default: 1,    modulatable: false, plockMode: 'js' },
+      { path: 'sample.startB',     label: 'Start B',    type: 'number',  min: 0,     max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
+      { path: 'sample.endB',       label: 'End B',      type: 'number',  min: 0,     max: 1,   default: 1,    modulatable: false, plockMode: 'js' },
+      { path: 'sample.loopStartB', label: 'LpSt B',     type: 'number',  min: 0,     max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
+      { path: 'sample.gainB',      label: 'Gain B',     type: 'number',  min: 0,     max: 4,   default: 1,    modulatable: false, plockMode: 'js' },
       { path: 'sample.speed',   label: 'Speed',       type: 'number',  min: 0.125, max: 4,   default: 1,    modulatable: false, plockMode: 'js' },
       { path: 'sample.rootA',   label: 'Root A',      type: 'number',  min: 0,     max: 127, default: 60,   modulatable: false, plockMode: 'js' },
       { path: 'sample.rootB',   label: 'Root B',      type: 'number',  min: 0,     max: 127, default: 60,   modulatable: false, plockMode: 'js' },

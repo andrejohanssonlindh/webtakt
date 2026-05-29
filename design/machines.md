@@ -139,11 +139,12 @@ AudioBufferSourceNode (per-note) → outputGain → [Filter]
 |---|---|---|---|
 | `sample.start` | 0–1 | 0 | Normalized start trim point |
 | `sample.end` | 0–1 | 1 | Normalized end trim point |
+| `sample.loopStart` | 0–1 | 0 | Normalized loop-resume point: first pass plays from `start`, subsequent loops restart here. Allows an intro region that only plays once (e.g. "doooo" → loops "oooo"). Clamped to `[start, end]` at playback time. |
 | `sample.speed` | 0.125–4 | 1 | Playback rate multiplier |
 | `sample.pitch` | boolean | true | When true: transpose pitch from `sample.root` per MIDI note |
 | `sample.root` | 0–127 | 60 | Root note the sample is tuned to (C4 = 60) |
 | `sample.reverse` | boolean | false | Play region backwards |
-| `sample.loop` | boolean | false | Loop between start/end |
+| `sample.loop` | boolean | false | Loop between loopStart/end |
 | `output.level` | 0–1 | 0.85 | Output gain (LFO-assignable) |
 
 **Note behaviour:**
@@ -151,7 +152,7 @@ AudioBufferSourceNode (per-note) → outputGain → [Filter]
 - When `sample.pitch = false`: drum mode — MIDI note is ignored, `playbackRate = sample.speed`.
 - Velocity scales `output.level`.
 - Reverse: rebuilds a reversed `AudioBuffer` slice per noteOn (cheap for trimmed regions).
-- Loop: `src.loopStart/loopEnd` set to the trimmed region.
+- Loop: `src.loopStart` = `sample.loopStart × duration`, `src.loopEnd` = `sample.end × duration`. First pass starts from `sample.start`.
 
 **Custom panel:** `SamplerPanel.js` — file picker, mic record, waveform + trim handles, params row.
 
@@ -177,8 +178,9 @@ Reverse playback is implemented by inverting the playback rate in the trigger me
 | `morph` | 0–1 | 0.5 | Crossfade centre: 0 = full A, 1 = full B. LFO-assignable + p-lockable. |
 | `sweep.depth` | 0–1 | 0 | SampleSweep depth: sine LFO amplitude around morph centre (0 = off). |
 | `sweep.speed` | 0.05–20 Hz | 0.5 | SampleSweep rate. |
-| `sample.start` | 0–1 | 0 | Normalized start of playback region |
-| `sample.end` | 0–1 | 1 | Normalized end of playback region |
+| `sample.startA` / `sample.startB` | 0–1 | 0 | Normalized start of each buffer's playback region |
+| `sample.endA` / `sample.endB` | 0–1 | 1 | Normalized end of each buffer's playback region |
+| `sample.loopStartA` / `sample.loopStartB` | 0–1 | 0 | Normalized loop-resume point per buffer; first pass plays from start, loops restart here. Clamped to `[startX, endX]`. |
 | `sample.speed` | 0.125–4 | 1 | Playback rate multiplier |
 | `sample.pitch` | boolean | true | Track MIDI note (true) or fixed pitch (false) |
 | `sample.rootA` | 0–127 | 60 | MIDI root of sample A |
@@ -201,7 +203,7 @@ Pitch interpolation: the effective root is `rootA × (1 − morph) + rootB × mo
 
 Seven-voice sample swarm. One root voice plays the loaded buffer at nominal pitch; six swarm voices are spread symmetrically above and below it in cents (the `spread` param). All seven sources are `AudioBufferSourceNode` instances spawned fresh per `noteOn` — no persistent oscillators.
 
-Sample controls mirror `SamplerMachine`: `sample.start/end/speed/gain/root`, `sample.reverse`, `sample.loop`, `sample.pitch`.
+Sample controls mirror `SamplerMachine`: `sample.start/end/loopStart/speed/gain/root`, `sample.reverse`, `sample.loop`, `sample.pitch`.
 
 Swarm controls mirror `SwarmMachine`:
 - `spread` — cent gap between adjacent pairs (0–100¢)

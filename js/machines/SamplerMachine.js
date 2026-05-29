@@ -13,12 +13,14 @@
  * localStorage via SampleStore under a separate key ('webtakt_samples').
  *
  * Parameters:
- *   'sample.start'   — normalized start point (0–1)
- *   'sample.end'     — normalized end point (0–1)
- *   'sample.speed'   — playback rate multiplier (0.125–4)
- *   'sample.reverse' — boolean (play backwards)
- *   'sample.loop'    — boolean (loop between start/end)
- *   'output.level'   — 0–1
+ *   'sample.start'     — normalized start point (0–1)
+ *   'sample.end'       — normalized end point (0–1)
+ *   'sample.loopStart' — normalized loop-resume point (0–1); first pass plays from start,
+ *                        subsequent loops restart here (must be >= sample.start)
+ *   'sample.speed'     — playback rate multiplier (0.125–4)
+ *   'sample.reverse'   — boolean (play backwards)
+ *   'sample.loop'      — boolean (loop between start/end)
+ *   'output.level'     — 0–1
  */
 
 import { Machine } from './Machine.js';
@@ -30,15 +32,16 @@ export class SamplerMachine extends Machine {
     this.label = 'Sampler';
 
     this._params = {
-      'sample.start':   0,
-      'sample.end':     1,
-      'sample.speed':   1,
-      'sample.gain':    1,      // pre-amp multiplier (0–4), boosts quiet recordings
-      'sample.reverse': false,
-      'sample.loop':    false,
-      'sample.pitch':   true,   // when true: track keyboard note; false = fixed pitch (drum mode)
-      'sample.root':    60,     // MIDI root note the sample is tuned to (C4 = 60)
-      'output.level':   0.85,
+      'sample.start':     0,
+      'sample.end':       1,
+      'sample.loopStart': 0,
+      'sample.speed':     1,
+      'sample.gain':      1,      // pre-amp multiplier (0–4), boosts quiet recordings
+      'sample.reverse':   false,
+      'sample.loop':      false,
+      'sample.pitch':     true,   // when true: track keyboard note; false = fixed pitch (drum mode)
+      'sample.root':      60,     // MIDI root note the sample is tuned to (C4 = 60)
+      'output.level':     0.85,
     };
 
     // The decoded AudioBuffer (or null if no sample loaded)
@@ -86,9 +89,14 @@ export class SamplerMachine extends Machine {
     let endNorm   = Math.max(this._params['sample.start'], this._params['sample.end']);
     if (endNorm - startNorm < 0.001) endNorm = Math.min(1, startNorm + 0.001);
 
-    const startSec = startNorm * dur;
-    const endSec   = endNorm   * dur;
-    const lengthSec = endSec - startSec;
+    // loopStart clamped to [startNorm, endNorm] — first pass plays from startSec,
+    // loop wraps to loopStartSec so an intro region is only heard once.
+    const loopStartNorm = Math.max(startNorm, Math.min(endNorm, this._params['sample.loopStart']));
+
+    const startSec     = startNorm     * dur;
+    const endSec       = endNorm       * dur;
+    const loopStartSec = loopStartNorm * dur;
+    const lengthSec    = endSec - startSec;
 
     // Pitch tracking: multiply playbackRate by interval from root note
     const pitchRate = this._params['sample.pitch']
@@ -103,21 +111,21 @@ export class SamplerMachine extends Machine {
 
     if (isReverse) {
       // Reversed: build a new buffer containing just the trimmed region, reversed.
-      // loopStart/End are in source-buffer time (not playback time).
-      const revBuf = this._buildReversed(buf, startNorm, endNorm);
+      // loopStart in the reversed buffer corresponds to (endNorm - loopStartNorm).
+      const revBuf       = this._buildReversed(buf, startNorm, endNorm);
+      const revLoopStart = (endNorm - loopStartNorm) * dur;
       src.buffer = revBuf;
       src.loop = isLoop;
       if (isLoop) {
-        src.loopStart = 0;
-        src.loopEnd   = revBuf.duration; // full reversed buffer
+        src.loopStart = revLoopStart;
+        src.loopEnd   = revBuf.duration;
       }
-      // Without loop: play the whole reversed buffer (no duration cap — let it finish naturally)
       src.start(time, 0, isLoop ? undefined : undefined);
     } else {
       src.buffer = buf;
       src.loop = isLoop;
       if (isLoop) {
-        src.loopStart = startSec;
+        src.loopStart = loopStartSec;
         src.loopEnd   = endSec;
       }
       // Without loop: pass duration so playback stops at endSec even at non-1x rate.
@@ -186,8 +194,9 @@ export class SamplerMachine extends Machine {
 
   getParamList() {
     return [
-      { path: 'sample.start',   label: 'Start',   type: 'number',  min: 0,   max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
-      { path: 'sample.end',     label: 'End',     type: 'number',  min: 0,   max: 1,   default: 1,    modulatable: false, plockMode: 'js' },
+      { path: 'sample.start',     label: 'Start',    type: 'number',  min: 0,   max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
+      { path: 'sample.end',       label: 'End',      type: 'number',  min: 0,   max: 1,   default: 1,    modulatable: false, plockMode: 'js' },
+      { path: 'sample.loopStart', label: 'Loop Strt',type: 'number',  min: 0,   max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
       { path: 'sample.speed',   label: 'Speed',   type: 'number',  min: 0.125, max: 4, default: 1,    modulatable: false, plockMode: 'js' },
       { path: 'sample.gain',    label: 'Gain',    type: 'number',  min: 0,   max: 20,  default: 1,    modulatable: false, plockMode: 'js' },
       { path: 'sample.root',    label: 'Root',    type: 'number',  min: 0,   max: 127, default: 60,   modulatable: false, plockMode: 'js' },

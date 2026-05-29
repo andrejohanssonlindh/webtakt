@@ -17,14 +17,16 @@
  * fresh random detune targets to the active swarm sources.
  *
  * Parameters:
- *   'sample.start'   — normalised start point (0–1)
- *   'sample.end'     — normalised end point (0–1)
- *   'sample.speed'   — playback rate multiplier (0.125–4)
- *   'sample.gain'    — pre-amp (0–4)
- *   'sample.root'    — MIDI root note the sample is tuned to (C4 = 60)
- *   'sample.reverse' — boolean: play region backwards
- *   'sample.loop'    — boolean: loop between start/end
- *   'sample.pitch'   — boolean: track keyboard note (false = drum mode)
+ *   'sample.start'     — normalised start point (0–1)
+ *   'sample.end'       — normalised end point (0–1)
+ *   'sample.loopStart' — normalised loop-resume point; first pass starts at 'start',
+ *                        subsequent loops restart here (intro plays once)
+ *   'sample.speed'     — playback rate multiplier (0.125–4)
+ *   'sample.gain'      — pre-amp (0–4)
+ *   'sample.root'      — MIDI root note the sample is tuned to (C4 = 60)
+ *   'sample.reverse'   — boolean: play region backwards
+ *   'sample.loop'      — boolean: loop between start/end
+ *   'sample.pitch'     — boolean: track keyboard note (false = drum mode)
  *   'spread'         — cent gap between adjacent swarm voices (0–100¢)
  *   'swarm.detune'   — random start-detune jitter per voice per noteOn (0–50¢)
  *   'height'         — swarm voice level relative to root (0–1)
@@ -44,14 +46,15 @@ export class SampleSwarmMachine extends Machine {
     this.label = 'Smp Swarm';
 
     this._params = {
-      'sample.start':   0,
-      'sample.end':     1,
-      'sample.speed':   1,
-      'sample.gain':    1,
-      'sample.root':    60,
-      'sample.reverse': false,
-      'sample.loop':    false,
-      'sample.pitch':   true,
+      'sample.start':     0,
+      'sample.end':       1,
+      'sample.loopStart': 0,
+      'sample.speed':     1,
+      'sample.gain':      1,
+      'sample.root':      60,
+      'sample.reverse':   false,
+      'sample.loop':      false,
+      'sample.pitch':     true,
       'spread':         15,
       'swarm.detune':   5,
       'height':         0.7,
@@ -160,9 +163,12 @@ export class SampleSwarmMachine extends Machine {
     let endNorm   = Math.max(this._params['sample.start'], this._params['sample.end']);
     if (endNorm - startNorm < 0.001) endNorm = Math.min(1, startNorm + 0.001);
 
-    const startSec  = startNorm * dur;
-    const endSec    = endNorm   * dur;
-    const lengthSec = endSec - startSec;
+    const loopStartNorm = Math.max(startNorm, Math.min(endNorm, this._params['sample.loopStart']));
+
+    const startSec     = startNorm     * dur;
+    const endSec       = endNorm       * dur;
+    const loopStartSec = loopStartNorm * dur;
+    const lengthSec    = endSec - startSec;
 
     const pitchRate = this._params['sample.pitch']
       ? Math.pow(2, (midiNote - this._params['sample.root']) / 12)
@@ -178,12 +184,14 @@ export class SampleSwarmMachine extends Machine {
 
     // Reversed: build reversed slice once, share across all 7 voices
     const playBuf = isReverse ? this._buildReversed(buf, startNorm, endNorm) : buf;
+    const revLoopStart = isReverse ? (endNorm - loopStartNorm) * dur : undefined;
 
     const jitter = this._params['swarm.detune'];
 
     // ── Root voice ──
     this._rootSrc = this._makeSource(playBuf, totalRate, isLoop,
-      isReverse ? 0 : startSec, isReverse ? undefined : lengthSec, time);
+      isReverse ? 0 : startSec, isReverse ? undefined : lengthSec, time,
+      isReverse ? revLoopStart : loopStartSec, isReverse ? playBuf.duration : endSec);
     this._rootSrc.connect(this._mix);
     this._rootSrc.detune.value = (Math.random() * 2 - 1) * jitter;
 
@@ -191,7 +199,8 @@ export class SampleSwarmMachine extends Machine {
     this._swarmSrc = [];
     for (let i = 0; i < NUM_SWARM; i++) {
       const src = this._makeSource(playBuf, totalRate, isLoop,
-        isReverse ? 0 : startSec, isReverse ? undefined : lengthSec, time);
+        isReverse ? 0 : startSec, isReverse ? undefined : lengthSec, time,
+        isReverse ? revLoopStart : loopStartSec, isReverse ? playBuf.duration : endSec);
       src.connect(this._swarmGain);
       src.detune.value = this._spreadBase[i] + (Math.random() * 2 - 1) * jitter;
       this._swarmSrc.push(src);
@@ -202,14 +211,14 @@ export class SampleSwarmMachine extends Machine {
     // Self-enveloping — no-op
   }
 
-  _makeSource(buf, rate, loop, offsetSec, durationSec, time) {
+  _makeSource(buf, rate, loop, offsetSec, durationSec, time, loopStartSec, loopEndSec) {
     const src          = this.context.createBufferSource();
     src.buffer         = buf;
     src.playbackRate.value = rate;
     src.loop           = loop;
     if (loop) {
-      src.loopStart = offsetSec;
-      src.loopEnd   = (offsetSec ?? 0) + (durationSec ?? buf.duration);
+      src.loopStart = loopStartSec ?? offsetSec ?? 0;
+      src.loopEnd   = loopEndSec   ?? (offsetSec ?? 0) + (durationSec ?? buf.duration);
     }
     src.start(time, offsetSec ?? 0, loop ? undefined : durationSec);
     return src;
@@ -288,8 +297,9 @@ export class SampleSwarmMachine extends Machine {
   getParamList() {
     return [
       // Sample controls
-      { path: 'sample.start',   label: 'Start',      type: 'number',  min: 0,     max: 1,    default: 0,    modulatable: false, plockMode: 'js' },
-      { path: 'sample.end',     label: 'End',        type: 'number',  min: 0,     max: 1,    default: 1,    modulatable: false, plockMode: 'js' },
+      { path: 'sample.start',     label: 'Start',      type: 'number',  min: 0,     max: 1,    default: 0,    modulatable: false, plockMode: 'js' },
+      { path: 'sample.end',       label: 'End',        type: 'number',  min: 0,     max: 1,    default: 1,    modulatable: false, plockMode: 'js' },
+      { path: 'sample.loopStart', label: 'Loop Strt',  type: 'number',  min: 0,     max: 1,    default: 0,    modulatable: false, plockMode: 'js' },
       { path: 'sample.speed',   label: 'Speed',      type: 'number',  min: 0.125, max: 4,    default: 1,    modulatable: false, plockMode: 'js' },
       { path: 'sample.gain',    label: 'Gain',       type: 'number',  min: 0,     max: 4,    default: 1,    modulatable: false, plockMode: 'js' },
       { path: 'sample.root',    label: 'Root',       type: 'number',  min: 0,     max: 127,  default: 60,   modulatable: false, plockMode: 'js' },

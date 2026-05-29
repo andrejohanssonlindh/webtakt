@@ -38,7 +38,7 @@ export class SamplerPanel {
     this._mediaRec    = null;
     this._recChunks   = [];
 
-    this._dragging    = null; // 'start' | 'end' | null
+    this._dragging    = null; // 'start' | 'end' | 'loopStart' | null
     this._canvasEl    = null;
     this._animFrame   = null;
 
@@ -127,8 +127,9 @@ export class SamplerPanel {
       return knob;
     };
 
-    this._startKnob = addKnob('sample.start', 'START', 0, 1, v => Math.round(v * 100) + '%');
-    this._endKnob   = addKnob('sample.end',   'END',   0, 1, v => Math.round(v * 100) + '%');
+    this._startKnob     = addKnob('sample.start',     'START',   0, 1,   v => Math.round(v * 100) + '%');
+    this._endKnob       = addKnob('sample.end',       'END',     0, 1,   v => Math.round(v * 100) + '%');
+    this._loopStartKnob = addKnob('sample.loopStart', 'LOOP ST', 0, 1,   v => Math.round(v * 100) + '%');
     addKnob('sample.speed', 'SPEED', 0.125, 4,  v => v.toFixed(2) + 'x');
     addKnob('sample.gain',  'GAIN',  0, 20,     v => v.toFixed(1) + 'x');
     addKnob('sample.root',  'ROOT',  0, 127,    v => this._midiName(Math.round(v)));
@@ -224,6 +225,7 @@ export class SamplerPanel {
       const newVal = !this.machine.getParam(path);
       this.ctx.writeValue(this.machine, path, newVal, true);
       btn.classList.toggle('active', newVal);
+      if (path === 'sample.loop') this._drawWaveform();
     });
 
     const lbl = document.createElement('span');
@@ -305,6 +307,26 @@ export class SamplerPanel {
     }
     gc.stroke();
 
+    // Loop-start handle — cyan dashed line (only drawn when loop is on)
+    const loopStartRaw = this.machine.getParam('sample.loopStart');
+    const loopStartClamped = Math.max(
+      this.machine.getParam('sample.start'),
+      Math.min(this.machine.getParam('sample.end'), loopStartRaw)
+    );
+    const loopStartX = loopStartClamped * w;
+    if (this.machine.getParam('sample.loop')) {
+      gc.save();
+      gc.strokeStyle = '#00bcd4';
+      gc.lineWidth = 2;
+      gc.setLineDash([4, 3]);
+      gc.beginPath();
+      gc.moveTo(loopStartX, 0);
+      gc.lineTo(loopStartX, h);
+      gc.stroke();
+      gc.setLineDash([]);
+      gc.restore();
+    }
+
     // Start handle — green line
     gc.strokeStyle = '#8bc34a';
     gc.lineWidth = 2;
@@ -329,6 +351,11 @@ export class SamplerPanel {
     gc.fillStyle = '#ffb300';
     gc.textAlign = endX > w - 30 ? 'right' : 'left';
     gc.fillText('E', endX + (endX > w - 30 ? -3 : 3), 12);
+    if (this.machine.getParam('sample.loop')) {
+      gc.fillStyle = '#00bcd4';
+      gc.textAlign = loopStartX < 30 ? 'left' : 'right';
+      gc.fillText('L', loopStartX + (loopStartX < 30 ? 3 : -3), 24);
+    }
   }
 
   _setupDrag() {
@@ -343,13 +370,21 @@ export class SamplerPanel {
     const SNAP = 0.01; // snap zone near handles
 
     canvas.addEventListener('mousedown', e => {
-      const pos   = getPos(e);
-      const start = this.machine.getParam('sample.start');
-      const end   = this.machine.getParam('sample.end');
+      const pos       = getPos(e);
+      const start     = this.machine.getParam('sample.start');
+      const end       = this.machine.getParam('sample.end');
+      const loopStart = this.machine.getParam('sample.loopStart');
 
-      if (Math.abs(pos - start) < SNAP) {
+      const dStart     = Math.abs(pos - start);
+      const dEnd       = Math.abs(pos - end);
+      const dLoopStart = Math.abs(pos - loopStart);
+      const loopOn     = this.machine.getParam('sample.loop');
+
+      if (loopOn && dLoopStart < SNAP && dLoopStart < dStart && dLoopStart < dEnd) {
+        this._dragging = 'loopStart';
+      } else if (dStart < SNAP && dStart <= dEnd) {
         this._dragging = 'start';
-      } else if (Math.abs(pos - end) < SNAP) {
+      } else if (dEnd < SNAP) {
         this._dragging = 'end';
       } else if (pos < start + (end - start) / 2) {
         this._dragging = 'start';
@@ -362,7 +397,13 @@ export class SamplerPanel {
     const onMove = e => {
       if (!this._dragging) return;
       const pos = Math.max(0, Math.min(1, getPos(e)));
-      const path = this._dragging === 'start' ? 'sample.start' : 'sample.end';
+      let path;
+      if (this._dragging === 'loopStart') {
+        path = 'sample.loopStart';
+        this._loopStartKnob?.setValue(pos);
+      } else {
+        path = this._dragging === 'start' ? 'sample.start' : 'sample.end';
+      }
       this.ctx.writeValue(this.machine, path, pos, false);
       this._drawWaveform();
     };
