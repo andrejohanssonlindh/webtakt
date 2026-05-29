@@ -11,7 +11,7 @@ The panel header has two zones in a single row:
 | MACHINE | Search input + grouped grid (Drums / Melodic / Sampler) of all machine types; click to swap machine on the selected track |
 | SOUNDS | Sound library: save/load named snapshots (machine + signal chain). Tag filter chips + scrollable list. |
 | SCALES | Scale dropdown + root note picker (12 buttons) + chromatic preview strip |
-| TRIG | Note display, REMOVE NOTE, RESET TRIG, condition/chance/length/nudge/detune/tone knobs. NUDGE is only shown when a step is selected. QUANTIZE knob (0–100%) is shown when no step is selected. |
+| TRIG | Note display, REMOVE NOTE, RESET TRIG, condition/chance/length/nudge/detune/tone knobs. NUDGE is only shown when a step is selected. QUANTIZE knob (0–100%), **NOTE FOLLOW** dropdown, and **FLW DLY** knob (0–500ms) are shown when no step is selected. |
 | SYNTH | Machine params — varies by machine type. Detune is hidden here (moved to TRIG). Rendered by a machine-specific panel from `js/ui/panels/`. |
 | FILTER | Single row: type dropdown + cutoff/res/gain/env knobs (left) + FilterViz (centre) + right column with compact filter ADSR above base HPF/LPF knobs. All p-lockable. |
 | AMP | Single row: PAN knob (left, p-lockable + LFO-assignable) + compact amp ADSR (right, canvasH=80, 44px knobs). |
@@ -32,6 +32,19 @@ A `<canvas class="oscilloscope">` sits between the tab bar and the FX block, fil
 ### FX Block (right side of header, always visible, teal)
 
 Three stacked toggle units — DLY / CRUSH / REV — sit in `.fx-bar` on the right, separated by a left border. See [`fx.md`](fx.md) for full detail.
+
+### Clipboard Block (rightmost in header)
+
+A `.clip-bar` with two buttons — **COPY** and **PASTE** — sits to the right of the FX block.
+
+Behaviour is context-sensitive based on whether a step is selected:
+
+| Context | COPY | PASTE |
+|---|---|---|
+| Step selected | Copies step data: voices, chance, condition, retrigger, plocks | Pastes copied step data into the currently selected step |
+| No step selected | Copies machine + filter + envelope + FX + LFOs of the selected track | Pastes machine config onto the current track (swaps machine type, restores all params) |
+
+The PASTE button shows an amber highlight when the clipboard contains data. The clipboard persists across tab and track switches within the session.
 
 ### P-Lock Knob Pattern
 

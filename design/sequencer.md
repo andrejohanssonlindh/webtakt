@@ -88,6 +88,50 @@ paths matching those prefixes as `'envelope'` automatically.
 
 ---
 
+## Note Follow
+
+A track can mirror notes from another track via `track.followSource` (an integer track index, or `null`).
+
+### Where follow is triggered
+
+| Source | Mechanism |
+|---|---|
+| Sequencer step | After `_fireStep()` completes, `Sequencer` iterates `_projectTracks` and calls `follower.fireFollowNote(note, vel, time, offTime)` for each track whose `followSource === this.track.index`. |
+| Live keyboard (chromatic / folded) | `Keyboard._noteOn` calls `_fireFollowers(sourceTrack, note, vel, audioTime)` after playing the selected track's note. |
+| Drum-mode finger drumming | Same `_fireFollowers` call after the drum note fires. |
+| MIDI In note-on | `index.html` MIDI init loop: after routing a note to the mapped track, iterates `project.tracks` and fires `fireFollowNote` on followers. |
+
+### Track.fireFollowNote(note, velocity, audioTime, offTime)
+
+Fires immediately on the follower track with an optional delay:
+```
+delaySec = track.followDelay / 1000
+startTime = audioTime + delaySec
+stopTime  = offTime + delaySec
+```
+Uses the follower's own machine, envelope, and LFOs — same voice pool mechanism as a normal note.
+
+### Follow properties (Track)
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `followSource` | `number\|null` | `null` | Index of the source track to follow, or null to disable |
+| `followDelay` | `number` | `0` | Delay in milliseconds applied to the follower's note start and end |
+
+Both are serialised in `Track.toJSON()` and restored by `fromJSON()`.
+
+### UI
+
+Located in the TRIG tab, visible only when no step is selected:
+- **NOTE FOLLOW** dropdown: `OFF` or any other track listed as `T{n} (machine-type)`. The current track is excluded.
+- **FLW DLY** knob: 0–500 ms delay, applied to follower playback.
+
+### Project wiring
+
+`Project._wireFollowTracks()` assigns `sequencer._projectTracks = this.tracks` to every sequencer. Called after initial construction and after `setTrackCount()`.
+
+---
+
 ## Track Nav (Page Counter + Length Control)
 
 The right side of the middle row holds a `#track-nav` panel:

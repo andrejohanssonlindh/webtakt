@@ -50,6 +50,14 @@ export class Project {
         return t;
       }
     );
+    this._wireFollowTracks();
+  }
+
+  /** Give every sequencer a live reference to the project's tracks array. */
+  _wireFollowTracks() {
+    this.tracks.forEach(t => {
+      t.sequencer._projectTracks = this.tracks;
+    });
   }
 
   get trackCount() {
@@ -87,6 +95,7 @@ export class Project {
         t.sequencer.stop();
       }
     }
+    this._wireFollowTracks();
   }
 
   static get trackCountMin() { return TRACK_COUNT_MIN; }

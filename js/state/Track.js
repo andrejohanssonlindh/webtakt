@@ -170,6 +170,9 @@ export class Track {
     // DJ filter: -1 = full LPF, 0 = flat, +1 = full HPF
     this.djFilter = 0;
 
+    // Note Follow delay in milliseconds (applied to follower track playback)
+    this.followDelay = 0;
+
     // MidiEngine reference — set by Project after init
     this._midiEngine = null;
 
@@ -273,6 +276,35 @@ export class Track {
   /** @param {number|null} trackIndex */
   setFollow(trackIndex) {
     this.followSource = trackIndex;
+  }
+
+  /**
+   * Fire a note on this track immediately (for note-follow triggering).
+   * @param {number} note     — MIDI note 0-127
+   * @param {number} velocity
+   * @param {number} audioTime — AudioContext scheduled time
+   * @param {number} offTime   — AudioContext scheduled note-off time
+   */
+  fireFollowNote(note, velocity, audioTime, offTime) {
+    if (this.muted) return;
+    const delayMs  = this.followDelay ?? 0;
+    const delaySec = delayMs / 1000;
+    const startTime = audioTime + delaySec;
+    const stopTime  = offTime  + delaySec;
+    const oscOffTime = stopTime + (this.envelope?.getParam('env.release') ?? 0.3);
+
+    const voice    = this._pool?.nextVoice() ?? null;
+    const machine  = voice?.machine  ?? this.machine;
+    const envelope = voice?.envelope ?? this.envelope;
+    if (voice) voice.claim(oscOffTime);
+
+    machine?.noteOn(note, velocity, startTime, stopTime);
+    machine?.noteOff(oscOffTime);
+    envelope?.scheduleNote(startTime, stopTime, {});
+    this.lfos?.forEach(lfo => {
+      lfo.noteOn(startTime, stopTime, envelope?._params ?? {});
+      lfo.noteOff(stopTime);
+    });
   }
 
   addLFO() {
@@ -473,6 +505,7 @@ export class Track {
     // Reset mute
     if (this.muted) this.unmute();
     this.followSource = null;
+    this.followDelay  = 0;
     this.modWheelTargets = [null, null];
 
     // Reset MIDI In
@@ -535,6 +568,7 @@ export class Track {
       index:        this.index,
       muted:        this.muted,
       followSource: this.followSource,
+      followDelay:  this.followDelay,
       pan:          this.pannerNode.pan.value,
       trigTone:      this.trigTone,
       nudgeQuantize: this.nudgeQuantize,
@@ -561,6 +595,7 @@ export class Track {
   fromJSON(obj) {
     this.muted        = obj.muted        ?? false;
     this.followSource = obj.followSource ?? null;
+    this.followDelay  = obj.followDelay  ?? 0;
     this.pannerNode.pan.value = obj.pan ?? 0;
     this.trigTone      = obj.trigTone      ?? 0;
     this.nudgeQuantize = obj.nudgeQuantize ?? 0;

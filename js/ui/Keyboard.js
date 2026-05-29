@@ -298,6 +298,9 @@ export class Keyboard {
     machine?.noteOn(midiNote, 100, time);
     envelope.noteOn(time);
 
+    // ── Fire followers (live keyboard note) ────────────────
+    this._fireFollowers(track, midiNote, 100, time);
+
     const stepIndex = this.state.recording
       ? (this.state.recordStepIndex ?? -1)
       : this.state.selectedStepIndex;
@@ -453,6 +456,9 @@ export class Keyboard {
     machine?.noteOn(60, 100, time);
     envelope.noteOn(time);
 
+    // Fire followers for drum-mode note
+    this._fireFollowers(track, 60, 100, time);
+
     // Record mode: write C4 into the step currently playing on this track
     if (this.state.recording) {
       const seq = track.sequencer;
@@ -545,6 +551,24 @@ export class Keyboard {
         }
       }
     }
+  }
+
+  /**
+   * Fire the same note on all tracks that follow the given source track.
+   * Used for live keyboard notes and drum-mode notes.
+   * @param {import('../state/Track.js').Track} sourceTrack
+   * @param {number} note
+   * @param {number} velocity
+   * @param {number} audioTime — AudioContext.currentTime + lookahead
+   */
+  _fireFollowers(sourceTrack, note, velocity, audioTime) {
+    const allTracks = this.state.project.tracks;
+    allTracks.forEach(follower => {
+      if (follower.followSource !== sourceTrack.index) return;
+      const release = follower.envelope?.getParam('env.release') ?? 0.3;
+      const offTime = audioTime + 0.5;  // hold gate 0.5s for live notes
+      follower.fireFollowNote(note, velocity, audioTime, offTime);
+    });
   }
 
   /** Toggle keyboard folding on/off. Called from the SCALES tab. */

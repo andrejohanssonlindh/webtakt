@@ -50,6 +50,9 @@ export class SynthPanel {
     // FilterViz reference for the currently rendered filter tab, or null
     this._activeViz     = null;
 
+    // Clipboard: { type: 'step'|'machine', data: object }
+    this._clipboard = null;
+
     this._buildShell();
 
     state.on('trackSelected', () => this.render());
@@ -147,6 +150,27 @@ export class SynthPanel {
     });
 
     header.appendChild(this._fxBar);
+
+    // ── Copy/Paste block — rightmost in header ───────────────
+    this._clipBar = document.createElement('div');
+    this._clipBar.className = 'clip-bar';
+
+    this._copyBtn = document.createElement('button');
+    this._copyBtn.className = 'clip-btn';
+    this._copyBtn.textContent = 'COPY';
+    this._copyBtn.title = 'Step selected: copy step  |  No step: copy machine';
+    this._copyBtn.addEventListener('click', () => this._doCopy());
+
+    this._pasteBtn = document.createElement('button');
+    this._pasteBtn.className = 'clip-btn';
+    this._pasteBtn.textContent = 'PASTE';
+    this._pasteBtn.title = 'Step selected: paste step  |  No step: paste machine';
+    this._pasteBtn.addEventListener('click', () => this._doPaste());
+
+    this._clipBar.appendChild(this._copyBtn);
+    this._clipBar.appendChild(this._pasteBtn);
+    header.appendChild(this._clipBar);
+
     this.container.appendChild(header);
 
     this._content = document.createElement('div');
@@ -163,7 +187,114 @@ export class SynthPanel {
     this._fxBar.querySelectorAll('.fx-toggle-wrap').forEach(wrap => {
       wrap._updateState?.();
     });
+    this._updateClipButtons();
     this._renderContent();
+  }
+
+  _updateClipButtons() {
+    const hasClip = this._clipboard !== null;
+    this._pasteBtn.classList.toggle('clip-has-data', hasClip);
+  }
+
+  _doCopy() {
+    const track = this.state.selectedTrack;
+    if (!track) return;
+    const step = this._step();
+    if (step) {
+      // Copy step: voices, chance, condition, length, retrigger, plocks
+      this._clipboard = {
+        type: 'step',
+        data: JSON.parse(JSON.stringify({
+          active:    step.active,
+          voices:    step.voices,
+          chance:    step.chance,
+          condition: step.condition.type === 'ratio'
+            ? { type: 'ratio', options: { ...step.condition.options } }
+            : { type: 'always', options: {} },
+          length:    step.length,
+          retrigger: step.retrigger,
+          nudge:     step.nudge,
+          plocks:    [...step.plocks.entries()],
+        })),
+      };
+    } else {
+      // Copy machine: full machine JSON + filter + envelope + FX
+      this._clipboard = {
+        type: 'machine',
+        data: JSON.parse(JSON.stringify({
+          machine:    track.machine.toJSON(),
+          filter:     track.filter.toJSON(),
+          envelope:   track.envelope.toJSON(),
+          delayFX:    track.delayFX.toJSON(),
+          bitcrushFX: track.bitcrushFX.toJSON(),
+          reverbFX:   track.reverbFX.toJSON(),
+          lfos:       track.lfos.map((lfo, i) => ({
+            ...lfo.toJSON(),
+            destPath: track._lfoDestPaths[i] ?? '',
+          })),
+        })),
+      };
+    }
+    this._updateClipButtons();
+  }
+
+  _doPaste() {
+    if (!this._clipboard) return;
+    const track = this.state.selectedTrack;
+    if (!track) return;
+    const step = this._step();
+
+    if (this._clipboard.type === 'step') {
+      if (!step) return;
+      const d = this._clipboard.data;
+      step.active    = d.active;
+      step.voices    = JSON.parse(JSON.stringify(d.voices));
+      step.chance    = d.chance ?? 100;
+      step.retrigger = d.retrigger ?? null;
+      step.plocks    = new Map(d.plocks ?? []);
+
+      // Restore condition object
+      if (d.condition?.type === 'ratio') {
+        step.condition = Condition.create('ratio', d.condition.options);
+      } else {
+        step.condition = Condition.create('always');
+      }
+
+      this.state.emit('stepChanged', {
+        trackIndex: this.state.selectedTrackIndex,
+        stepIndex:  this.state.selectedStepIndex,
+        step,
+      });
+      this._renderContent();
+
+    } else if (this._clipboard.type === 'machine') {
+      const d = this._clipboard.data;
+      if (d.machine?.type) track.setMachine(d.machine.type);
+      track.machine.fromJSON(d.machine ?? {});
+      track._pool.syncParams();
+      track.filter.fromJSON(d.filter ?? {});
+      track.envelope.fromJSON(d.envelope ?? {});
+      track._pool.syncParams();
+      track.delayFX.fromJSON(d.delayFX ?? {});
+      track.bitcrushFX.fromJSON(d.bitcrushFX ?? {});
+      track.reverbFX.fromJSON(d.reverbFX ?? {});
+
+      // Restore LFOs
+      track.lfos.forEach(l => l.stop());
+      track.lfos = [];
+      track._lfoDestPaths = [];
+      (d.lfos ?? []).forEach(lfoObj => {
+        const lfo = track.addLFO();
+        lfo.fromJSON(lfoObj);
+        if (lfoObj.destPath) track.setLFODestination(track.lfos.length - 1, lfoObj.destPath);
+      });
+
+      this.state.emit('trackSelected', {
+        index: this.state.selectedTrackIndex,
+        track,
+      });
+      this._renderContent();
+    }
   }
 
   _renderContent() {
@@ -725,7 +856,7 @@ export class SynthPanel {
     shiftRow.appendChild(shiftFwd);
     panel.appendChild(shiftRow);
 
-    // ── No-step section: QUANTIZE knob ──────────────────────
+    // ── No-step section: QUANTIZE knob + Note Follow ────────
     if (!hasStep) {
       const noStepRow = document.createElement('div');
       noStepRow.className = 'trig-knobs-row';
@@ -746,11 +877,65 @@ export class SynthPanel {
       noStepRow.appendChild(quantizeKnob.el);
       this._activeWidgets.push(quantizeKnob);
 
+      // ── Note Follow delay knob ───────────────────────────
+      const followDelay = track.followDelay ?? 0;
+      const followDelayKnob = new KnobWidget({
+        label:   'FLW DLY',
+        min:     0,
+        max:     500,
+        value:   followDelay,
+        bipolar: false,
+        size:    64,
+        fmt:     v => Math.round(v) + 'ms',
+        onChange: v => {
+          track.followDelay = Math.round(v);
+        },
+      });
+      noStepRow.appendChild(followDelayKnob.el);
+      this._activeWidgets.push(followDelayKnob);
+
+      panel.appendChild(noStepRow);
+
+      // ── Note Follow dropdown ─────────────────────────────
+      const followRow = document.createElement('div');
+      followRow.className = 'trig-follow-row';
+
+      const followLabel = document.createElement('span');
+      followLabel.className = 'param-label label';
+      followLabel.textContent = 'NOTE FOLLOW';
+
+      const followSel = document.createElement('select');
+      followSel.className = 'param-select';
+
+      const noneOpt = document.createElement('option');
+      noneOpt.value = '';
+      noneOpt.textContent = 'OFF';
+      followSel.appendChild(noneOpt);
+
+      const allTracks = this.state.project.tracks;
+      allTracks.forEach((t, ti) => {
+        if (ti === this.state.selectedTrackIndex) return;
+        const opt = document.createElement('option');
+        opt.value = String(ti);
+        opt.textContent = `T${ti + 1} (${t.machine?.type ?? '?'})`;
+        if (track.followSource === ti) opt.selected = true;
+        followSel.appendChild(opt);
+      });
+      if (track.followSource === null) noneOpt.selected = true;
+
+      followSel.addEventListener('change', () => {
+        const val = followSel.value === '' ? null : parseInt(followSel.value, 10);
+        track.setFollow(val);
+      });
+
+      followRow.appendChild(followLabel);
+      followRow.appendChild(followSel);
+      panel.appendChild(followRow);
+
       const msg = document.createElement('div');
       msg.className = 'trig-no-step';
       msg.textContent = 'Select a step to edit note and condition';
 
-      panel.appendChild(noStepRow);
       panel.appendChild(msg);
       this._content.appendChild(panel);
       return;

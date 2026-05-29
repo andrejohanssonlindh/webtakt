@@ -150,6 +150,29 @@
             });
           });
         });
+
+        // Route incoming MIDI notes to selected track + fire followers
+        midiEngine.onNoteOn((inputId, channel, note, velocity) => {
+          const ctx = audio.context;
+          const time = ctx.currentTime + 0.015;
+          project.tracks.forEach(track => {
+            const cfg = track.midiIn;
+            if (!cfg.inputId || cfg.inputId !== inputId) return;
+            if (cfg.channel !== 0 && cfg.channel !== channel) return;
+            // Play note on the track that has MIDI In mapped to this port/channel
+            const voice    = track._pool?.nextVoice() ?? null;
+            const machine  = voice?.machine  ?? track.machine;
+            const envelope = voice?.envelope ?? track.envelope;
+            if (voice) voice.claim(time + 30);
+            machine?.noteOn(note, velocity, time);
+            envelope?.noteOn(time);
+            // Fire followers
+            project.tracks.forEach(follower => {
+              if (follower.followSource !== track.index) return;
+              follower.fireFollowNote(note, velocity, time, time + 0.5);
+            });
+          });
+        });
       }
     });
 

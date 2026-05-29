@@ -39,13 +39,14 @@ const STEPS_PER_PAGE     = 16;
 
 export class Sequencer {
   constructor(track, clock) {
-    this.track       = track;
-    this.clock       = clock;
-    this._stepCount  = DEFAULT_STEP_COUNT;
-    this.pageOffset  = 0;
-    this._stepIndex  = 0;
-    this._playCount  = 0;
-    this._tickBound  = this._onTick.bind(this);
+    this.track          = track;
+    this.clock          = clock;
+    this._stepCount     = DEFAULT_STEP_COUNT;
+    this.pageOffset     = 0;
+    this._stepIndex     = 0;
+    this._playCount     = 0;
+    this._tickBound     = this._onTick.bind(this);
+    this._projectTracks = null;  // set by Project after construction
 
     // Wall-clock trigger state — read by TrackRow for the trig glow animation
     this.lastFireTime     = 0;   // performance.now() at last fire
@@ -258,6 +259,20 @@ getVisibleSteps() {
     });
 
     jsRestores.forEach(fn => fn());
+
+    // ── Notify follower tracks ─────────────────────────────────
+    if (this._projectTracks) {
+      this._projectTracks.forEach(follower => {
+        if (follower.followSource !== this.track.index) return;
+        step.voices.forEach(sv => {
+          const effectiveNudge = sv.nudge * (1 - (this.track.nudgeQuantize ?? 0));
+          const time      = scheduledTime + (effectiveNudge * this.clock._secondsPerTick);
+          const offTime   = time + (sv.length * this.clock._secondsPerTick);
+          const finalNote = Math.max(0, Math.min(127, sv.note + Math.round(tone)));
+          follower.fireFollowNote(finalNote, sv.velocity, time, offTime);
+        });
+      });
+    }
   }
 
   toJSON() {
