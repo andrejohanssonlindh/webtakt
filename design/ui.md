@@ -16,6 +16,7 @@ The panel header has two zones in a single row:
 | FILTER | Single row: type dropdown + cutoff/res/gain/env knobs (left) + FilterViz (centre) + right column with compact filter ADSR above base HPF/LPF knobs. All p-lockable. |
 | AMP | Single row: PAN knob (left, p-lockable + LFO-assignable) + compact amp ADSR (right, canvasH=80, 44px knobs). |
 | LFO | LFO sub-selector (LFO 1, LFO 2, …, +) capped at 220px wide, destination dropdown (grouped), speed/depth/waveform knobs |
+| MIDI | Per-track MIDI In: input port dropdown, channel filter (All / Ch 1–16), CC→param mapping table (CC# + target param dropdown, + Add CC / × remove). |
 | MIXER | All-tracks mixer island: one strip per track showing Level, DLY wet, CRUSH wet, REV wet, and DJ Filter knobs. Clicking a strip selects that track. |
 
 ### Oscilloscope Strip (centre of header, always visible)

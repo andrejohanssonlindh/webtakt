@@ -96,6 +96,7 @@
     import { AudioEngine }       from './js/core/AudioEngine.js';
     import { GlobalRecorder }    from './js/core/GlobalRecorder.js';
     import { Clock }         from './js/core/Clock.js';
+    import { MidiEngine }    from './js/core/MidiEngine.js';
     import { AppState }      from './js/state/AppState.js';
     import { Project }       from './js/state/Project.js';
     import { SoundLibrary }  from './js/state/SoundLibrary.js';
@@ -114,9 +115,47 @@
     const state   = new AppState(project);
     const library = new SoundLibrary();
 
+    // ── MIDI ─────────────────────────────────────────────────
+    const midiEngine = new MidiEngine();
+    midiEngine.init().then(() => {
+      if (midiEngine.available) {
+        midiEngine.connectClock(clock, audio.context);
+        project.setMidiEngine(midiEngine);
+        // Route incoming CC to mapped track params
+        midiEngine.onCC((inputId, channel, cc, value) => {
+          project.tracks.forEach(track => {
+            const cfg = track.midiIn;
+            if (!cfg.inputId || cfg.inputId !== inputId) return;
+            if (cfg.channel !== 0 && cfg.channel !== channel) return;
+            cfg.ccMappings.forEach(m => {
+              if (m.cc !== cc || !m.param) return;
+              // Normalise 0-127 → param range
+              const sources = [
+                track.machine,
+                track.filter,
+                track.envelope,
+                track.delayFX,
+                track.bitcrushFX,
+                track.reverbFX,
+              ];
+              for (const src of sources) {
+                const desc = src.getParamList?.().find(p => p.path === m.param);
+                if (desc) {
+                  const mapped = desc.min + (value / 127) * (desc.max - desc.min);
+                  src.setParam(m.param, mapped);
+                  state.emit('paramChanged', { path: m.param, value: mapped });
+                  break;
+                }
+              }
+            });
+          });
+        });
+      }
+    });
+
     // ── Mount UI ─────────────────────────────────────────────
     const trackRow   = new TrackRow(document.getElementById('track-row'), state);
-    const synthPanel = new SynthPanel(document.getElementById('synth-panel'), state, library, _openModal, project.sampleStore, audio.context);
+    const synthPanel = new SynthPanel(document.getElementById('synth-panel'), state, library, _openModal, project.sampleStore, audio.context, midiEngine);
     const stepGrid   = new StepGrid(document.getElementById('step-grid'), state);
     const oscilloscope = new Oscilloscope(synthPanel.scopeCanvas, audio.analyser);
     oscilloscope.start();

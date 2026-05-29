@@ -24,7 +24,7 @@ A browser-based modular step sequencer / synthesizer inspired by Elektron Syntak
 Built in vanilla HTML5 + JavaScript. No build step, no framework, no package manager.
 Served via `python3 -m http.server 8000` and opened in Chrome.
 
-**Current scope:** 8–12 tracks (configurable at runtime via TRACKS +/− in the transport bar, default 8), unlimited steps per track (configurable per track, 16 visible per page), SynthMachine as primary voice, full suite of synthesis drum voices and melodic machines. No MIDI, no FX internals.
+**Current scope:** 8–12 tracks (configurable at runtime via TRACKS +/− in the transport bar, default 8), unlimited steps per track (configurable per track, 16 visible per page), SynthMachine as primary voice, full suite of synthesis drum voices and melodic machines. MIDI out (MidiMachine per track), MIDI In CC routing per track, MIDI clock sync out (24 PPQN).
 
 ---
 
@@ -39,6 +39,7 @@ js/
     AudioEngine.js      — AudioContext, master gain, FX bus, AnalyserNode (master output tap)
     Clock.js            — BPM clock, tick scheduling via AudioContext.currentTime
     GlobalRecorder.js   — MediaRecorder wrapper tapping masterGain
+    MidiEngine.js       — Web MIDI singleton: port enumeration, note/CC out, CC in routing, 24-PPQN clock sync out
   sequencer/
     Sequencer.js        — Per-track step runner, polyrhythm, page logic, p-lock dispatch
     Step.js             — Single step: note, vel, length, nudge, retrigger, chance, condition, plocks
@@ -60,6 +61,7 @@ js/
     WavetableMachine.js — Wavetable oscillator with morphing (8-entry bank via PeriodicWave)
     WavetableSamplerMachine.js — Two-sample wavetable: morph between sample A and B via AudioWorklet
     SampleSwarmMachine.js — 7-voice sample swarm: one sample played through 7 detuned BufferSourceNodes with spread + drift (type: 'sample-swarm')
+    MidiMachine.js      — MIDI out machine: routes noteOn/noteOff to a selected MIDI output port/channel; params: channel (1–16), noteOffset (±24 semitones); no audio output (type: 'midi')
     KarplusMachine.js   — Karplus-Strong plucked string (noise burst + comb filter)
     MarimbaMachine.js   — Marimba bar: 3 tuned inharmonic sine partials (ratios ~1×/3.9×/9.9×) + mallet noise burst, each partial with independent decay
     BassMachine.js      — Bassline voice: saw/sq + sub + drive + portamento + accent

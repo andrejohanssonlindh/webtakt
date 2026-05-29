@@ -2723,3 +2723,105 @@ body {
   border-color: #7ec8c8;
   color: #7ec8c8;
 }
+
+/* ── MIDI UI ──────────────────────────────────────────────────────── */
+
+.midi-unavailable {
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: 9px;
+  padding: 10px 6px;
+  letter-spacing: 0.05em;
+}
+
+.midi-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.midi-section-label {
+  font-family: var(--font-ui);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.midi-select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 9px;
+  padding: 3px 5px;
+  cursor: pointer;
+  max-width: 260px;
+}
+
+.midi-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.midi-knob-row {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 10px;
+}
+
+.midi-clock-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.midi-cc-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 3px;
+}
+
+.midi-cc-num {
+  width: 38px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 9px;
+  padding: 3px 4px;
+  text-align: center;
+}
+
+.midi-cc-num:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.midi-cc-arrow {
+  font-family: var(--font-ui);
+  font-size: 9px;
+  color: var(--text-dim);
+}
+
+.midi-cc-param {
+  flex: 1;
+}
+
+.midi-cc-rm {
+  font-size: 9px;
+  padding: 2px 5px;
+}
+
+.midi-cc-add {
+  font-size: 8px;
+  padding: 3px 7px;
+  margin-top: 4px;
+}

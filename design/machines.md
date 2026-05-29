@@ -220,6 +220,24 @@ Gain architecture: all 7 sources sum into `_mix` (normalised by 1/7), then `outp
 
 ---
 
+### MidiMachine (`type: 'midi'`)
+
+Routes sequencer note events to a MIDI output port instead of audio. No WebAudio nodes are created beyond a silent `outputGain` placeholder so the normal Track/VoicePool signal chain doesn't break.
+
+**Parameters:**
+- `midi.channel` (1–16) — MIDI channel to send on
+- `midi.noteOffset` (±24) — semitone offset applied to every outgoing note
+
+**Port selection:** `machine.setOutputPort(portId)` / `machine.getOutputPort()` — selected in MidiPanel.
+
+**noteOn timing:** converts AudioContext-scheduled time to a `setTimeout` delay so notes fire at approximately the right moment. Typical jitter ~1–5 ms — fine for melodic/harmonic MIDI control; not sample-accurate.
+
+**Custom panel:** `MidiPanel.js` — output port dropdown, channel knob, note offset knob, clock sync port dropdown.
+
+**Files:** `js/machines/MidiMachine.js`, `js/ui/panels/MidiPanel.js`, `js/core/MidiEngine.js`
+
+---
+
 ## Hidden Param Pattern
 
 Params with `hidden: true` in `getParamList()` are skipped by `_renderParamList` but remain available for p-locking, LFO assignment, and sequencer dispatch. Used for `osc.detune` (moved to TRIG tab). Reuse this pattern for any param that belongs in a different tab from its machine's default grid.

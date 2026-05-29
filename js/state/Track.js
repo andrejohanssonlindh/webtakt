@@ -60,6 +60,7 @@ import { ChordMachine }     from '../machines/ChordMachine.js';
 import { WavetableSamplerMachine } from '../machines/WavetableSamplerMachine.js';
 import { SampleSwarmMachine }     from '../machines/SampleSwarmMachine.js';
 import { MarimbaMachine }         from '../machines/MarimbaMachine.js';
+import { MidiMachine }           from '../machines/MidiMachine.js';
 import { Filter }        from '../signal/Filter.js';
 import { Envelope }      from '../signal/Envelope.js';
 import { VoicePool }     from '../signal/VoicePool.js';
@@ -92,6 +93,7 @@ const MACHINES = {
   chord:      ChordMachine,
   'wt-sampler':     WavetableSamplerMachine,
   'sample-swarm':   SampleSwarmMachine,
+  midi:             MidiMachine,
 };
 
 export class Track {
@@ -167,6 +169,16 @@ export class Track {
 
     // DJ filter: -1 = full LPF, 0 = flat, +1 = full HPF
     this.djFilter = 0;
+
+    // MidiEngine reference — set by Project after init
+    this._midiEngine = null;
+
+    // MIDI In configuration for this track
+    this.midiIn = {
+      inputId:  null,   // MIDIInput port id, or null = off
+      channel:  0,      // 0 = all channels, 1-16 = specific
+      ccMappings: [],   // [{ cc: number, param: string }]
+    };
   }
 
   /** Canonical machine (slot 0) — used by UI panels for param reads/writes. */
@@ -180,9 +192,22 @@ export class Track {
    * Params from slot 0 are preserved and copied to new slots.
    * @param {string} type
    */
+  /**
+   * @param {import('../core/MidiEngine.js').MidiEngine} engine
+   */
+  setMidiEngine(engine) {
+    this._midiEngine = engine;
+    if (this.machine?.type === 'midi') this.machine.setMidiEngine(engine);
+  }
+
   setMachine(type) {
     const MachineClass = MACHINES[type] ?? SynthMachine;
-    const makeMachine  = (ctx) => new MachineClass(ctx);
+    const midiEngine   = this._midiEngine;
+    const makeMachine  = (ctx) => {
+      const m = new MachineClass(ctx);
+      if (m.type === 'midi' && midiEngine) m.setMidiEngine(midiEngine);
+      return m;
+    };
 
     if (this._pool) {
       // Rewire LFOs: disconnect all existing machine AudioParam connections
@@ -450,6 +475,9 @@ export class Track {
     this.followSource = null;
     this.modWheelTargets = [null, null];
 
+    // Reset MIDI In
+    this.midiIn = { inputId: null, channel: 0, ccMappings: [] };
+
     // Tear down all LFOs and start fresh with one
     this.lfos.forEach(l => { l.clearDestination(); l.stop(); });
     this.lfos = [];
@@ -525,6 +553,7 @@ export class Track {
       })),
       sequencer:    this.sequencer.toJSON(),
       modWheelTargets: [...this.modWheelTargets],
+      midiIn:       { ...this.midiIn, ccMappings: [...this.midiIn.ccMappings] },
     };
   }
 
@@ -576,6 +605,12 @@ export class Track {
     this.reverbFX.fromJSON(obj.reverbFX ?? {});
     this.sequencer.fromJSON(obj.sequencer ?? {});
     this.modWheelTargets = obj.modWheelTargets ?? [null, null];
+
+    if (obj.midiIn) {
+      this.midiIn.inputId    = obj.midiIn.inputId    ?? null;
+      this.midiIn.channel    = obj.midiIn.channel    ?? 0;
+      this.midiIn.ccMappings = obj.midiIn.ccMappings ?? [];
+    }
 
     // Restore LFOs
     this.lfos.forEach(l => l.stop());

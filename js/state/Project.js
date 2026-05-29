@@ -40,6 +40,8 @@ export class Project {
     this.clock  = clock;
     this.sampleStore = new SampleStore();
 
+    this._midiEngine = null;
+
     this.tracks = Array.from(
       { length: TRACK_COUNT_DEFAULT },
       (_, i) => {
@@ -58,6 +60,12 @@ export class Project {
    * Add or remove tracks to reach the target count.
    * @param {number} n
    */
+  /** @param {import('../core/MidiEngine.js').MidiEngine} engine */
+  setMidiEngine(engine) {
+    this._midiEngine = engine;
+    this.tracks.forEach(t => t.setMidiEngine(engine));
+  }
+
   setTrackCount(n) {
     n = Math.max(TRACK_COUNT_MIN, Math.min(TRACK_COUNT_MAX, n));
     if (n === this.tracks.length) return;
@@ -68,6 +76,7 @@ export class Project {
         const i = this.tracks.length;
         const t = new Track(i, this.audio, this.clock);
         t.sampleStore = this.sampleStore;
+        if (this._midiEngine) t.setMidiEngine(this._midiEngine);
         this.tracks.push(t);
         if (this.clock.isPlaying) t.sequencer.start();
       }
