@@ -78,20 +78,40 @@ js/
   ui/
     TrackRow.js         — 8 track selector buttons, mute state, machine type indicator
     StepGrid.js         — 16-step grid (current page), click to select, dblclick to add lowest note
-    SynthPanel.js       — Tabbed panel: MACHINE / TRIG / SYNTH / FILTER / AMP / LFO
+    SynthPanel.js       — Shell + tab router only (~600 lines): builds header (tab bar,
+                          oscilloscope, FX toggles, copy/paste), routes each tab to a panel
+                          in panels/, owns shared p-lock helpers (_writeValue, _renderParamList,
+                          _step) and the per-render context built by _makeTabContext(). Each tab's
+                          DOM lives in its own panel file (see panels/ below).
     FilterViz.js        — Canvas widget: frequency response curve + base filter + env ghost
     Oscilloscope.js     — Canvas waveform strip: time-domain display of master output with zero-crossing trigger
     ModWheel.js         — 2 assignable mod wheels: drag or scroll (left/right screen halves → MW1/MW2)
     Keyboard.js         — Piano keyboard (2 octaves), octave shift, live note trigger
     KnobWidget.js       — Rotary knob widget, supports bipolar, p-lock highlight, drag interaction
     ADSRWidget.js       — Visual ADSR canvas widget used in AMP and FILTER tabs
-    panels/
+    panels/             — One file per tab/machine panel. Tab panels expose render(ctx); the ctx
+                          is built by SynthPanel._makeTabContext (track, step, container,
+                          activeWidgets, knobByPath, state, writeValue, renderContent, fmtParam,
+                          service refs). Machine panels (Default/FM/Sampler/…) use the same ctx.
+      formatParam.js          — Shared param value formatter (path → display string). Used by SynthPanel + all panels.
       DefaultMachinePanel.js  — Generic SYNTH tab layout: flat knob/select/checkbox grid from getParamList()
       FMPanel.js              — Custom SYNTH tab layout for FMMachine: schematic + 2×2 operator grid
-      SoundLibraryPanel.js    — SOUNDS tab content: tag filter chips + scrollable sound card list
       SamplerPanel.js         — Custom SYNTH tab for SamplerMachine: file picker, mic record, waveform + trim handles
       WavetableSamplerPanel.js — Custom SYNTH tab for WavetableSamplerMachine: dual file pickers + morph/speed/level controls
       SampleSwarmPanel.js     — Custom SYNTH tab for SampleSwarmMachine: SamplerPanel + swarm knob row
+      MidiPanel.js            — Custom SYNTH tab for MidiMachine (MIDI out): port/channel/note-offset
+      TrigPanel.js            — TRIG tab: length/chance/detune/tone/nudge/condition knobs, voice cards, shift, note follow
+      ScalesPanel.js          — SCALES tab: searchable scale dropdown, root strip, degree preview, keyboard fold
+      FilterPanel.js          — FILTER tab: type/cutoff/res/gain/env/slope + base LPF/HPF + FilterViz + filter-env ADSR
+      AmpPanel.js             — AMP tab: pan knob + amp ADSR
+      LFOPanel.js             — LFO tab: sub-tabs, destination dropdown, simple/advanced layouts
+      FXPanel.js              — Generic DELAY/CRUSH/REVERB tab: render(ctx, fxObj, fmtOverrides)
+      MidiInPanel.js          — MIDI tab: per-track MIDI In source/channel/CC→param mappings (distinct from MidiPanel)
+      MixerPanel.js           — MIXER tab: per-track strip (level, DLY/CRUSH/REV/DJ knobs, FX toggles)
+      MachinePickerPanel.js   — MACHINE tab: searchable grouped machine card grid. Owns canonical MACHINE_GROUPS / MACHINE_DEFS (re-exported by SynthPanel for back-compat).
+      SoundsPanel.js          — SOUNDS tab: wraps SoundLibraryPanel + preview/restore logic
+      SoundLibraryPanel.js    — SOUNDS tab content: tag filter chips + scrollable sound card list
+      ArpPanel.js             — ARP tab: arpeggiator mode/rate/variance controls
   signal/
     Arpeggiator.js      — Per-track arpeggiator: Chord / Manual / Random modes; BPM-sync; variance. Owned by Track, called from Sequencer._fireStep()
   util/
