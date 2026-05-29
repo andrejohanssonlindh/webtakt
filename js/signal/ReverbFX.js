@@ -29,12 +29,8 @@
  *   toJSON() / fromJSON()
  */
 
-const DIV_QN = { '1/32':0.125, '1/16':0.25, '1/8':0.5, '1/4':1, '1/2':2, '1/1':4, '2/1':8, '4/1':16 };
-export const REVERB_DIVISIONS = ['1/32','1/16','1/8','1/4','1/2','1/1'];
-
-function divToSeconds(div, bpm) {
-  return (DIV_QN[div] ?? 0.25) * 60 / bpm;
-}
+import { divToSeconds, SYNC_DIVISIONS } from '../util/BpmSync.js';
+export const REVERB_DIVISIONS = SYNC_DIVISIONS.slice(0, 6); // up to '1/1'
 
 export class ReverbFX {
   /** @param {AudioContext} context */

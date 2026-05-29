@@ -69,6 +69,7 @@ import { Sequencer }     from '../sequencer/Sequencer.js';
 import { DelayFX }       from '../signal/DelayFX.js';
 import { BitcrushFX }    from '../signal/BitcrushFX.js';
 import { ReverbFX }      from '../signal/ReverbFX.js';
+import { Arpeggiator }   from '../signal/Arpeggiator.js';
 
 const MACHINES = {
   synth:      SynthMachine,
@@ -118,9 +119,12 @@ export class Track {
     this.pannerNode.pan.value = 0;
 
     // Per-track FX chain: panner → delay → bitcrush → reverb → fxBus
-    this.delayFX   = new DelayFX(audio.context);
+    this.delayFX    = new DelayFX(audio.context);
     this.bitcrushFX = new BitcrushFX(audio.context);
-    this.reverbFX  = new ReverbFX(audio.context);
+    this.reverbFX   = new ReverbFX(audio.context);
+
+    // Arpeggiator — schedules note fans from Sequencer triggers
+    this.arp = new Arpeggiator();
 
     this.outputGain.connect(this.pannerNode);
     this.pannerNode.connect(this.delayFX.inputNode);
@@ -128,12 +132,13 @@ export class Track {
     this.bitcrushFX.connect(this.reverbFX.inputNode);
     this.reverbFX.connect(audio.fxBus);
 
-    // Signal chain nodes
+    // Canonical (slot-0) filter — UI/sequencer read & write params here. Each
+    // voice slot owns its own filter (created by the pool); this one is slot 0's
+    // and mirrors its params to the others. Wiring (filter → ampGain → outputGain)
+    // is done per slot inside VoiceSlot, so no direct connect here.
     this.filter = new Filter(audio.context);
-    // filter.node → outputGain (wired once here; slots gate before the filter input)
-    this.filter.connect(this.outputGain);
 
-    // Voice pool — owns machines + envelopes; all slots connect to shared filter + outputGain
+    // Voice pool — owns machines + envelopes + per-slot filters
     this._pool = null;
     this.setMachine('synth');
 
@@ -230,6 +235,7 @@ export class Track {
         this.filter,
         this.outputGain,
         makeMachine,
+        (ctx) => new Filter(ctx),
         8
       );
     }
@@ -256,20 +262,26 @@ export class Track {
   applyDJFilter(value) {
     this.djFilter = Math.max(-1, Math.min(1, value));
     const now = this.audio.context.currentTime;
+    // Apply to every voice slot's filter (each slot owns its own filter).
+    const filters = this._pool?.filters ?? [this.filter];
     if (this.djFilter <= 0) {
       // Left side: sweep LPF down, HPF stays neutral
       const t = -this.djFilter;  // 0 = flat, 1 = full LPF
       // exponential interpolation 20000 → 80 Hz
       const lpf = 20000 * Math.pow(80 / 20000, t);
-      this.filter._baseLPF.frequency.setTargetAtTime(lpf, now, 0.01);
-      this.filter._baseHPF.frequency.setTargetAtTime(20, now, 0.01);
+      for (const f of filters) {
+        f._baseLPF.frequency.setTargetAtTime(lpf, now, 0.01);
+        f._baseHPF.frequency.setTargetAtTime(20, now, 0.01);
+      }
     } else {
       // Right side: sweep HPF up, LPF stays neutral
       const t = this.djFilter;   // 0 = flat, 1 = full HPF
       // exponential interpolation 20 → 8000 Hz
       const hpf = 20 * Math.pow(8000 / 20, t);
-      this.filter._baseHPF.frequency.setTargetAtTime(hpf, now, 0.01);
-      this.filter._baseLPF.frequency.setTargetAtTime(20000, now, 0.01);
+      for (const f of filters) {
+        f._baseHPF.frequency.setTargetAtTime(hpf, now, 0.01);
+        f._baseLPF.frequency.setTargetAtTime(20000, now, 0.01);
+      }
     }
   }
 
@@ -278,10 +290,11 @@ export class Track {
     this.followSource = trackIndex;
   }
 
-  /** Called by Project when BPM changes — propagates to synced FX. */
+  /** Called by Project when BPM changes — propagates to synced FX and arpeggiator. */
   onBpmChanged(bpm) {
     this.delayFX.setBpm(bpm);
     this.reverbFX.setBpm(bpm);
+    this.arp.setBpm(bpm);
   }
 
   /**
@@ -299,11 +312,12 @@ export class Track {
     const stopTime  = offTime  + delaySec;
     const oscOffTime = stopTime + (this.envelope?.getParam('env.release') ?? 0.3);
 
-    const voice    = this._pool?.nextVoice() ?? null;
+    const voice    = this._pool?.nextVoice(startTime) ?? null;
     const machine  = voice?.machine  ?? this.machine;
     const envelope = voice?.envelope ?? this.envelope;
     if (voice) voice.claim(oscOffTime);
 
+    machine?.syncParamsAt?.(startTime);
     machine?.noteOn(note, velocity, startTime, stopTime);
     machine?.noteOff(oscOffTime);
     envelope?.scheduleNote(startTime, stopTime, {});
@@ -394,14 +408,19 @@ export class Track {
       return;
     }
 
-    // Check if this path belongs to the machine (multi-slot) or shared signal chain
+    // Route by owner: machine and filter params are per-slot (multi-slot);
+    // FX/pan params are single shared AudioParams.
     const isMachineParam = this.machine.resolveAudioParam?.(paramPath) != null;
+    const isFilterParam  = this.filter.resolveAudioParam?.(paramPath) != null;
 
     if (isMachineParam) {
       // Connect to every slot's machine AudioParam
       this._pool.connectLFOToAll(lfo, paramPath, resolved.depthScale);
+    } else if (isFilterParam) {
+      // Connect to every slot's filter AudioParam
+      this._pool.connectLFOToAllFilters(lfo, paramPath, resolved.depthScale);
     } else {
-      // Single shared AudioParam (filter, FX, pan)
+      // Single shared AudioParam (FX, pan)
       lfo.addDestination(resolved.audioParam, resolved.depthScale);
     }
 
@@ -587,6 +606,7 @@ export class Track {
       delayFX:      this.delayFX.toJSON(),
       bitcrushFX:   this.bitcrushFX.toJSON(),
       reverbFX:     this.reverbFX.toJSON(),
+      arp:          this.arp.toJSON(),
       lfos:         this.lfos.map((lfo, i) => ({
         ...lfo.toJSON(),
         destPath: this._lfoDestPaths[i] ?? '',
@@ -644,6 +664,7 @@ export class Track {
     this.delayFX.fromJSON(obj.delayFX ?? {});
     this.bitcrushFX.fromJSON(obj.bitcrushFX ?? {});
     this.reverbFX.fromJSON(obj.reverbFX ?? {});
+    if (obj.arp) this.arp.fromJSON(obj.arp);
     this.onBpmChanged(this.clock.bpm);
     this.sequencer.fromJSON(obj.sequencer ?? {});
     this.modWheelTargets = obj.modWheelTargets ?? [null, null];

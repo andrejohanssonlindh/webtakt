@@ -30,13 +30,8 @@
  *   toJSON() / fromJSON()
  */
 
-// Quarter-note multipliers matching LFO.js BPM_DIVISIONS
-const DIV_QN = { '1/32':0.125, '1/16':0.25, '1/8':0.5, '1/4':1, '1/2':2, '1/1':4, '2/1':8, '4/1':16 };
-export const DELAY_DIVISIONS = ['1/32','1/16','1/8','1/4','1/2','1/1','2/1','4/1'];
-
-function divToSeconds(div, bpm) {
-  return (DIV_QN[div] ?? 1) * 60 / bpm;
-}
+import { divToSeconds, SYNC_DIVISIONS } from '../util/BpmSync.js';
+export const DELAY_DIVISIONS = SYNC_DIVISIONS;
 
 export class DelayFX {
   /** @param {AudioContext} context */

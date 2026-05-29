@@ -88,6 +88,54 @@ export class Machine {
     // subclasses implement
   }
 
+  /**
+   * Restore only JS-state params from JSON — skips AudioParam-backed params
+   * (plockMode: 'audioParam') so in-flight scheduled gain ramps are not interrupted.
+   * Called by VoicePool.nextVoice() when syncing a non-canonical slot.
+   */
+  fromJSONSafe(obj) {
+    const audioParamPaths = new Set(
+      this.getParamList()
+        .filter(p => p.plockMode === 'audioParam')
+        .map(p => p.path)
+    );
+    const params = obj.params ?? {};
+    Object.entries(params).forEach(([k, v]) => {
+      if (!audioParamPaths.has(k)) this.setParam(k, v);
+    });
+  }
+
+  /**
+   * Copy AudioParam-backed param VALUES (plockMode: 'audioParam') from another
+   * machine into this one's JS state ONLY — without scheduling any AudioParam.
+   * Called by VoicePool.nextVoice() so a reused slot carries the canonical
+   * slot-0 values in its _params; syncParamsAt(time) then schedules them at the
+   * note start (not now), avoiding interruption of any in-flight release tail.
+   * @param {Machine} src — canonical (slot-0) machine to copy values from
+   */
+  copyAudioParamState(src) {
+    if (!this._params || !src) return;
+    this.getParamList()
+      .filter(p => p.plockMode === 'audioParam')
+      .forEach(p => {
+        const v = src.getParam(p.path);
+        if (v !== undefined) this._params[p.path] = v;
+      });
+  }
+
+  /**
+   * Apply AudioParam-backed params at a scheduled audio time.
+   * Called by the sequencer just before noteOn so level/etc snap at note start.
+   * @param {number} time — AudioContext scheduled time
+   */
+  syncParamsAt(time) {
+    const params = this.getParamList().filter(p => p.plockMode === 'audioParam');
+    params.forEach(p => {
+      const v = this.getParam(p.path);
+      if (v !== undefined) this.setParam(p.path, v, time);
+    });
+  }
+
   /** Convert MIDI note number to frequency in Hz. */
   static midiToFreq(note) {
     return 440 * Math.pow(2, (note - 69) / 12);

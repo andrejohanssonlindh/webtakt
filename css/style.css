@@ -2908,3 +2908,233 @@ body {
   min-width: 90px;
   font-size: 9px;
 }
+
+/* ── ARPEGGIATOR TAB ─────────────────────────────────────── */
+
+.arp-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 4px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.arp-onoff-btn {
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 4px 10px;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  min-width: 62px;
+}
+.arp-onoff-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #111;
+}
+.arp-onoff-btn:hover {
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+
+.arp-mode-wrap {
+  display: flex;
+  gap: 3px;
+}
+
+.arp-mode-btn {
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.arp-mode-btn.active {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+.arp-mode-btn:hover {
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+
+.arp-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.arp-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.arp-small-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+
+.arp-select-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.arp-select {
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  padding: 4px 6px;
+  min-width: 80px;
+}
+.arp-select:focus {
+  border-color: var(--accent-dim);
+  outline: none;
+}
+
+.arp-sync-btn {
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 4px 8px;
+  align-self: flex-end;
+  margin-bottom: 2px;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.arp-sync-btn.active {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+.arp-sync-btn:hover {
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+
+.arp-div-sel {
+  align-self: flex-end;
+  margin-bottom: 2px;
+}
+
+.arp-pattern-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.arp-pattern-btns {
+  display: flex;
+  gap: 3px;
+}
+
+.arp-pat-btn {
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 3px 7px;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.arp-pat-btn.active {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+.arp-pat-btn:hover {
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+
+/* Manual mode list */
+.arp-manual-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.arp-manual-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 4px 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.arp-manual-speed {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.arp-step-remove {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  align-self: center;
+  margin-bottom: 2px;
+  transition: color 0.1s, border-color 0.1s;
+}
+.arp-step-remove:hover {
+  border-color: #c44;
+  color: #c44;
+}
+
+.arp-add-step-btn {
+  background: var(--surface-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 5px 10px;
+  align-self: flex-start;
+  transition: border-color 0.1s, color 0.1s;
+}
+.arp-add-step-btn:hover {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}

@@ -10,7 +10,14 @@
  * concurrent note its own envelope eliminates the summing problem.
  *
  * Signal chain per slot:
- *   machine → envelope.ampGain (per-slot gate) → filter._baseHPF (shared) → filter.node → outputGain (shared)
+ *   machine → filter (per-slot) → envelope.ampGain (per-slot gate) → outputGain (shared)
+ *
+ * Each slot owns its OWN filter so the amp gate sits AFTER the filter, exactly
+ * as in the pre-polyphony topology. This keeps every idle voice fully silent —
+ * including the filter's resonant ringing tail — instead of letting one shared
+ * filter bleed its ring across steps (the "pre-sound / ghost note" bug). The
+ * slot-0 filter is canonical (UI/sequencer read & write it) and mirrors every
+ * param change to the sibling slot filters so all voices stay identical.
  *
  * Voice selection: round-robin, advancing only when the chosen slot is still
  * in its release tail. If all slots are busy the oldest one is stolen.
@@ -33,32 +40,35 @@ import { Envelope } from './Envelope.js';
 
 export class VoiceSlot {
   /**
-   * @param {Machine} machine
+   * @param {Machine}  machine
    * @param {Envelope} envelope
-   * @param {Filter}   filter       — shared filter
+   * @param {Filter}   filter       — this slot's own filter
    * @param {GainNode} outputGain   — shared track output gain
    *
    * Signal chain per slot:
-   *   machine → envelope.ampGain → filter._baseHPF (shared) → … → filter.node → outputGain
+   *   machine → filter._baseHPF → … → filter._outputGain → envelope.ampGain → outputGain
    *
-   * The ampGain gates the machine BEFORE the shared filter so each slot is
-   * fully isolated — a silent slot contributes no audio even though all slots
-   * feed into the same filter input. The filter envelope still modulates
-   * filter.node.frequency directly (shared, last-writer-wins, which is fine).
+   * The filter sits BEFORE the amp gate so the gate silences the filter's own
+   * resonant ring between notes — each slot is fully isolated, contributing no
+   * audio (and no filter ring) while idle. The slot envelope drives this slot's
+   * own filter frequency, so the filter envelope is identical per voice.
    */
   constructor(machine, envelope, filter, outputGain) {
     this.machine  = machine;
     this.envelope = envelope;
     this._filter  = filter;
 
-    // machine → envelope.ampGain (per-slot isolation gate)
-    this.machine.connect(envelope.ampGain);
+    // machine → filter input (per-slot filter)
+    this.machine.connect(filter._baseHPF);
 
-    // envelope.ampGain → filter._baseHPF (shared filter input)
-    this.envelope.connect(filter._baseHPF);
+    // filter output → envelope.ampGain (per-slot gate)
+    filter.connect(envelope.ampGain);
 
-    // filter chain is already wired: _baseHPF → _baseLPF → filter.node → outputGain
-    // That final connection (filter.node → outputGain) is made once by Track after pool creation.
+    // envelope.ampGain → shared track outputGain
+    this.envelope.connect(outputGain);
+
+    // This slot's envelope drives this slot's own filter frequency envelope.
+    this.envelope.connectToFilter(filter);
 
     // Busy tracking: AudioContext time at which this slot becomes free.
     this._freeAt = 0;
@@ -79,8 +89,7 @@ export class VoiceSlot {
   /** Disconnect this slot from the audio graph cleanly. */
   dispose() {
     this.machine.disconnect();
-    // envelope.ampGain → filter._baseHPF: disconnect the slot's gate from filter input
-    try { this.envelope.ampGain.disconnect(this._filter._baseHPF); } catch (_) {}
+    try { this._filter.disconnect(); } catch (_) {}
     this.envelope.disconnect();
   }
 }
@@ -88,29 +97,34 @@ export class VoiceSlot {
 export class VoicePool {
   /**
    * @param {AudioContext}  context
-   * @param {Filter}        filter      — shared track filter
+   * @param {Filter}        filter      — canonical (slot-0) track filter
    * @param {GainNode}      outputGain  — shared track output gain
    * @param {function}      makeMachine — (context) => Machine instance
+   * @param {function}      makeFilter  — (context) => Filter instance (for slots 1..n)
    * @param {number}        [count=4]
    */
-  constructor(context, filter, outputGain, makeMachine, count = 4) {
-    this._context    = context;
-    this._filter     = filter;
-    this._outputGain = outputGain;
+  constructor(context, filter, outputGain, makeMachine, makeFilter, count = 4) {
+    this._context     = context;
+    this._filter      = filter;       // canonical slot-0 filter
+    this._outputGain  = outputGain;
     this._makeMachine = makeMachine;
-    this._slots      = [];
-    this._robin      = 0;   // round-robin cursor
+    this._makeFilter  = makeFilter;
+    this._slots       = [];
+    this._robin       = 0;   // round-robin cursor
 
     for (let i = 0; i < count; i++) {
-      this._slots.push(this._makeSlot());
+      this._slots.push(this._makeSlot(i === 0));
     }
   }
 
-  _makeSlot() {
+  _makeSlot(isCanonical = false) {
     const machine  = this._makeMachine(this._context);
     const envelope = new Envelope(this._context);
-    envelope.connectToFilter(this._filter);
-    return new VoiceSlot(machine, envelope, this._filter);
+    // Slot 0 uses the canonical track filter; other slots get their own filter
+    // that mirrors the canonical one's params (set in mirrorTo below).
+    const filter = isCanonical ? this._filter : this._makeFilter(this._context);
+    if (!isCanonical) this._filter.mirrorTo(filter);
+    return new VoiceSlot(machine, envelope, filter, this._outputGain);
   }
 
   get voiceCount() { return this._slots.length; }
@@ -121,15 +135,25 @@ export class VoicePool {
   /** Canonical envelope — slot 0. UI reads/writes params here. */
   get envelope() { return this._slots[0].envelope; }
 
+  /** Canonical filter — slot 0. UI/sequencer read/write params here. */
+  get filter()   { return this._slots[0]._filter; }
+
+  /** All per-slot filters — used for direct AudioParam writes (e.g. DJ filter). */
+  get filters()  { return this._slots.map(s => s._filter); }
+
   /**
-   * Return the next voice slot to use.
-   * Prefers an idle slot in round-robin order.
-   * If all slots are busy, returns the one whose release ends soonest (steal oldest).
-   * Syncs the chosen slot's machine+envelope params from slot 0 before returning,
-   * so UI knob changes always take effect on the next note regardless of which slot fires.
+   * Return the next voice slot to use for a note scheduled at `noteTime`.
+   *
+   * The scheduler runs 100ms ahead of audio time, so we compare _freeAt against
+   * `noteTime` (the scheduled note start), not context.currentTime. Using currentTime
+   * caused future-scheduled notes to fill the pool, forcing premature slot stealing
+   * and fromJSON calls that produced audible pre-note glitches on every track.
+   *
+   * @param {number} [noteTime] — AudioContext scheduled start time. Defaults to
+   *   context.currentTime when called from live keyboard (no lookahead).
    */
-  nextVoice() {
-    const now = this._context.currentTime;
+  nextVoice(noteTime) {
+    const now = noteTime ?? this._context.currentTime;
 
     let chosen = -1;
 
@@ -157,14 +181,20 @@ export class VoicePool {
 
     const slot = this._slots[chosen];
 
-    // Sync params from canonical slot 0 to the chosen slot (skip slot 0 itself)
+    // Sync params from canonical slot 0 to the chosen slot (skip slot 0 itself).
+    // fromJSONSafe applies JS-state params (waveforms, enums) immediately.
+    // AudioParam-backed params (output.level, detune, …) must NOT fire
+    // setValueAtTime(now) — that would interrupt any still-ringing release tail
+    // on this slot's outputGain. Instead copyAudioParamState copies their VALUES
+    // into the slot's JS _params, and the sequencer's machine.syncParamsAt(time)
+    // schedules them at the note start. This ensures a reused voice plays the
+    // canonical level/detune even though fromJSONSafe skips those params.
     if (chosen !== 0) {
-      const machineJSON = this._slots[0].machine.toJSON();
-      slot.machine.fromJSON(machineJSON);
-      // Sync binary buffers that can't round-trip through JSON (e.g. WavetableSamplerMachine)
-      slot.machine.syncFrom?.( this._slots[0].machine);
-      const envJSON = this._slots[0].envelope.toJSON();
-      slot.envelope.fromJSON(envJSON);
+      const canonical = this._slots[0].machine;
+      slot.machine.fromJSONSafe(canonical.toJSON());
+      slot.machine.copyAudioParamState(canonical);
+      slot.machine.syncFrom?.(canonical);
+      slot.envelope.fromJSON(this._slots[0].envelope.toJSON());
     }
 
     return slot;
@@ -238,6 +268,28 @@ export class VoicePool {
   disconnectLFOFromAll(lfo, path) {
     for (const slot of this._slots) {
       const ap = slot.machine.resolveAudioParam?.(path);
+      if (ap) lfo.removeDestination(ap);
+    }
+  }
+
+  /**
+   * Connect an LFO to a filter AudioParam path on every slot's filter, so all
+   * voices modulate identically (each slot owns its own filter).
+   * @param {LFO}    lfo
+   * @param {string} path        — filter param path e.g. 'filter.cutoff'
+   * @param {number} depthScale
+   */
+  connectLFOToAllFilters(lfo, path, depthScale) {
+    for (const slot of this._slots) {
+      const ap = slot._filter.resolveAudioParam?.(path);
+      if (ap) lfo.addDestination(ap, depthScale);
+    }
+  }
+
+  /** Disconnect an LFO from a filter AudioParam path on every slot's filter. */
+  disconnectLFOFromAllFilters(lfo, path) {
+    for (const slot of this._slots) {
+      const ap = slot._filter.resolveAudioParam?.(path);
       if (ap) lfo.removeDestination(ap);
     }
   }

@@ -71,7 +71,7 @@ js/
     Filter.js           — BiquadFilterNode wrapper: type, cutoff, resonance, envAmount + base LPF/HPF
     Envelope.js         — Dual ADSR (amp + filter env), scheduleNote for sequencer, noteOn/noteOff for live
     LFO.js              — LFO: waveform, speed, depth, destination routing (supports multiple AudioParam destinations)
-    VoicePool.js        — 4-slot voice pool per track: each slot owns machine + envelope; all slots share filter + outputGain
+    VoicePool.js        — 8-slot voice pool per track: each slot owns machine + envelope + filter; slot-0 filter is canonical and mirrors params to siblings; all slots share outputGain
     DelayFX.js          — Stereo feedback delay
     BitcrushFX.js       — Bit-depth reduction + rate smear
     ReverbFX.js         — Convolution reverb with synthesised IR
@@ -92,8 +92,12 @@ js/
       SamplerPanel.js         — Custom SYNTH tab for SamplerMachine: file picker, mic record, waveform + trim handles
       WavetableSamplerPanel.js — Custom SYNTH tab for WavetableSamplerMachine: dual file pickers + morph/speed/level controls
       SampleSwarmPanel.js     — Custom SYNTH tab for SampleSwarmMachine: SamplerPanel + swarm knob row
+  signal/
+    Arpeggiator.js      — Per-track arpeggiator: Chord / Manual / Random modes; BPM-sync; variance. Owned by Track, called from Sequencer._fireStep()
+  util/
+    BpmSync.js          — Shared BPM-sync utility: DIV_QN map, SYNC_DIVISIONS list, divToSeconds(div, bpm). Used by DelayFX, ReverbFX, Arpeggiator.
   state/
-    Track.js            — Owns VoicePool + sequencer + filter + FX chain + LFOs + pannerNode
+    Track.js            — Owns VoicePool + sequencer + filter + FX chain + LFOs + pannerNode + Arpeggiator
     Project.js          — 8–12 tracks (dynamic), BPM, export/import JSON file
     AppState.js         — Selected track/step, active tab/LFO, event bus
     SoundLibrary.js     — Persistent sound library (localStorage): save/load/delete named voice snapshots
@@ -114,12 +118,16 @@ AppState
               ├── Sequencer
               │     └── Step (×64)
               │           └── Condition
-              ├── VoicePool (4 slots)
-              │     └── VoiceSlot (×4)
+              ├── VoicePool (8 slots)
+              │     └── VoiceSlot (×8)
               │           ├── Machine (SynthMachine | BassMachine | ChordMachine | … one per slot)
-              │           └── Envelope (one per slot — prevents amplitude stacking on overlap)
-              ├── Filter (shared across all slots)
+              │           ├── Envelope (one per slot — prevents amplitude stacking on overlap)
+              │           └── Filter (one per slot — amp gate sits AFTER filter so idle voices
+              │                       are fully silent, incl. filter ring; slot-0 filter is
+              │                       canonical & mirrors params to siblings)
+              ├── Filter (Track.filter === pool slot-0 filter; canonical for UI/sequencer)
               ├── StereoPannerNode (pannerNode — owned directly by Track)
+              ├── Arpeggiator (intercepts Sequencer triggers when enabled)
               └── LFO (×N, at least 1; machine-param LFOs connect to all 4 slot machines)
 
 AudioEngine

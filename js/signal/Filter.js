@@ -102,6 +102,11 @@ export class Filter {
     this._outputGain = context.createGain();
     this._outputGain.gain.value = 1;
 
+    // Sibling filters (other voice slots) that mirror this one's params.
+    // The canonical slot-0 filter is the only one the UI/sequencer writes to;
+    // it fans every setParam out to its mirrors so all voices stay identical.
+    this._mirrors = [];
+
     // Wire signal chain
     // base: _baseHPF → _baseLPF → node
     this._baseHPF.connect(this._baseLPF);
@@ -136,8 +141,20 @@ export class Filter {
     this._outputGain.disconnect();
   }
 
+  /**
+   * Register a sibling filter that should mirror every param change made here.
+   * Used by VoicePool so all voice-slot filters track the canonical slot-0 filter.
+   * @param {Filter} filter
+   */
+  mirrorTo(filter) {
+    if (filter && filter !== this) this._mirrors.push(filter);
+  }
+
   /** @param {string} path @param {number|string} value @param {number} [time] */
   setParam(path, value, time) {
+    // Fan out to mirror filters (other voice slots) so all voices stay identical.
+    for (const m of this._mirrors) m.setParam(path, value, time);
+
     this._params[path] = value;
     const t = time ?? this.context.currentTime;
 

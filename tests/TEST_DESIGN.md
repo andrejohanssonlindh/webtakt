@@ -184,6 +184,8 @@ Additional machine-specific tests:
 
 **filter.cutoff LFO not directly testable.** The `filter.cutoff` param uses `plockMode: 'envelope'` — it is modulated via scheduled `linearRampToValueAtTime` calls in `Envelope.scheduleNote`, not via a permanent LFO → AudioParam connection. The LFO does connect to `filter.node.frequency` via `resolveAudioParam`, but the envelope's ramps overwrite it. The LFO tests use `output.level` instead, which has a clean direct AudioParam connection.
 
+**Machine p-locks target the firing voice, not slot 0.** In the 8-voice pool, each voice owns its own machine + filter and the sequencer round-robins which slot plays each step. `_fireStep` therefore collects machine-owned p-locks (`audioParam` and `js` modes) and applies them to the *actual firing voice's* machine inside the voice loop (after `syncParamsAt`), not to canonical slot 0. Filter p-locks reach every slot because the canonical filter mirrors `setParam` to its siblings (`Filter.mirrorTo`); pan/FX p-locks hit shared post-pool nodes. A reused voice carries the canonical baseline via `nextVoice()` → `fromJSONSafe` + `copyAudioParamState`, then `syncParamsAt(time)` schedules it at note start. The `output.level` / `filter.cutoff` p-lock tests fire 8 steps (spanning all slots) and rely on this behaviour — before it, p-locks landed on slot 0 while a different slot played, so they failed deterministically.
+
 **Chance and condition steps not tested.** `Step.chance < 100` and ratio conditions are JS-only and non-deterministic. They are excluded from the current test suite.
 
 **Retrigger not tested.** No test for `step.retrigger` behaviour.

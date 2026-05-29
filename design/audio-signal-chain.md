@@ -2,38 +2,42 @@
 
 ## Per-Track Signal Chain
 
-Each track runs 4 voice slots in parallel. Slots share the filter and output; each has its own machine and envelope to prevent amplitude stacking when notes overlap.
+Each track runs 8 voice slots in parallel. Each slot owns its own machine, envelope, AND filter — only `Track.outputGain` (and everything downstream) is shared. Per-slot machines/envelopes prevent amplitude stacking when notes overlap; per-slot filters keep the amp gate AFTER the filter so an idle slot is fully silent including its filter's resonant ring.
 
 ```
-VoiceSlot ×4 (each slot is fully isolated before the shared filter):
-  Machine (oscillator nodes) → Envelope.ampGain (GainNode, per-slot ADSR gate) ─┐
-                                                                                  ↓
-  Filter._baseHPF (BiquadFilterNode, highpass, shared) ────────────────────────── ← all 4 slots sum here
-    → Filter._baseLPF (BiquadFilterNode, lowpass, shared)
-      → Filter.node (BiquadFilterNode, shared — type/cutoff/resonance)
-        → Track.outputGain (GainNode, shared — mute implemented here)
-            → Track.pannerNode (StereoPannerNode, shared — pan)
-              → DelayFX.inputNode
-                → BitcrushFX.inputNode
-                  → ReverbFX.inputNode
-                    → AudioEngine.fxBus (GainNode)
-                      → AudioEngine.masterGain
-                        → AudioContext.destination
-                        → AudioEngine.analyser (AnalyserNode — parallel tap, no audio output)
+VoiceSlot ×8 (each slot is fully self-contained up to the shared outputGain):
+  Machine (oscillator nodes)
+    → Filter._baseHPF (BiquadFilterNode, highpass, per-slot)
+      → Filter._baseLPF (BiquadFilterNode, lowpass, per-slot)
+        → Filter.node (+ slope stages) (BiquadFilterNode, per-slot — type/cutoff/resonance)
+          → Envelope.ampGain (GainNode, per-slot ADSR gate)  ← gate AFTER filter
+            → Track.outputGain (GainNode, shared — mute implemented here) ← all 8 slots sum here
+              → Track.pannerNode (StereoPannerNode, shared — pan)
+                → DelayFX.inputNode
+                  → BitcrushFX.inputNode
+                    → ReverbFX.inputNode
+                      → AudioEngine.fxBus (GainNode)
+                        → AudioEngine.masterGain
+                          → AudioContext.destination
+                          → AudioEngine.analyser (AnalyserNode — parallel tap, no audio output)
 
-Each Envelope also drives Filter.node.frequency directly (filter envelope modulation).
-All 4 envelopes modulate the same shared filter frequency param — they race-cancel correctly
-via cancelAndHoldAtTime, so whichever slot fires latest wins the filter sweep.
+Each slot's Envelope drives ITS OWN Filter.node.frequency (per-voice filter envelope) —
+no cross-slot races on a shared frequency param.
 
-The ampGain gate sits BEFORE the filter (machine → ampGain → baseHPF), not after.
-This ensures each slot is isolated: a silent slot contributes zero audio to the filter
-even though all slots sum into the same filter input. The previous post-filter fan-out
-topology (filter.node → all 4 ampGains) caused all slots to bleed through all envelopes.
+The amp gate sits AFTER the filter (machine → filter → ampGain → outputGain). This is the
+pre-polyphony topology, restored per voice: the gate silences the filter's own resonant ring
+between notes, so idle voices contribute zero audio. The intermediate "gate before a single
+SHARED filter" topology let the shared filter ring bleed across steps — heard as a "pre-sound /
+ghost note" before every sequenced trigger (cleared only as slots warmed up). Per-voice filters
+fix it: see dual_note.md.
+
+Slot 0's filter is canonical — UI and sequencer read & write `Track.filter` (=== slot-0 filter).
+Every `setParam` on it fans out to the sibling slot filters via `Filter.mirrorTo()`, so all
+voices stay identical. DJ-filter base-cutoff writes iterate `VoicePool.filters` directly.
 
 LFOs connect to AudioParams:
-  - Filter.node.frequency / Q  (single shared param)
-  - Filter._baseLPF.frequency / Filter._baseHPF.frequency  (single shared)
-  - Machine AudioParams (osc.detune, sub.level, output.level, etc.) — connected to ALL 4 slot machines
+  - Filter.node.frequency / Q, _baseLPF/_baseHPF.frequency — connected to ALL 8 slot filters
+  - Machine AudioParams (osc.detune, sub.level, output.level, etc.) — connected to ALL 8 slot machines
   - Track.pannerNode.pan (amp.pan — single shared)
   - DelayFX / BitcrushFX / ReverbFX params — single shared
 
@@ -44,7 +48,7 @@ Wheel position 0–1 maps linearly to [min, max].
 
 ### Voice Selection (VoicePool.nextVoice)
 
-Round-robin through 4 slots; picks the first idle one (past its release tail). If all 4 are busy, steals the one whose release ends soonest. Before returning the chosen slot, syncs its machine and envelope params from slot 0 (canonical) so UI knob changes always take effect on the next note.
+Round-robin through 8 slots; picks the first idle one (past its release tail). If all 8 are busy, steals the one whose release ends soonest. Before returning the chosen slot, syncs its machine and envelope params from slot 0 (canonical) so UI knob changes always take effect on the next note. (Filter params stay synced continuously via `Filter.mirrorTo`.)
 
 ---
 

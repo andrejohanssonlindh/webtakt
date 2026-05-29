@@ -13,6 +13,7 @@ The panel header has two zones in a single row:
 | SCALES | Scale dropdown + root note picker (12 buttons) + chromatic preview strip |
 | TRIG | Note display, REMOVE NOTE, RESET TRIG, condition/chance/length/nudge/detune/tone knobs. NUDGE is only shown when a step is selected. QUANTIZE knob (0–100%), **NOTE FOLLOW** dropdown, and **FLW DLY** knob (0–500ms) are shown when no step is selected. |
 | SYNTH | Machine params — varies by machine type. Detune is hidden here (moved to TRIG). Rendered by a machine-specific panel from `js/ui/panels/`. |
+| ARP | Per-track arpeggiator. ON/OFF toggle + mode selector (Chord / Manual / Random). See Arpeggiator section below. |
 | FILTER | Single row: type dropdown + cutoff/res/gain/env knobs (left) + FilterViz (centre) + right column with compact filter ADSR above base HPF/LPF knobs. All p-lockable. |
 | AMP | Single row: PAN knob (left, p-lockable + LFO-assignable) + compact amp ADSR (right, canvasH=80, 44px knobs). |
 | LFO | LFO sub-selector (LFO 1, LFO 2, …, +) capped at 220px wide, destination dropdown (grouped), speed/depth/waveform knobs |
@@ -195,3 +196,49 @@ exposes a `render()` method called explicitly when its data changes.
 | `stepSelected` | `{ index, step }` | StepGrid, SynthPanel |
 | `stepChanged` | `{ trackIndex, stepIndex, step }` | StepGrid, SynthPanel (trig tab only) |
 | `recordingChanged` | `{ recording }` | index.html transport (REC button) |
+
+---
+
+## Arpeggiator Tab (ARP)
+
+Per-track arpeggiator UI. Lives at `js/ui/panels/ArpPanel.js`.
+
+**Header row** — always visible:
+- **ARP ON / ARP OFF** toggle button (amber when on)
+- **Mode selector** — CHORD / MANUAL / RANDOM buttons
+
+**Chord mode controls:**
+| Control | Description |
+|---|---|
+| Chord selector | Drop-down of 11 chord types (same set as ChordMachine) |
+| Pattern | Up / Down / UpDown / Rand buttons |
+| MS/BPM toggle | Switch speed unit |
+| SPEED knob (ms mode) | Gap between notes in ms (1–2000ms) |
+| DIVISION select (bpm mode) | Beat division from SYNC_DIVISIONS |
+| VARIANCE knob | 0–100%: widens gaps on middle notes by ±50% × variance |
+
+**Manual mode controls:**
+A scrollable list of steps. Each step has:
+| Control | Description |
+|---|---|
+| NOTE / +/− knob | Semitone offset from root (−24 to +24) |
+| MS/BPM toggle | Per-step speed unit |
+| DELAY knob or DIV select | Time before the next note |
+| GATE knob | Note-on length in ms; 0 = "STEP" (inherit base step length) |
+| × button | Remove this step (hidden if only one remains) |
+
+`+ ADD STEP` button appends a new step at the bottom.
+
+**Random mode controls:**
+| Control | Description |
+|---|---|
+| NOTES knob | Number of notes per arp cycle (2–8) |
+| RANGE ± knob | Semitone spread ±N around root (1–24) |
+| MS/BPM + speed | Same as Chord mode |
+| VARIANCE knob | Timing jitter applied to all gaps |
+
+**Timing implementation:**
+The arpeggiator intercepts `_fireStep()` in `Sequencer.js`. When `arp.enabled` is true, `arp.buildEvents()` is called with the root note and step timing. It returns a flat array of `{ note, velocity, time, offTime }` events, each scheduled independently using `AudioContext.currentTime` — no `setInterval` or `setTimeout`. Notes can naturally overlap when gate > gap, producing polyphony via the voice pool.
+
+**BPM sync utility:**
+`js/util/BpmSync.js` — shared by `DelayFX`, `ReverbFX`, and `Arpeggiator`. Exports `DIV_QN`, `SYNC_DIVISIONS`, and `divToSeconds(div, bpm)`.

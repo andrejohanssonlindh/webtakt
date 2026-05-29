@@ -24,6 +24,7 @@ import { SoundLibraryPanel }       from './panels/SoundLibraryPanel.js';
 import { SamplerPanel }            from './panels/SamplerPanel.js';
 import { WavetableSamplerPanel }   from './panels/WavetableSamplerPanel.js';
 import { SampleSwarmPanel }        from './panels/SampleSwarmPanel.js';
+import { ArpPanel }                from './panels/ArpPanel.js';
 
 export class SynthPanel {
   /**
@@ -81,7 +82,7 @@ export class SynthPanel {
     this._tabBar.className = 'tab-bar';
 
     // Voice tabs only — FX moved to right-side toggles
-    const leftTabs = ['machine', 'sounds', 'scales', 'trig', 'synth', 'filter', 'amp', 'lfo', 'midi', 'mixer'];
+    const leftTabs = ['machine', 'sounds', 'scales', 'trig', 'synth', 'arp', 'filter', 'amp', 'lfo', 'midi', 'mixer'];
     leftTabs.forEach(tab => {
       const btn = document.createElement('button');
       btn.className   = 'tab-btn';
@@ -313,6 +314,7 @@ export class SynthPanel {
       case 'scales':  this._renderScales(track);  break;
       case 'trig':   this._renderTrig(track);   break;
       case 'synth':  this._renderSynth(track);  break;
+      case 'arp':    this._renderArp(track);    break;
       case 'filter': this._renderFilter(track); break;
       case 'amp':    this._renderEnv(track);    break;
       case 'lfo':    this._renderLFO(track);     break;
@@ -1625,6 +1627,15 @@ export class SynthPanel {
       ? new FMPanel()
       : new DefaultMachinePanel();
     panel.render(ctx);
+  }
+
+  _renderArp(track) {
+    const panel = new ArpPanel(
+      this._content,
+      track,
+      () => this._renderContent(),   // rebuildArp — re-renders the whole content area
+    );
+    this._activeWidgets.push(panel);
   }
 
   _renderFilter(track) {
