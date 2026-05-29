@@ -33,7 +33,7 @@
  */
 
 import { Machine }        from './Machine.js';
-import { getNoiseBuffer } from '../util/AudioBuffers.js';
+import { getNoiseBuffer, scheduleCallback } from '../util/AudioBuffers.js';
 
 const _noiseCache = { buf: null };
 
@@ -142,19 +142,19 @@ export class MarimbaMachine extends Machine {
 
     // Schedule cleanup after the longest decay
     const longestDecay = this._params['decay1'];
-    const delayMs = (longestDecay + 0.5) * 1000 + Math.max(t - this.context.currentTime, 0) * 1000;
     const refs = {
       o1: this._osc1, e1: this._env1,
       o2: this._osc2, e2: this._env2,
       o3: this._osc3, e3: this._env3,
       mf: this._malletFilter, me: this._malletEnv,
     };
-    setTimeout(() => {
+    // Cleanup on the audio thread at note end (avoids wall-clock setTimeout drift).
+    scheduleCallback(this.context, t + longestDecay + 0.5, () => {
       this._detachEnv(refs.o1, refs.e1);
       this._detachEnv(refs.o2, refs.e2);
       this._detachEnv(refs.o3, refs.e3);
       if (refs.me) this._detachEnv(refs.mf, refs.me);
-    }, delayMs);
+    });
   }
 
   _makeEnv(t, peak, decay) {

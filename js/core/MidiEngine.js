@@ -9,10 +9,16 @@
  *   - Register on Clock tick to send MIDI clock (24 PPQN out)
  *   - Deliver incoming CC/note messages to registered listeners
  *
- * Timing note: MIDI output is NOT sample-accurate. We convert the scheduled
- * AudioContext time to a wall-clock delay via (scheduledTime - ctx.currentTime)
- * and use setTimeout to fire the send at approximately the right moment.
- * For sync and CC use this is acceptable (~1-5ms jitter typical).
+ * Timing note (Web MIDI platform limitation — NOT a bug to fix):
+ * The Web MIDI API has no sample-accurate scheduled send — MIDIOutput.send()
+ * with a timestamp is sparsely supported and still bound to the main thread.
+ * So we convert the scheduled AudioContext time to a wall-clock delay via
+ * (scheduledTime - ctx.currentTime) and use setTimeout to fire the send at
+ * approximately the right moment. This carries the usual setTimeout jitter
+ * (~1-15ms depending on main-thread load), which is acceptable for clock sync
+ * and CC. There is no in-browser way to make this sample-accurate; do not
+ * replace it with an AudioContext-scheduled approach expecting tighter timing.
+ * (See DESIGN.md → Design Principles → "Capability warnings".)
  *
  * Public:
  *   init()                          — request MIDI access; returns Promise<boolean>
@@ -44,6 +50,8 @@ export class MidiEngine {
     this._clock         = null;
     this._audioCtx      = null;
     this._clockTickCb   = null;
+    this._clockStartCb  = null;
+    this._clockStopCb   = null;
     // ticksPerBeat on the Clock is 4 (16th notes), so we need 6 MIDI pulses per tick
     // to achieve 24 PPQN (24 / 4 = 6).
     this._midiPulsesPerTick = 6;
@@ -177,36 +185,29 @@ export class MidiEngine {
 
     clock.register(this._clockTickCb);
 
-    // Patch start/stop to send transport messages
-    const origStart = clock.start.bind(clock);
-    const origStop  = clock.stop.bind(clock);
-    clock.start = () => {
-      origStart();
+    // Transport messages via Clock's start/stop listeners (0xFA = start, 0xFC = stop).
+    this._clockStartCb = () => {
       const out = this._syncOutputId ? this.outputs.get(this._syncOutputId) : null;
       if (out) try { out.send([0xfa]); } catch (_) {}
     };
-    clock.stop = () => {
-      origStop();
+    this._clockStopCb = () => {
       const out = this._syncOutputId ? this.outputs.get(this._syncOutputId) : null;
       if (out) try { out.send([0xfc]); } catch (_) {}
     };
-    this._patchedClock       = clock;
-    this._origClockStart     = origStart;
-    this._origClockStop      = origStop;
+    clock.onStart(this._clockStartCb);
+    clock.onStop(this._clockStopCb);
   }
 
   disconnectClock() {
-    if (this._clockTickCb && this._clock) {
-      this._clock.unregister(this._clockTickCb);
-    }
-    // Restore original start/stop if we patched them
-    if (this._patchedClock) {
-      this._patchedClock.start = this._origClockStart;
-      this._patchedClock.stop  = this._origClockStop;
-      this._patchedClock = null;
+    if (this._clock) {
+      if (this._clockTickCb)  this._clock.unregister(this._clockTickCb);
+      if (this._clockStartCb) this._clock.offStart(this._clockStartCb);
+      if (this._clockStopCb)  this._clock.offStop(this._clockStopCb);
     }
     this._clock        = null;
     this._audioCtx     = null;
     this._clockTickCb  = null;
+    this._clockStartCb = null;
+    this._clockStopCb  = null;
   }
 }

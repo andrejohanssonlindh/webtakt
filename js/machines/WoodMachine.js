@@ -31,7 +31,7 @@
  */
 
 import { Machine }        from './Machine.js';
-import { getNoiseBuffer } from '../util/AudioBuffers.js';
+import { getNoiseBuffer, scheduleCallback } from '../util/AudioBuffers.js';
 
 const _noiseCache = { buf: null };
 const _getNoiseBuffer = ctx => getNoiseBuffer(ctx, _noiseCache, 0.5);
@@ -140,8 +140,8 @@ export class WoodMachine extends Machine {
       r2: this._ring2, r2g: this._ring2Gain,
       co: this._clickOsc, cg: this._clickGain,
     };
-    const cleanupMs = (decay + 0.1) * 1000 + Math.max(t - this.context.currentTime, 0) * 1000;
-    setTimeout(() => {
+    // Cleanup on the audio thread at note end (avoids wall-clock setTimeout drift).
+    scheduleCallback(this.context, t + decay + 0.1, () => {
       try { refs.r1.disconnect(refs.r1g); } catch (_) {}
       try { refs.r1g.disconnect();        } catch (_) {}
       try { refs.r2.disconnect(refs.r2g); } catch (_) {}
@@ -150,7 +150,7 @@ export class WoodMachine extends Machine {
         try { refs.co.disconnect(refs.cg); } catch (_) {}
         try { refs.cg.disconnect();        } catch (_) {}
       }
-    }, cleanupMs);
+    });
   }
 
   noteOff(time) {} // Self-enveloping

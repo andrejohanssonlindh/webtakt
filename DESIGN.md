@@ -202,7 +202,7 @@ UI (reads AppState, calls Track/Sequencer/Machine methods)
 | Delay | Per-track feedback delay, p-lockable + LFO-assignable |
 | Bitcrush | Per-track bit-depth + rate reduction, p-lockable + LFO-assignable |
 | Reverb | Per-track convolution reverb (synth IR), p-lockable + LFO-assignable |
-| MIDI | Out of scope |
+| MIDI | MIDI out (MidiMachine per track), MIDI In CC routing, 24-PPQN clock sync out. Timing via setTimeout (Web MIDI has no sample-accurate send) — see MidiEngine.js header. |
 | Analogue emulation | Out of scope |
 
 ---

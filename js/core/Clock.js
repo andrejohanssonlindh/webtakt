@@ -18,6 +18,8 @@
  *   setBPM(bpm)                    — updates tempo (takes effect immediately)
  *   register(callback)             — add a tick listener: fn(tickIndex, scheduledTime)
  *   unregister(callback)           — remove a tick listener
+ *   onStart(fn) / offStart(fn)     — transport-start listeners (fired by start())
+ *   onStop(fn)  / offStop(fn)      — transport-stop listeners (fired by stop())
  *   .isPlaying                     — boolean
  *   .bpm                           — current BPM
  *   .ticksPerBeat                  — subdivision resolution (default: 4, i.e. 16th notes)
@@ -39,6 +41,10 @@ export class Clock {
     this._scheduleInterval = 25;  // ms between scheduler runs
     this._timerID      = null;
     this._callbacks    = new Set();
+    // Transport listeners — fired by start()/stop(). Used by MidiEngine to send
+    // 0xFA/0xFC without monkey-patching start/stop.
+    this._startListeners = new Set();
+    this._stopListeners  = new Set();
   }
 
   /** Seconds per tick at current BPM and subdivision. */
@@ -56,6 +62,15 @@ export class Clock {
     this._callbacks.delete(callback);
   }
 
+  /** @param {function} fn — called with no args when transport starts */
+  onStart(fn)  { this._startListeners.add(fn); }
+  /** @param {function} fn */
+  offStart(fn) { this._startListeners.delete(fn); }
+  /** @param {function} fn — called with no args when transport stops */
+  onStop(fn)   { this._stopListeners.add(fn); }
+  /** @param {function} fn */
+  offStop(fn)  { this._stopListeners.delete(fn); }
+
   /** @param {number} bpm */
   setBPM(bpm) {
     this.bpm = Math.max(20, Math.min(300, bpm));
@@ -67,6 +82,7 @@ export class Clock {
     this._tickIndex    = 0;
     this._nextTickTime = this.audio.context.currentTime + 0.05;
     this._schedule();
+    this._startListeners.forEach(fn => { try { fn(); } catch (_) {} });
   }
 
   stop() {
@@ -76,6 +92,7 @@ export class Clock {
       clearTimeout(this._timerID);
       this._timerID = null;
     }
+    this._stopListeners.forEach(fn => { try { fn(); } catch (_) {} });
   }
 
   _schedule() {

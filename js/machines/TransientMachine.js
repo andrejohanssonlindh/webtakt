@@ -37,7 +37,7 @@
  */
 
 import { Machine }         from './Machine.js';
-import { getNoiseBuffer }  from '../util/AudioBuffers.js';
+import { getNoiseBuffer, scheduleCallback } from '../util/AudioBuffers.js';
 
 const _noiseCache = { buf: null };
 const _getNoiseBuffer = ctx => getNoiseBuffer(ctx, _noiseCache, 0.5);
@@ -149,8 +149,8 @@ export class TransientMachine extends Machine {
       bodyOsc: this._bodyOsc,
       bodyAmp: this._bodyAmp,
     };
-    const cleanupMs = (bodyDec + 0.15) * 1000 + Math.max(t - this.context.currentTime, 0) * 1000;
-    setTimeout(() => {
+    // Cleanup on the audio thread at note end (avoids wall-clock setTimeout drift).
+    scheduleCallback(this.context, t + bodyDec + 0.15, () => {
       try { refs.clickOsc.disconnect(refs.clickGain);             } catch (_) {}
       try { refs.clickGain.disconnect();                          } catch (_) {}
       if (refs.noiseGain) {
@@ -159,7 +159,7 @@ export class TransientMachine extends Machine {
       }
       try { refs.bodyOsc.disconnect(refs.bodyAmp);                } catch (_) {}
       try { refs.bodyAmp.disconnect();                            } catch (_) {}
-    }, cleanupMs);
+    });
   }
 
   noteOff(time) {} // Self-enveloping

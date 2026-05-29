@@ -35,7 +35,7 @@
  */
 
 import { Machine }         from './Machine.js';
-import { getNoiseBuffer }  from '../util/AudioBuffers.js';
+import { getNoiseBuffer, scheduleCallback } from '../util/AudioBuffers.js';
 
 const _noiseCache = { buf: null };
 const _getNoiseBuffer = ctx => getNoiseBuffer(ctx, _noiseCache, 2.0);
@@ -146,12 +146,12 @@ export class NoiseMachine extends Machine {
     const ampGain = this._ampGain;
     const mixGain = this._mixGain;
     const crusher = this._crusher;
-    const cleanupMs = (decay + 0.15) * 1000 + Math.max(t - this.context.currentTime, 0) * 1000;
-    setTimeout(() => {
+    // Cleanup on the audio thread at note end (avoids wall-clock setTimeout drift).
+    scheduleCallback(this.context, t + decay + 0.15, () => {
       try { mixGain.disconnect(ampGain); } catch (_) {}
       try { ampGain.disconnect(crusher); } catch (_) {}
       try { ampGain.disconnect();        } catch (_) {}
-    }, cleanupMs);
+    });
   }
 
   noteOff(time) {} // Self-enveloping

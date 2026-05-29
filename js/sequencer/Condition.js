@@ -32,6 +32,9 @@ export const Condition = {
   /** All ratio steps in order, for knob use. Index 0 = "always" (no condition). */
   RATIO_LIST: _ratios,   // length 36
 
+  /** Convenience: a fresh "always" condition (no ratio). */
+  always() { return Condition.create('always'); },
+
   create(type = 'always', options = {}) {
     switch (type) {
 

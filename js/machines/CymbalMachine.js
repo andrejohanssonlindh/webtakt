@@ -30,6 +30,7 @@
  */
 
 import { Machine } from './Machine.js';
+import { scheduleCallback } from '../util/AudioBuffers.js';
 
 const RATIOS   = [1.0, 1.4142, 1.5399, 1.7320, 2.0000, 2.3784];
 const BASE_FREQ = 200;
@@ -110,11 +111,11 @@ export class CymbalMachine extends Machine {
 
     const ampGain = this._ampGain;
     const bp      = this._bp;
-    const cleanupMs = (decay + 0.15) * 1000 + Math.max(t - this.context.currentTime, 0) * 1000;
-    setTimeout(() => {
+    // Cleanup on the audio thread at note end (avoids wall-clock setTimeout drift).
+    scheduleCallback(this.context, t + decay + 0.15, () => {
       try { bp.disconnect(ampGain);  } catch (_) {}
       try { ampGain.disconnect();    } catch (_) {}
-    }, cleanupMs);
+    });
   }
 
   noteOff(time) {} // Self-enveloping

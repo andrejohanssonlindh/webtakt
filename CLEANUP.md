@@ -3,6 +3,9 @@
 > Audit date: 2026-05-29. Scope: full `js/` tree (~17.4k LOC), `DESIGN.md`, `index.html`.
 > Goal: flag code that will or can bite us later. Ranked by impact, not effort.
 > Bar: "4/5 is good enough" — this list is what to fix to clear that bar, not a repaint.
+>
+> **Status (updated):** P1 #1, #2, #3 done; P2 #4, #5, #6 done; P3 #8 (SynthPanel
+> split) done. Remaining: P2 #7 (timer-contract doc), P3 #9/#10 (watch-only).
 
 The codebase is in good shape overall: clear module boundaries, the ownership graph
 in DESIGN.md matches reality, p-lock dispatch is well-documented, and the voice-pool

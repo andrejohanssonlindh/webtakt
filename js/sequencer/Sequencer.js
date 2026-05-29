@@ -55,6 +55,7 @@ export class Sequencer {
     this._playCount     = 0;
     this._tickBound     = this._onTick.bind(this);
     this._projectTracks = null;  // set by Project after construction
+    this._plockModeMapCache = null;  // lazily built, invalidated on machine swap
 
     // Wall-clock trigger state — read by TrackRow for the trig glow animation
     this.lastFireTime     = 0;   // performance.now() at last fire
@@ -141,6 +142,23 @@ getVisibleSteps() {
   }
 
   /**
+   * Cached path→plockMode map (see _buildPlockModeMap). Built lazily on first
+   * fire and reused — the param set only changes when the machine type changes,
+   * so Track.setMachine() calls invalidatePlockModeMap(). Avoids rebuilding the
+   * map (and re-allocating every machine/filter/FX getParamList()) on every
+   * p-locked step fire, which is on the audio scheduling path.
+   */
+  _plockModeMap() {
+    if (!this._plockModeMapCache) this._plockModeMapCache = this._buildPlockModeMap();
+    return this._plockModeMapCache;
+  }
+
+  /** Drop the cached plock-mode map so it rebuilds on next use. */
+  invalidatePlockModeMap() {
+    this._plockModeMapCache = null;
+  }
+
+  /**
    * Build a flat path→plockMode map from all param lists the track exposes.
    * env.*, fenv.*, and filter.cutoff are not raw AudioParam dispatches — they
    * go through scheduleNote() as 'envelope' overrides.
@@ -186,7 +204,7 @@ getVisibleSteps() {
     const v0off    = v0time + (step.voices[0].length * this.clock._secondsPerTick);
 
     if (step.hasPLocks) {
-      const modeMap = this._buildPlockModeMap();
+      const modeMap = this._plockModeMap();
       for (const [path, value] of step.plocks) {
         const mode = modeMap.get(path)
           ?? (path.startsWith('env.') || path.startsWith('fenv.') ? 'envelope' : 'js');

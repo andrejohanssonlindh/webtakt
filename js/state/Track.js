@@ -70,6 +70,7 @@ import { DelayFX }       from '../signal/DelayFX.js';
 import { BitcrushFX }    from '../signal/BitcrushFX.js';
 import { ReverbFX }      from '../signal/ReverbFX.js';
 import { Arpeggiator }   from '../signal/Arpeggiator.js';
+import { Condition }     from '../sequencer/Condition.js';
 
 const MACHINES = {
   synth:      SynthMachine,
@@ -241,6 +242,9 @@ export class Track {
     }
 
     this.loadedSoundName = null;
+    // New machine = new param set; drop the sequencer's cached plock-mode map.
+    // (Guarded: sequencer is created after the constructor's first setMachine.)
+    this.sequencer?.invalidatePlockModeMap();
   }
 
   mute() {
@@ -489,7 +493,7 @@ export class Track {
       s.retrigger = null;
       s.chance    = 100;
       s.plocks.clear();
-      s.condition = { type: 'always', options: {}, label: '—', evaluate() { return true; } };
+      s.condition = Condition.always();
     });
     this.sequencer.stepCount  = 16;
     this.sequencer.pageOffset = 0;
