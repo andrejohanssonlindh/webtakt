@@ -15,10 +15,12 @@
  *     size:     72,             // optional px, default 72
  *     color:    '#e8a020',      // optional
  *     fmt:      v => v + 'Hz', // optional display formatter
+ *     snapPoints: [1,2,4,8],   // optional; if set, shift snaps to nearest of these
  *     onChange: v => { ... },  // called with real value on change
  *   });
  *   container.appendChild(knob.el);   // .el is the .knob-cell div
  *   knob.setValue(newValue);           // update from outside (no onChange fired)
+ *   knob.setRange(min, max, fmt);     // swap range + formatter (e.g. MS↔BPM mode)
  *   knob.setHasPLock(bool);           // tint label blue
  *   knob.destroy();                    // removes global listeners
  */
@@ -182,6 +184,9 @@ export class KnobWidget {
     this.size     = opts.size     ?? 72;
     this.color    = opts.color    ?? KNOB_ACCENT;
     this.fmt      = opts.fmt      ?? (v => v.toFixed(2));
+    this.snapPoints = opts.snapPoints ?? null;  // shift snaps to nearest of these (real values)
+    this.centerLabel  = opts.centerLabel  ?? null;  // text drawn in the knob body (e.g. mode)
+    this.onCenterClick = opts.onCenterClick ?? null; // click (no drag) on center hotspot
     this.onChange  = opts.onChange  ?? null;
     this.onRelease = opts.onRelease ?? null;
 
@@ -226,7 +231,26 @@ export class KnobWidget {
     } else {
       _drawUnipolar(this._ctx, this.size, norm, this.color);
     }
+    if (this.centerLabel) this._drawCenterLabel();
     this._valEl.textContent = this.fmt(this._value);
+  }
+
+  /** Draw the clickable mode label in the knob body (e.g. "MS"/"BPM"). */
+  _drawCenterLabel() {
+    const ctx = this._ctx, w = this.size;
+    ctx.save();
+    ctx.fillStyle    = this.color;
+    ctx.font         = `bold ${Math.round(w * 0.16)}px monospace`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(this.centerLabel, w / 2, w / 2);
+    ctx.restore();
+  }
+
+  /** Update the center label text and redraw. */
+  setCenterLabel(text) {
+    this.centerLabel = text;
+    this._redraw();
   }
 
   _setFromNorm(n) {
@@ -235,15 +259,42 @@ export class KnobWidget {
     if (this.onChange) this.onChange(this._value);
   }
 
+  /** Snap a real value to the nearest configured snap point. */
+  _snap(v) {
+    if (!this.snapPoints || this.snapPoints.length === 0) return v;
+    let best = this.snapPoints[0], bestD = Math.abs(v - best);
+    for (const p of this.snapPoints) {
+      const d = Math.abs(v - p);
+      if (d < bestD) { best = p; bestD = d; }
+    }
+    return _clamp(best, this.min, this.max);
+  }
+
+  /** Step to the next/previous snap point in the given direction (+1/-1). */
+  _snapStep(dir) {
+    if (!this.snapPoints || this.snapPoints.length === 0) return this._value;
+    const sorted = [...this.snapPoints].sort((a, b) => a - b);
+    if (dir > 0) return _clamp(sorted.find(p => p > this._value + 1e-9) ?? sorted[sorted.length - 1], this.min, this.max);
+    return _clamp([...sorted].reverse().find(p => p < this._value - 1e-9) ?? sorted[0], this.min, this.max);
+  }
+
   _bindInteraction() {
     let dragging = false;
     let lastY    = 0;
+    let downY    = 0;       // clientY at mousedown (for click-vs-drag threshold)
+    let downInCenter = false;  // mousedown landed on the center hotspot
 
     const onWheel = (e) => {
       e.preventDefault();
-      const fine = e.shiftKey || e.ctrlKey;
-      const step = (this.max - this.min) * (fine ? 0.002 : 0.02);
-      this._value = _clamp(this._value + (e.deltaY > 0 ? -step : step), this.min, this.max);
+      const snapMode = this.snapPoints && (e.shiftKey || e.ctrlKey);
+      if (snapMode) {
+        // Shift on a snap knob → jump to the adjacent musical division.
+        this._value = this._snapStep(e.deltaY > 0 ? -1 : 1);
+      } else {
+        const fine = e.shiftKey || e.ctrlKey;
+        const step = (this.max - this.min) * (fine ? 0.002 : 0.02);
+        this._value = _clamp(this._value + (e.deltaY > 0 ? -step : step), this.min, this.max);
+      }
       this._redraw();
       if (this.onChange) this.onChange(this._value);
       // Treat each wheel tick as its own release (no held state)
@@ -253,21 +304,42 @@ export class KnobWidget {
     const onMouseDown = (e) => {
       dragging = true;
       lastY    = e.clientY;
+      downY    = e.clientY;
+      // Did the press land on the center hotspot? (body radius ≈ size*0.35)
+      const rect = this._canvas.getBoundingClientRect();
+      const dx = (e.clientX - rect.left) - this.size / 2;
+      const dy = (e.clientY - rect.top)  - this.size / 2;
+      downInCenter = Math.hypot(dx, dy) <= this.size * 0.35;
       e.preventDefault();
     };
 
     const onMouseMove = (e) => {
       if (!dragging) return;
-      const fine  = e.shiftKey || e.ctrlKey;
-      const speed = fine ? 0.0008 : 0.008;
+      const snapMode = this.snapPoints && (e.shiftKey || e.ctrlKey);
+      const speed = (e.shiftKey || e.ctrlKey) && !snapMode ? 0.0008 : 0.008;
       const dy    = (lastY - e.clientY) * speed;
       const norm  = _clamp(this._toNorm(this._value) + dy, 0, 1);
       lastY       = e.clientY;
-      this._setFromNorm(norm);
+      if (snapMode) {
+        // Drag with shift on a snap knob → continuously snap to nearest division.
+        this._value = this._snap(this._fromNorm(norm));
+        this._redraw();
+        if (this.onChange) this.onChange(this._value);
+      } else {
+        this._setFromNorm(norm);
+      }
     };
 
-    const onMouseUp = () => {
-      if (dragging && this.onRelease) this.onRelease(this._value);
+    const onMouseUp = (e) => {
+      if (!dragging) return;
+      const isClick = Math.abs((e?.clientY ?? downY) - downY) <= 4;
+      if (isClick && downInCenter && this.onCenterClick) {
+        // Center click (no meaningful drag) → toggle, don't fire release.
+        dragging = false;
+        this.onCenterClick();
+        return;
+      }
+      if (this.onRelease) this.onRelease(this._value);
       dragging = false;
     };
 
@@ -288,6 +360,20 @@ export class KnobWidget {
   /** Set value from outside without firing onChange */
   setValue(v) {
     this._value = _clamp(v, this.min, this.max);
+    this._redraw();
+  }
+
+  /**
+   * Swap the knob's range, formatter and (optionally) snap points without
+   * firing onChange. Used to flip a sync knob between MS and BPM modes.
+   * The caller should call setValue() afterwards with the new mode's value.
+   */
+  setRange(min, max, fmt, snapPoints = null) {
+    this.min = min;
+    this.max = max;
+    if (fmt) this.fmt = fmt;
+    this.snapPoints = snapPoints;
+    this._value = _clamp(this._value, this.min, this.max);
     this._redraw();
   }
 

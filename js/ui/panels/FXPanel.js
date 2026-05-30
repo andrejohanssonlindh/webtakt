@@ -12,6 +12,7 @@
  */
 
 import { KnobWidget } from '../KnobWidget.js';
+import { formatCount32 } from '../../util/BpmSync.js';
 
 export class FXPanel {
   /**
@@ -38,7 +39,10 @@ export class FXPanel {
       const hasPLock = canPLock && hasStep && step.plocks.has(p.path);
       const dispVal  = hasPLock ? step.plocks.get(p.path) : fxObj.getParam(p.path);
 
-      if (p.type === 'enum') {
+      if (p.type === 'sync') {
+        this._renderSync(ctx, fxObj, p, knobRow, fmtOverrides);
+
+      } else if (p.type === 'enum') {
         // Render as a labelled button group inside the knob row
         const cell = document.createElement('div');
         cell.className = 'fx-enum-cell';
@@ -113,5 +117,77 @@ export class FXPanel {
     }
 
     container.appendChild(wrapper);
+  }
+
+  /**
+   * Render a unified MS/BPM sync control: one mode-aware knob + an MS/BPM
+   * toggle. In MS mode the knob drives the seconds param (p-lockable); in BPM
+   * mode it sweeps the 1/32-note grid (track-level), shift snapping to musical
+   * divisions. See design/sync-knob-rollout.md.
+   */
+  _renderSync(ctx, fxObj, p, knobRow, fmtOverrides) {
+    const { activeWidgets, knobByPath, state, fmtParam, renderContent } = ctx;
+    const step    = ctx.step;
+    const hasStep = step !== null;
+
+    const isBpm   = fxObj.getParam(p.modePath) === 'bpm';
+    const list    = fxObj.getParamList();
+    const msDesc  = list.find(x => x.path === p.msPath);
+    const bpmDesc = list.find(x => x.path === p.bpmPath);
+
+    // Active path + value. Both modes are p-lockable when their underlying
+    // param is modulatable (ms → audioParam p-lock, bpm count → js p-lock).
+    const activePath = isBpm ? p.bpmPath : p.msPath;
+    const canPLock   = (isBpm ? bpmDesc : msDesc)?.modulatable;
+    const hasPLock   = canPLock && hasStep && step.plocks.has(activePath);
+    const dispVal    = hasPLock ? step.plocks.get(activePath) : fxObj.getParam(activePath);
+
+    const min  = isBpm ? p.bpmMin : (msDesc?.min ?? 0);
+    const max  = isBpm ? p.bpmMax : (msDesc?.max ?? 1);
+    const fmt  = isBpm
+      ? (v => formatCount32(v))
+      : (fmtOverrides[p.msPath] ?? (v => fmtParam(msDesc ?? { path: p.msPath }, v)));
+
+    const cell = document.createElement('div');
+    cell.className = 'fx-sync-cell knob-cell';
+
+    const knob = new KnobWidget({
+      label:   p.label,
+      min, max,
+      value:   dispVal ?? min,
+      size:    64,
+      fmt,
+      snapPoints: isBpm ? p.bpmSnap : null,
+      // Click the knob center to toggle MS↔BPM. Center shows the current mode.
+      centerLabel: isBpm ? 'BPM' : 'MS',
+      onCenterClick: () => {
+        fxObj.setParam(p.modePath, isBpm ? 'ms' : 'bpm');
+        renderContent();   // rebuild so the knob picks up the new range/value
+      },
+      onChange: v => {
+        const val = isBpm ? Math.round(v) : v;
+        if (canPLock && hasStep) {
+          step.setPLock(activePath, val);
+          knob.setHasPLock(true);
+        } else {
+          fxObj.setParam(activePath, val);
+        }
+      },
+      onRelease: () => {
+        if (canPLock && hasStep) {
+          state.emit('stepChanged', {
+            trackIndex: state.selectedTrackIndex,
+            stepIndex:  state.selectedStepIndex,
+            step,
+          });
+        }
+      },
+    });
+    knob.setHasPLock(hasPLock);
+    cell.appendChild(knob.el);
+
+    knobRow.appendChild(cell);
+    activeWidgets.push(knob);
+    knobByPath.set(activePath, knob);
   }
 }
