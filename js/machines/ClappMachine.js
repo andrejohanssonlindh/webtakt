@@ -27,18 +27,26 @@ const _noiseCache = { buf: null };
 const _getNoiseBuffer = ctx => getNoiseBuffer(ctx, _noiseCache, 0.5);
 
 export class ClappMachine extends Machine {
+  static SPEC = {
+    'tone':         { label: 'Tone', type: 'number', min: 800, max: 6000, default: 3000,
+                      modulatable: true, lfoMin: 800, lfoMax: 6000,
+                      target: m => m._bp.frequency, schedule: 'setTarget', tc: 0.01 },
+    'snap':         { label: 'Snap', type: 'number', min: 0.3, max: 4, default: 1.2,
+                      modulatable: true, lfoMin: 0.3, lfoMax: 4,
+                      target: m => m._bp.Q, schedule: 'setTarget', tc: 0.01 },
+    'decay':        { label: 'Decay', type: 'number', min: 0.05, max: 1.0, default: 0.3, plockMode: 'js' },
+    'spread':       { label: 'Spread', type: 'number', min: 0, max: 30, default: 8, plockMode: 'js' },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m.outputGain.gain, schedule: 'setValue' },
+  };
+
   constructor(context) {
     super(context);
     this.type  = 'clapp';
     this.label = 'Clapp';
 
-    this._params = {
-      'tone':         3000,
-      'snap':         1.2,
-      'decay':        0.3,
-      'spread':       8,
-      'output.level': 0.85,
-    };
+    this._initSpec();
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
@@ -101,44 +109,5 @@ export class ClappMachine extends Machine {
     this._trimGain.disconnect();
   }
 
-  setParam(path, value, time) {
-    this._params[path] = value;
-    const t = time ?? this.context.currentTime;
-    switch (path) {
-      case 'tone':
-        this._bp.frequency.setTargetAtTime(value, t, 0.01);
-        break;
-      case 'snap':
-        this._bp.Q.setTargetAtTime(value, t, 0.01);
-        break;
-      case 'output.level':
-        this.outputGain.gain.setValueAtTime(value, t);
-        break;
-      // 'decay', 'spread' — JS-only, read in noteOn
-    }
-  }
-
-  getParam(path) { return this._params[path]; }
-
-  getParamList() {
-    return [
-      { path: 'tone',         label: 'Tone',    type: 'number', min: 800,  max: 6000, default: 3000, modulatable: true,  lfoMin: 800,  lfoMax: 6000, plockMode: 'audioParam' },
-      { path: 'snap',         label: 'Snap',    type: 'number', min: 0.3,  max: 4,    default: 1.2,  modulatable: true,  lfoMin: 0.3,  lfoMax: 4,    plockMode: 'audioParam' },
-      { path: 'decay',        label: 'Decay',   type: 'number', min: 0.05, max: 1.0,  default: 0.3,                                                  plockMode: 'js'        },
-      { path: 'spread',       label: 'Spread',  type: 'number', min: 0,    max: 30,   default: 8,                                                     plockMode: 'js'        },
-      { path: 'output.level', label: 'Level',   type: 'number', min: 0,    max: 1,    default: 0.85, modulatable: true,  lfoMin: 0,    lfoMax: 1,     plockMode: 'audioParam' },
-    ];
-  }
-
-  resolveAudioParam(path) {
-    switch (path) {
-      case 'tone':         return this._bp.frequency;
-      case 'snap':         return this._bp.Q;
-      case 'output.level': return this.outputGain.gain;
-      default: return null;
-    }
-  }
-
-  toJSON()      { return { type: this.type, params: { ...this._params } }; }
-  fromJSON(obj) { Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v)); }
+  // Param interface derived from `static SPEC` (Machine base class).
 }

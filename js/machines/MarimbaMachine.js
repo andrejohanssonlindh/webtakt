@@ -39,25 +39,38 @@ import { getNoiseBuffer, scheduleCallback } from '../util/AudioBuffers.js';
 const _noiseCache = { buf: null };
 
 export class MarimbaMachine extends Machine {
+  // p2ratio/p3ratio = manualTarget: resolve to the partial osc frequency for LFO,
+  // but setParam schedules _baseFreq × ratio via apply (ratio is relative).
+  static SPEC = {
+    'decay1':       { label: 'Decay 1', type: 'number', min: 0.2, max: 8.0, default: 1.8, plockMode: 'js' },
+    'decay2':       { label: 'Decay 2', type: 'number', min: 0.05, max: 2.0, default: 0.18, plockMode: 'js' },
+    'decay3':       { label: 'Decay 3', type: 'number', min: 0.01, max: 0.5, default: 0.05, plockMode: 'js' },
+    'p2ratio':      { label: 'P2 Ratio', type: 'number', min: 2.0, max: 6.0, default: 3.9,
+                      modulatable: true, lfoMin: 2.0, lfoMax: 6.0, plockMode: 'audioParam',
+                      target: m => m._osc2.frequency, manualTarget: true,
+                      apply: (v, t, m) => m._osc2.frequency.setTargetAtTime(m._baseFreq * v, t, 0.005) },
+    'p3ratio':      { label: 'P3 Ratio', type: 'number', min: 5.0, max: 15.0, default: 9.9,
+                      modulatable: true, lfoMin: 5.0, lfoMax: 15.0, plockMode: 'audioParam',
+                      target: m => m._osc3.frequency, manualTarget: true,
+                      apply: (v, t, m) => m._osc3.frequency.setTargetAtTime(m._baseFreq * v, t, 0.005) },
+    'p2level':      { label: 'P2 Level', type: 'number', min: 0, max: 1, default: 0.45, plockMode: 'js' },
+    'p3level':      { label: 'P3 Level', type: 'number', min: 0, max: 1, default: 0.15, plockMode: 'js' },
+    'mallet':       { label: 'Mallet', type: 'number', min: 0, max: 1, default: 0.5, plockMode: 'js' },
+    'mallet.tone':  { label: 'Mallet Tone', type: 'number', min: 500, max: 8000, default: 2500,
+                      modulatable: true, lfoMin: 500, lfoMax: 8000,
+                      target: m => m._malletFilter.frequency, schedule: 'setTarget', tc: 0.005 },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.9,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m.outputGain.gain, schedule: 'setValue' },
+  };
+
   constructor(context) {
     super(context);
     this.type  = 'marimba';
     this.label = 'Marimba';
 
-    this._params = {
-      'p2ratio':      3.9,
-      'p3ratio':      9.9,
-      'decay1':       1.8,
-      'decay2':       0.18,
-      'decay3':       0.05,
-      'p2level':      0.45,
-      'p3level':      0.15,
-      'mallet':       0.5,
-      'mallet.tone':  2500,
-      'output.level': 0.9,
-    };
-
     this._baseFreq = 440;
+    this._initSpec();
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
@@ -188,54 +201,5 @@ export class MarimbaMachine extends Machine {
     this._trimGain.disconnect();
   }
 
-  setParam(path, value, time) {
-    this._params[path] = value;
-    const t = time ?? this.context.currentTime;
-
-    switch (path) {
-      case 'p2ratio':
-        this._osc2.frequency.setTargetAtTime(this._baseFreq * value, t, 0.005);
-        break;
-      case 'p3ratio':
-        this._osc3.frequency.setTargetAtTime(this._baseFreq * value, t, 0.005);
-        break;
-      case 'mallet.tone':
-        this._malletFilter.frequency.setTargetAtTime(value, t, 0.005);
-        break;
-      case 'output.level':
-        this.outputGain.gain.setValueAtTime(value, t);
-        break;
-      // decay1/2/3, p2level, p3level, mallet — JS-only, read in noteOn
-    }
-  }
-
-  getParam(path) { return this._params[path]; }
-
-  getParamList() {
-    return [
-      { path: 'decay1',       label: 'Decay 1',    type: 'number', min: 0.2,  max: 8.0,  default: 1.8,  plockMode: 'js'        },
-      { path: 'decay2',       label: 'Decay 2',    type: 'number', min: 0.05, max: 2.0,  default: 0.18, plockMode: 'js'        },
-      { path: 'decay3',       label: 'Decay 3',    type: 'number', min: 0.01, max: 0.5,  default: 0.05, plockMode: 'js'        },
-      { path: 'p2ratio',      label: 'P2 Ratio',   type: 'number', min: 2.0,  max: 6.0,  default: 3.9,  modulatable: true, lfoMin: 2.0, lfoMax: 6.0,  plockMode: 'audioParam' },
-      { path: 'p3ratio',      label: 'P3 Ratio',   type: 'number', min: 5.0,  max: 15.0, default: 9.9,  modulatable: true, lfoMin: 5.0, lfoMax: 15.0, plockMode: 'audioParam' },
-      { path: 'p2level',      label: 'P2 Level',   type: 'number', min: 0,    max: 1,    default: 0.45, plockMode: 'js'        },
-      { path: 'p3level',      label: 'P3 Level',   type: 'number', min: 0,    max: 1,    default: 0.15, plockMode: 'js'        },
-      { path: 'mallet',       label: 'Mallet',     type: 'number', min: 0,    max: 1,    default: 0.5,  plockMode: 'js'        },
-      { path: 'mallet.tone',  label: 'Mallet Tone',type: 'number', min: 500,  max: 8000, default: 2500, modulatable: true, lfoMin: 500, lfoMax: 8000, plockMode: 'audioParam' },
-      { path: 'output.level', label: 'Level',      type: 'number', min: 0,    max: 1,    default: 0.9,  modulatable: true, lfoMin: 0,   lfoMax: 1,    plockMode: 'audioParam' },
-    ];
-  }
-
-  resolveAudioParam(path) {
-    switch (path) {
-      case 'p2ratio':      return this._osc2.frequency;
-      case 'p3ratio':      return this._osc3.frequency;
-      case 'mallet.tone':  return this._malletFilter.frequency;
-      case 'output.level': return this.outputGain.gain;
-      default: return null;
-    }
-  }
-
-  toJSON()      { return { type: this.type, params: { ...this._params } }; }
-  fromJSON(obj) { Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v)); }
+  // Param interface derived from `static SPEC` (Machine base class).
 }

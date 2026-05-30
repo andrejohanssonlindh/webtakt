@@ -1,0 +1,232 @@
+/**
+ * machines/param_spec.js — declarative param-spec regression tests
+ *
+ * Guards the Machine `static SPEC` refactor: the spec-derived getParamList(),
+ * resolveAudioParam(), and toJSON/fromJSON of each converted machine must match
+ * the original hand-written descriptors EXACTLY. The EXPECTED tables below are
+ * copied verbatim from the pre-refactor source — if a future spec edit drifts
+ * from these, this test fails.
+ *
+ * Comparison is order-independent (both array order and object key order) so it
+ * checks the real contract (consumers read by key), not incidental formatting.
+ */
+
+import { suite, test, assert, makeOfflineTrack } from '../../runner.js';
+
+// Deep value-equality, ignoring object key order. Arrays are compared by the
+// SET of their (normalised) elements keyed on `path`, so descriptor order is
+// irrelevant — every consumer looks descriptors up by path, never by index.
+function normObj(o) {
+  if (Array.isArray(o)) return o.map(normObj);
+  if (o && typeof o === 'object') {
+    const out = {};
+    for (const k of Object.keys(o).sort()) out[k] = normObj(o[k]);
+    return out;
+  }
+  return o;
+}
+function paramListEqual(actual, expected) {
+  if (actual.length !== expected.length) return false;
+  const byPath = list => Object.fromEntries(list.map(d => [d.path, JSON.stringify(normObj(d))]));
+  const a = byPath(actual), e = byPath(expected);
+  const keys = new Set([...Object.keys(a), ...Object.keys(e)]);
+  for (const k of keys) if (a[k] !== e[k]) return false;
+  return true;
+}
+
+const EXPECTED = {
+  synth: [
+    { path: 'osc.waveform',  label: 'Waveform',     type: 'enum',   options: ['sine','sawtooth','square','triangle'], plockMode: 'js' },
+    { path: 'osc.detune',    label: 'Detune',       type: 'number', min: -100, max: 100, default: 0,   modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
+    { path: 'sub.level',     label: 'Sub Level',    type: 'number', min: 0,    max: 1,   default: 0.3, modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'audioParam' },
+    { path: 'sub.waveform',  label: 'Sub Waveform', type: 'enum',   options: ['sine','sawtooth','square','triangle'], plockMode: 'js' },
+    { path: 'output.level',  label: 'Level',        type: 'number', min: 0,    max: 1,   default: 0.8, modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'audioParam' },
+  ],
+  snare: [
+    { path: 'tune',         label: 'Tune',      type: 'number', min: 100,  max: 400,  default: 200,  modulatable: true, lfoMin: 100,  lfoMax: 400,  plockMode: 'audioParam' },
+    { path: 'decay',        label: 'Decay',     type: 'number', min: 0.05, max: 1.0,  default: 0.18, plockMode: 'js' },
+    { path: 'tone',         label: 'Tone',      type: 'number', min: 0,    max: 1,    default: 0.4,  modulatable: true, lfoMin: 0,    lfoMax: 1,    plockMode: 'audioParam' },
+    { path: 'snap',         label: 'Snap',      type: 'number', min: 0,    max: 1,    default: 0.8,  modulatable: true, lfoMin: 0,    lfoMax: 1,    plockMode: 'audioParam' },
+    { path: 'noise.cutoff', label: 'Noise Cut', type: 'number', min: 200,  max: 8000, default: 2000, modulatable: true, lfoMin: 200,  lfoMax: 8000, plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',     type: 'number', min: 0,    max: 1,    default: 0.85, modulatable: true, lfoMin: 0,    lfoMax: 1,    plockMode: 'audioParam' },
+  ],
+  chord: [
+    { path: 'osc.detune',   label: 'Detune',    type: 'number', min: -100, max: 100, default: 0,   modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
+    { path: 'chord',        label: 'Chord',     type: 'enum',   options: ['major','minor','dom7','maj7','min7','sus2','sus4','dim','aug','power','octave'], plockMode: 'js' },
+    { path: 'inversion',    label: 'Inversion', type: 'number', min: 0, max: 3,  default: 0,   plockMode: 'js' },
+    { path: 'spread',       label: 'Spread',    type: 'number', min: 0, max: 50, default: 8,   modulatable: true, lfoMin: 0, lfoMax: 50, plockMode: 'js' },
+    { path: 'waveform',     label: 'Waveform',  type: 'enum',   options: ['sawtooth','square','triangle','sine'], plockMode: 'js' },
+    { path: 'output.level', label: 'Level',     type: 'number', min: 0, max: 1,  default: 0.7, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+  ],
+  'kick.silk': [
+    { path: 'tune',         label: 'Tune',        type: 'number', min: 20, max: 200, default: 60, modulatable: true, lfoMin: 20, lfoMax: 200, plockMode: 'audioParam' },
+    { path: 'decay',        label: 'Decay',       type: 'number', min: 0.05, max: 2.0, default: 0.45, plockMode: 'js' },
+    { path: 'sweep',        label: 'Sweep',       type: 'number', min: 1, max: 8, default: 4.0, plockMode: 'js' },
+    { path: 'punch',        label: 'Punch',       type: 'number', min: 0, max: 1, default: 0.7, plockMode: 'js' },
+    { path: 'punch.decay',  label: 'Punch Decay', type: 'number', min: 0.005, max: 0.08, default: 0.025, plockMode: 'js' },
+    { path: 'output.level', label: 'Level',       type: 'number', min: 0, max: 1, default: 0.9, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+  ],
+  'kick.hard': [
+    { path: 'tune',         label: 'Tune',        type: 'number', min: 20, max: 200, default: 60, modulatable: true, lfoMin: 20, lfoMax: 200, plockMode: 'audioParam' },
+    { path: 'decay',        label: 'Decay',       type: 'number', min: 0.05, max: 2.0, default: 0.45, plockMode: 'js' },
+    { path: 'sweep',        label: 'Sweep',       type: 'number', min: 1, max: 8, default: 4.0, plockMode: 'js' },
+    { path: 'sub.level',    label: 'Sub',         type: 'number', min: 0, max: 1, default: 0.8, plockMode: 'js' },
+    { path: 'drive',        label: 'Drive',       type: 'number', min: 1, max: 6, default: 3.0, plockMode: 'js' },
+    { path: 'punch',        label: 'Punch',       type: 'number', min: 0, max: 1, default: 0.7, plockMode: 'js' },
+    { path: 'punch.decay',  label: 'Punch Decay', type: 'number', min: 0.005, max: 0.08, default: 0.025, plockMode: 'js' },
+    { path: 'output.level', label: 'Level',       type: 'number', min: 0, max: 1, default: 0.9, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+  ],
+  hihat: [
+    { path: 'decay',        label: 'Decay',      type: 'number', min: 0.01, max: 0.25, default: 0.06, plockMode: 'js' },
+    { path: 'open.decay',   label: 'Open Decay', type: 'number', min: 0.1, max: 2.0, default: 0.5, plockMode: 'js' },
+    { path: 'open',         label: 'Open',       type: 'boolean', default: false, plockMode: 'js' },
+    { path: 'cutoff',       label: 'Cutoff',     type: 'number', min: 500, max: 12000, default: 3000, modulatable: true, lfoMin: 500, lfoMax: 12000, plockMode: 'audioParam' },
+    { path: 'tone',         label: 'Tone',       type: 'number', min: 0, max: 8, default: 2.0, modulatable: true, lfoMin: 0, lfoMax: 8, plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',      type: 'number', min: 0, max: 1, default: 0.75, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+  ],
+  clapp: [
+    { path: 'tone',         label: 'Tone',   type: 'number', min: 800, max: 6000, default: 3000, modulatable: true, lfoMin: 800, lfoMax: 6000, plockMode: 'audioParam' },
+    { path: 'snap',         label: 'Snap',   type: 'number', min: 0.3, max: 4, default: 1.2, modulatable: true, lfoMin: 0.3, lfoMax: 4, plockMode: 'audioParam' },
+    { path: 'decay',        label: 'Decay',  type: 'number', min: 0.05, max: 1.0, default: 0.3, plockMode: 'js' },
+    { path: 'spread',       label: 'Spread', type: 'number', min: 0, max: 30, default: 8, plockMode: 'js' },
+    { path: 'output.level', label: 'Level',  type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+  ],
+  cymbal: [
+    { path: 'tune',         label: 'Tune',       type: 'number', min: 100, max: 800, default: 300, modulatable: true, lfoMin: 100, lfoMax: 800, plockMode: 'audioParam' },
+    { path: 'tone',         label: 'Tone',       type: 'number', min: 200, max: 8000, default: 1500, modulatable: true, lfoMin: 200, lfoMax: 8000, plockMode: 'audioParam' },
+    { path: 'body',         label: 'Body',       type: 'number', min: 500, max: 16000, default: 3500, modulatable: true, lfoMin: 500, lfoMax: 16000, plockMode: 'audioParam' },
+    { path: 'resonance',    label: 'Resonance',  type: 'number', min: 0.5, max: 12, default: 3.0, modulatable: true, lfoMin: 0.5, lfoMax: 12, plockMode: 'audioParam' },
+    { path: 'decay',        label: 'Decay',      type: 'number', min: 0.05, max: 0.5, default: 0.15, plockMode: 'js' },
+    { path: 'mid.decay',    label: 'Mid Decay',  type: 'number', min: 0.1, max: 2.0, default: 0.6, plockMode: 'js' },
+    { path: 'open.decay',   label: 'Open Decay', type: 'number', min: 0.5, max: 8.0, default: 2.5, plockMode: 'js' },
+    { path: 'mode',         label: 'Mode',       type: 'enum',   options: ['closed','mid','open'], plockMode: 'js' },
+    { path: 'output.level', label: 'Level',      type: 'number', min: 0, max: 1, default: 0.5, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+  ],
+  noise: [
+    { path: 'color',        label: 'Color',      type: 'number', min: 0, max: 1, default: 0.3, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'js' },
+    { path: 'color.freq',   label: 'Color Freq', type: 'number', min: 200, max: 8000, default: 2000, modulatable: true, lfoMin: 200, lfoMax: 8000, plockMode: 'audioParam' },
+    { path: 'body.freq',    label: 'Body Freq',  type: 'number', min: 80, max: 2000, default: 400, modulatable: true, lfoMin: 80, lfoMax: 2000, plockMode: 'audioParam' },
+    { path: 'body.level',   label: 'Body',       type: 'number', min: 0, max: 1, default: 0.5, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+    { path: 'crush',        label: 'Crush',      type: 'number', min: 0, max: 1, default: 0.0, plockMode: 'js' },
+    { path: 'decay',        label: 'Decay',      type: 'number', min: 0.01, max: 4.0, default: 0.25, plockMode: 'js' },
+    { path: 'output.level', label: 'Level',      type: 'number', min: 0, max: 1, default: 0.8, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+  ],
+  karplus: [
+    { path: 'damping',      label: 'Damping',     type: 'number', min: 0, max: 1, default: 0.5, plockMode: 'js' },
+    { path: 'feedback',     label: 'Feedback',    type: 'number', min: 0.8, max: 0.999, default: 0.985, plockMode: 'js' },
+    { path: 'excite',       label: 'Excite',      type: 'number', min: 1, max: 50, default: 8, plockMode: 'js' },
+    { path: 'excite.tone',  label: 'Excite Tone', type: 'number', min: 200, max: 20000, default: 8000, plockMode: 'js' },
+    { path: 'stretch',      label: 'Stretch',     type: 'number', min: -12, max: 12, default: 0, plockMode: 'js' },
+    { path: 'output.level', label: 'Level',       type: 'number', min: 0, max: 1, default: 0.8, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+  ],
+  comb: [
+    { path: 'ratio',        label: 'Ratio',   type: 'number', min: 0.5, max: 8, default: 2.756, modulatable: false, plockMode: 'js' },
+    { path: 'decay',        label: 'Decay',   type: 'number', min: 0.1, max: 8, default: 1.8, modulatable: true, lfoMin: 0.1, lfoMax: 8, plockMode: 'js' },
+    { path: 'decay2',       label: 'Decay 2', type: 'number', min: 0.1, max: 2, default: 0.35, modulatable: false, plockMode: 'js' },
+    { path: 'mix',          label: 'Mix',     type: 'number', min: 0, max: 1, default: 0.4, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'js' },
+    { path: 'strike',       label: 'Strike',  type: 'number', min: 0, max: 1, default: 0.6, modulatable: false, plockMode: 'js' },
+    { path: 'output.level', label: 'Level',   type: 'number', min: 0, max: 1, default: 0.8, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+  ],
+  marimba: [
+    { path: 'decay1',       label: 'Decay 1',     type: 'number', min: 0.2, max: 8.0, default: 1.8, plockMode: 'js' },
+    { path: 'decay2',       label: 'Decay 2',     type: 'number', min: 0.05, max: 2.0, default: 0.18, plockMode: 'js' },
+    { path: 'decay3',       label: 'Decay 3',     type: 'number', min: 0.01, max: 0.5, default: 0.05, plockMode: 'js' },
+    { path: 'p2ratio',      label: 'P2 Ratio',    type: 'number', min: 2.0, max: 6.0, default: 3.9, modulatable: true, lfoMin: 2.0, lfoMax: 6.0, plockMode: 'audioParam' },
+    { path: 'p3ratio',      label: 'P3 Ratio',    type: 'number', min: 5.0, max: 15.0, default: 9.9, modulatable: true, lfoMin: 5.0, lfoMax: 15.0, plockMode: 'audioParam' },
+    { path: 'p2level',      label: 'P2 Level',    type: 'number', min: 0, max: 1, default: 0.45, plockMode: 'js' },
+    { path: 'p3level',      label: 'P3 Level',    type: 'number', min: 0, max: 1, default: 0.15, plockMode: 'js' },
+    { path: 'mallet',       label: 'Mallet',      type: 'number', min: 0, max: 1, default: 0.5, plockMode: 'js' },
+    { path: 'mallet.tone',  label: 'Mallet Tone', type: 'number', min: 500, max: 8000, default: 2500, modulatable: true, lfoMin: 500, lfoMax: 8000, plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',       type: 'number', min: 0, max: 1, default: 0.9, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+  ],
+  transient: [
+    { path: 'pitch',        label: 'Pitch',       type: 'number', min: 0, max: 2000, default: 0, modulatable: true, lfoMin: 0, lfoMax: 2000, plockMode: 'js' },
+    { path: 'pitch.end',    label: 'Pitch End',   type: 'number', min: 0.05, max: 1.0, default: 0.4, plockMode: 'js' },
+    { path: 'body.decay',   label: 'Body Decay',  type: 'number', min: 0.01, max: 2.0, default: 0.12, plockMode: 'js' },
+    { path: 'body.wave',    label: 'Body Wave',   type: 'enum',   options: ['sine','triangle'], plockMode: 'js' },
+    { path: 'click.freq',   label: 'Click Freq',  type: 'number', min: 100, max: 8000, default: 1200, modulatable: true, lfoMin: 100, lfoMax: 8000, plockMode: 'audioParam' },
+    { path: 'click.decay',  label: 'Click Decay', type: 'number', min: 0.001, max: 0.05, default: 0.008, plockMode: 'js' },
+    { path: 'noise.click',  label: 'Crack',       type: 'number', min: 0, max: 1, default: 0.3, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',       type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+  ],
+  wood: [
+    { path: 'freq1',        label: 'Freq 1',     type: 'number', min: 200, max: 4000, default: 600, modulatable: true, lfoMin: 200, lfoMax: 4000, plockMode: 'audioParam' },
+    { path: 'freq2',        label: 'Freq 2',     type: 'number', min: 400, max: 8000, default: 1400, modulatable: true, lfoMin: 400, lfoMax: 8000, plockMode: 'audioParam' },
+    { path: 'ring',         label: 'Ring',       type: 'number', min: 1, max: 30, default: 12, modulatable: true, lfoMin: 1, lfoMax: 30, plockMode: 'audioParam' },
+    { path: 'mix',          label: 'Mix',        type: 'number', min: 0, max: 1, default: 0.35, plockMode: 'js' },
+    { path: 'decay',        label: 'Decay',      type: 'number', min: 0.001, max: 0.4, default: 0.08, plockMode: 'js' },
+    { path: 'click',        label: 'Click',      type: 'number', min: 0, max: 1, default: 0.6, plockMode: 'js' },
+    { path: 'click.freq',   label: 'Click Freq', type: 'number', min: 500, max: 12000, default: 3000, modulatable: true, lfoMin: 500, lfoMax: 12000, plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',      type: 'number', min: 0, max: 1, default: 1.0, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+  ],
+};
+
+// Paths that must resolve to a real AudioParam (incl. manualTarget ones).
+const RESOLVES = {
+  synth: ['osc.detune', 'sub.level', 'output.level'],
+  snare: ['tune', 'tone', 'snap', 'noise.cutoff', 'output.level'],
+  chord: ['osc.detune', 'output.level'],
+  'kick.silk': ['tune', 'output.level'],
+  'kick.hard': ['tune', 'output.level'],
+  hihat: ['cutoff', 'tone', 'output.level'],
+  clapp: ['tone', 'snap', 'output.level'],
+  cymbal: ['tune', 'tone', 'body', 'resonance', 'output.level'],
+  noise: ['color.freq', 'body.freq', 'body.level', 'output.level'],
+  karplus: ['output.level'],
+  comb: ['output.level'],
+  marimba: ['p2ratio', 'p3ratio', 'mallet.tone', 'output.level'],
+  transient: ['click.freq', 'noise.click', 'output.level'],
+  wood: ['freq1', 'freq2', 'ring', 'click.freq', 'output.level'],
+};
+
+suite('Param spec (declarative machines)', () => {
+
+  for (const type of [
+    'synth', 'snare', 'chord',
+    'kick.silk', 'kick.hard', 'hihat', 'clapp', 'cymbal',
+    'noise', 'karplus', 'comb', 'marimba', 'transient', 'wood',
+  ]) {
+
+    test(`${type}: getParamList matches original descriptors`, async () => {
+      const { track } = await makeOfflineTrack(type, 0.1);
+      const actual = track.machine.getParamList();
+      assert.ok(paramListEqual(actual, EXPECTED[type]),
+        `${type} getParamList drifted from original:\n` +
+        `actual=${JSON.stringify(actual)}`);
+    });
+
+    test(`${type}: resolveAudioParam returns AudioParams for the right paths`, async () => {
+      const { track } = await makeOfflineTrack(type, 0.1);
+      const m = track.machine;
+      const all = m.getParamList().map(d => d.path);
+      for (const p of all) {
+        const ap = m.resolveAudioParam(p);
+        const shouldResolve = RESOLVES[type].includes(p);
+        if (shouldResolve) {
+          assert.ok(ap && typeof ap.setValueAtTime === 'function',
+            `${type}.${p} should resolve to an AudioParam`);
+        } else {
+          assert.ok(ap == null, `${type}.${p} should resolve to null, got ${ap}`);
+        }
+      }
+    });
+
+    test(`${type}: toJSON/fromJSON round-trips all params`, async () => {
+      const { track } = await makeOfflineTrack(type, 0.1);
+      const m = track.machine;
+      // Mutate one numeric + one enum param, then round-trip into a fresh machine.
+      const numParam = m.getParamList().find(d => d.type === 'number');
+      m.setParam(numParam.path, (numParam.min + numParam.max) / 2);
+      const json = m.toJSON();
+      assert.ok(json.type === type, `toJSON type should be '${type}'`);
+      assert.ok(json.params && typeof json.params === 'object', 'toJSON must carry params');
+
+      const { track: t2 } = await makeOfflineTrack(type, 0.1);
+      t2.machine.fromJSON(json);
+      for (const d of m.getParamList()) {
+        assert.ok(t2.machine.getParam(d.path) === m.getParam(d.path),
+          `${type}.${d.path} did not round-trip (${t2.machine.getParam(d.path)} !== ${m.getParam(d.path)})`);
+      }
+    });
+  }
+});

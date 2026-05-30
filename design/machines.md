@@ -264,3 +264,17 @@ Routes sequencer note events to a MIDI output port instead of audio. No WebAudio
 ## Hidden Param Pattern
 
 Params with `hidden: true` in `getParamList()` are skipped by `_renderParamList` but remain available for p-locking, LFO assignment, and sequencer dispatch. Used for `osc.detune` (moved to TRIG tab). Reuse this pattern for any param that belongs in a different tab from its machine's default grid.
+
+## Declarative Param Spec (`static SPEC`)
+
+A machine can replace its hand-written `setParam`/`getParam`/`getParamList`/`resolveAudioParam`/`toJSON`/`fromJSON` with a single declarative table. Define `static SPEC` (path → entry) and call `this._initSpec()` at the **end of the constructor** (after audio nodes exist); the `Machine` base derives all six members. This is **opt-in and incremental** — machines that don't call `_initSpec()` keep their own methods, so converted and un-converted machines coexist.
+
+**Spec entry fields:**
+- *Descriptor* (copied verbatim into `getParamList()` — these names are the contract): `label`, `type` (`'number'`/`'enum'`/`'boolean'`), `min`, `max`, `default`, `options`, `hidden`, `modulatable`, `lfoMin`, `lfoMax`, `plockMode`. `default` doubles as the `_params` init value. `plockMode` defaults to `'audioParam'` if a `target` is present, else `'js'`.
+- *Execution*: `target` `(m) => AudioParam` (lazy; drives auto-schedule **and** `resolveAudioParam`); `schedule` `'setTarget'` (default) | `'setValue'`; `tc` (setTargetAtTime time-constant, default `0.005`); `apply` `(value, time, m) => void` (JS side-effect, runs after store); `manualTarget: true` (the `target` is exposed to LFO/`resolveAudioParam` only — `setParam` does **not** auto-schedule it; the `apply` hook owns the write).
+
+**Three action kinds it expresses:** (a) store-only (`plockMode:'js'`, no target/apply); (b) store + schedule AudioParam (`target` + `schedule`); (c) store + JS side-effect (`apply`, e.g. ChordMachine's `_applyChord`). `manualTarget` covers params that are LFO-targetable yet written via a side-effect (ChordMachine `osc.detune`; samplers' `output.level`).
+
+`getParamList()` is **cached on the class** (`constructor._paramListCache`) since the spec is static and the result is read-only — never mutate a returned descriptor array.
+
+**Converted so far (14):** Synth, Snare, Chord, KickSilk, KickHard, HiHat, Clapp, Cymbal, Noise, Karplus, Comb, Marimba, Transient, Wood. **Not converted:** FM (28 params, op*.ratio side-effect vs _baseFreq), Bass (drive curve), Wavetable (PeriodicWave pos swap), the three Samplers (override toJSON/fromJSON with super), Swarm/SampleSwarm (drift timers), Midi (bespoke flat JSON + step/fmt descriptor fields), Drum (stub). Regression-guarded by `tests/tests/machines/param_spec.js`, which asserts each converted machine's `getParamList()`/`resolveAudioParam()`/JSON round-trip against the original hand-written descriptors.

@@ -58,20 +58,38 @@ function _buildCrusherCurve(amount) {
 }
 
 export class NoiseMachine extends Machine {
+  // 'color' is modulatable but JS-only (no AudioParam): it sets Q on both
+  // bandpass filters via apply. 'crush' rebuilds the waveshaper curve.
+  static SPEC = {
+    'color':        { label: 'Color', type: 'number', min: 0, max: 1, default: 0.3,
+                      modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'js',
+                      apply: (v, t, m) => {
+                        m._colorBP.Q.setTargetAtTime(m._colorQ(), t, 0.01);
+                        m._bodyBP.Q.setTargetAtTime(m._bodyQ(), t, 0.01);
+                      } },
+    'color.freq':   { label: 'Color Freq', type: 'number', min: 200, max: 8000, default: 2000,
+                      modulatable: true, lfoMin: 200, lfoMax: 8000,
+                      target: m => m._colorBP.frequency, schedule: 'setTarget', tc: 0.01 },
+    'body.freq':    { label: 'Body Freq', type: 'number', min: 80, max: 2000, default: 400,
+                      modulatable: true, lfoMin: 80, lfoMax: 2000,
+                      target: m => m._bodyBP.frequency, schedule: 'setTarget', tc: 0.01 },
+    'body.level':   { label: 'Body', type: 'number', min: 0, max: 1, default: 0.5,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m._bodyGain.gain, schedule: 'setTarget', tc: 0.01 },
+    'crush':        { label: 'Crush', type: 'number', min: 0, max: 1, default: 0.0, plockMode: 'js',
+                      apply: (v, t, m) => { m._crusher.curve = _buildCrusherCurve(v); } },
+    'decay':        { label: 'Decay', type: 'number', min: 0.01, max: 4.0, default: 0.25, plockMode: 'js' },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m.outputGain.gain, schedule: 'setValue' },
+  };
+
   constructor(context) {
     super(context);
     this.type  = 'noise';
     this.label = 'Noise';
 
-    this._params = {
-      'color':        0.3,
-      'color.freq':   2000,
-      'body.freq':    400,
-      'body.level':   0.5,
-      'crush':        0.0,
-      'decay':        0.25,
-      'output.level': 0.8,
-    };
+    this._initSpec();
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
@@ -169,57 +187,6 @@ export class NoiseMachine extends Machine {
     this._trimGain.disconnect();
   }
 
-  setParam(path, value, time) {
-    this._params[path] = value;
-    const t = time ?? this.context.currentTime;
-
-    switch (path) {
-      case 'color':
-        this._colorBP.Q.setTargetAtTime(this._colorQ(), t, 0.01);
-        this._bodyBP.Q.setTargetAtTime(this._bodyQ(), t, 0.01);
-        break;
-      case 'color.freq':
-        this._colorBP.frequency.setTargetAtTime(value, t, 0.01);
-        break;
-      case 'body.freq':
-        this._bodyBP.frequency.setTargetAtTime(value, t, 0.01);
-        break;
-      case 'body.level':
-        this._bodyGain.gain.setTargetAtTime(value, t, 0.01);
-        break;
-      case 'crush':
-        this._crusher.curve = _buildCrusherCurve(value);
-        break;
-      case 'output.level':
-        this.outputGain.gain.setValueAtTime(value, t);
-        break;
-    }
-  }
-
-  getParam(path) { return this._params[path]; }
-
-  getParamList() {
-    return [
-      { path: 'color',        label: 'Color',      type: 'number', min: 0,    max: 1,    default: 0.3,  modulatable: true, lfoMin: 0,   lfoMax: 1,    plockMode: 'js'        },
-      { path: 'color.freq',   label: 'Color Freq', type: 'number', min: 200,  max: 8000, default: 2000, modulatable: true, lfoMin: 200, lfoMax: 8000, plockMode: 'audioParam' },
-      { path: 'body.freq',    label: 'Body Freq',  type: 'number', min: 80,   max: 2000, default: 400,  modulatable: true, lfoMin: 80,  lfoMax: 2000, plockMode: 'audioParam' },
-      { path: 'body.level',   label: 'Body',       type: 'number', min: 0,    max: 1,    default: 0.5,  modulatable: true, lfoMin: 0,   lfoMax: 1,    plockMode: 'audioParam' },
-      { path: 'crush',        label: 'Crush',      type: 'number', min: 0,    max: 1,    default: 0.0,                                                 plockMode: 'js'        },
-      { path: 'decay',        label: 'Decay',      type: 'number', min: 0.01, max: 4.0,  default: 0.25,                                                plockMode: 'js'        },
-      { path: 'output.level', label: 'Level',      type: 'number', min: 0,    max: 1,    default: 0.8,  modulatable: true, lfoMin: 0,   lfoMax: 1,    plockMode: 'audioParam' },
-    ];
-  }
-
-  resolveAudioParam(path) {
-    switch (path) {
-      case 'color.freq':   return this._colorBP.frequency;
-      case 'body.freq':    return this._bodyBP.frequency;
-      case 'body.level':   return this._bodyGain.gain;
-      case 'output.level': return this.outputGain.gain;
-      default: return null;
-    }
-  }
-
-  toJSON() { return { type: this.type, params: { ...this._params } }; }
-  fromJSON(obj) { Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v)); }
+  // Param interface derived from `static SPEC` (Machine base class). _colorQ/
+  // _bodyQ helpers above are referenced by the 'color' apply hook.
 }

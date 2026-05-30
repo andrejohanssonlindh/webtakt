@@ -28,19 +28,25 @@ const _noiseCache = { buf: null };
 const _getNoiseBuffer = ctx => getNoiseBuffer(ctx, _noiseCache, 0.25);
 
 export class KickSilkMachine extends Machine {
+  static SPEC = {
+    'tune':         { label: 'Tune', type: 'number', min: 20, max: 200, default: 60,
+                      modulatable: true, lfoMin: 20, lfoMax: 200,
+                      target: m => m._tuneOsc.frequency, schedule: 'setTarget', tc: 0.01 },
+    'decay':        { label: 'Decay', type: 'number', min: 0.05, max: 2.0, default: 0.45, plockMode: 'js' },
+    'sweep':        { label: 'Sweep', type: 'number', min: 1, max: 8, default: 4.0, plockMode: 'js' },
+    'punch':        { label: 'Punch', type: 'number', min: 0, max: 1, default: 0.7, plockMode: 'js' },
+    'punch.decay':  { label: 'Punch Decay', type: 'number', min: 0.005, max: 0.08, default: 0.025, plockMode: 'js' },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.9,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m.outputGain.gain, schedule: 'setValue' },
+  };
+
   constructor(context) {
     super(context);
     this.type  = 'kick.silk';
     this.label = 'Kick Silk';
 
-    this._params = {
-      'tune':         60,
-      'decay':        0.45,
-      'sweep':        4.0,
-      'punch':        0.7,
-      'punch.decay':  0.025,
-      'output.level': 0.9,
-    };
+    this._initSpec();
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
@@ -134,45 +140,5 @@ export class KickSilkMachine extends Machine {
     this._trimGain.disconnect();
   }
 
-  setParam(path, value, time) {
-    this._params[path] = value;
-    const t = time ?? this.context.currentTime;
-    if (path === 'tune') {
-      this._tuneOsc.frequency.setTargetAtTime(value, t, 0.01);
-    }
-    if (path === 'output.level') {
-      this.outputGain.gain.setValueAtTime(value, t);
-    }
-  }
-
-  getParam(path) {
-    return this._params[path];
-  }
-
-  getParamList() {
-    return [
-      { path: 'tune',         label: 'Tune',        type: 'number', min: 20,    max: 200,  default: 60,    modulatable: true, lfoMin: 20, lfoMax: 200, plockMode: 'audioParam' },
-      { path: 'decay',        label: 'Decay',        type: 'number', min: 0.05,  max: 2.0,  default: 0.45,                                              plockMode: 'js'        },
-      { path: 'sweep',        label: 'Sweep',        type: 'number', min: 1,     max: 8,    default: 4.0,                                               plockMode: 'js'        },
-      { path: 'punch',        label: 'Punch',        type: 'number', min: 0,     max: 1,    default: 0.7,                                               plockMode: 'js'        },
-      { path: 'punch.decay',  label: 'Punch Decay',  type: 'number', min: 0.005, max: 0.08, default: 0.025,                                             plockMode: 'js'        },
-      { path: 'output.level', label: 'Level',        type: 'number', min: 0,     max: 1,    default: 0.9,   modulatable: true, lfoMin: 0,  lfoMax: 1,   plockMode: 'audioParam' },
-    ];
-  }
-
-  resolveAudioParam(path) {
-    switch (path) {
-      case 'tune':         return this._tuneOsc.frequency;
-      case 'output.level': return this.outputGain.gain;
-      default: return null;
-    }
-  }
-
-  toJSON() {
-    return { type: this.type, params: { ...this._params } };
-  }
-
-  fromJSON(obj) {
-    Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v));
-  }
+  // Param interface derived from `static SPEC` (Machine base class).
 }

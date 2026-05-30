@@ -28,18 +28,29 @@ import { Machine } from './Machine.js';
 import { makeTrimGain } from './LoudnessTrim.js';
 
 export class SynthMachine extends Machine {
+  // Declarative param spec — see Machine._initSpec/setParam/getParamList.
+  static SPEC = {
+    'osc.waveform': { label: 'Waveform', type: 'enum', options: ['sine','sawtooth','square','triangle'],
+                      default: 'sawtooth', plockMode: 'js', apply: (v, t, m) => { m._oscMain.type = v; } },
+    'osc.detune':   { label: 'Detune', type: 'number', min: -100, max: 100, default: 0, hidden: true,
+                      modulatable: true, lfoMin: -100, lfoMax: 100,
+                      target: m => m._oscMain.detune, schedule: 'setTarget', tc: 0.005 },
+    'sub.level':    { label: 'Sub Level', type: 'number', min: 0, max: 1, default: 0.3,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m._subGain.gain, schedule: 'setTarget', tc: 0.005 },
+    'sub.waveform': { label: 'Sub Waveform', type: 'enum', options: ['sine','sawtooth','square','triangle'],
+                      default: 'square', plockMode: 'js', apply: (v, t, m) => { m._oscSub.type = v; } },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m.outputGain.gain, schedule: 'setValue' },
+  };
+
   constructor(context) {
     super(context);
     this.type  = 'synth';
     this.label = 'Synth';
 
-    this._params = {
-      'osc.waveform':  'sawtooth',
-      'osc.detune':    0,
-      'sub.level':     0.3,
-      'sub.waveform':  'square',
-      'output.level':  0.8,
-    };
+    this._initSpec();
 
     // Persistent output gain
     this.outputGain = context.createGain();
@@ -94,57 +105,6 @@ export class SynthMachine extends Machine {
     this._trimGain.disconnect();
   }
 
-  setParam(path, value, time) {
-    this._params[path] = value;
-    const t = time ?? this.context.currentTime;
-
-    switch (path) {
-      case 'osc.waveform':
-        this._oscMain.type = value;
-        break;
-      case 'osc.detune':
-        this._oscMain.detune.setTargetAtTime(value, t, 0.005);
-        break;
-      case 'sub.level':
-        this._subGain.gain.setTargetAtTime(value, t, 0.005);
-        break;
-      case 'sub.waveform':
-        this._oscSub.type = value;
-        break;
-      case 'output.level':
-        this.outputGain.gain.setValueAtTime(value, t);
-        break;
-    }
-  }
-
-  getParam(path) {
-    return this._params[path];
-  }
-
-  getParamList() {
-    return [
-      { path: 'osc.waveform',  label: 'Waveform',    type: 'enum',   options: ['sine','sawtooth','square','triangle'],                                   plockMode: 'js'        },
-      { path: 'osc.detune',    label: 'Detune',       type: 'number', min: -100, max: 100, default: 0,   modulatable: true, lfoMin: -100, lfoMax: 100,   plockMode: 'audioParam', hidden: true },
-      { path: 'sub.level',     label: 'Sub Level',    type: 'number', min: 0,    max: 1,   default: 0.3, modulatable: true, lfoMin: 0,    lfoMax: 1,     plockMode: 'audioParam' },
-      { path: 'sub.waveform',  label: 'Sub Waveform', type: 'enum',   options: ['sine','sawtooth','square','triangle'],                                   plockMode: 'js'        },
-      { path: 'output.level',  label: 'Level',        type: 'number', min: 0,    max: 1,   default: 0.8, modulatable: true, lfoMin: 0,    lfoMax: 1,     plockMode: 'audioParam' },
-    ];
-  }
-
-  resolveAudioParam(path) {
-    switch (path) {
-      case 'osc.detune':   return this._oscMain.detune;
-      case 'sub.level':    return this._subGain.gain;
-      case 'output.level': return this.outputGain.gain;
-      default: return null;
-    }
-  }
-
-  toJSON() {
-    return { type: this.type, params: { ...this._params } };
-  }
-
-  fromJSON(obj) {
-    Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v));
-  }
+  // setParam / getParam / getParamList / resolveAudioParam / toJSON / fromJSON
+  // are all derived from `static SPEC` by the Machine base class.
 }

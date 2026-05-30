@@ -70,19 +70,37 @@ function _getIntervals(chordName, inversion) {
 }
 
 export class ChordMachine extends Machine {
+  // Most params are JS side-effects that recompute the 4 voice freqs/detunes via
+  // _applyChord. 'osc.detune' is manualTarget: its AudioParam (osc[0].detune) is
+  // exposed to LFO/resolveAudioParam, but setParam writes it through _applyChord
+  // (so per-voice spread is preserved), NOT a direct auto-schedule.
+  static SPEC = {
+    'osc.detune':   { label: 'Detune', type: 'number', min: -100, max: 100, default: 0, hidden: true,
+                      modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam',
+                      target: m => m._oscs[0].detune, manualTarget: true,
+                      apply: (v, t, m) => m._applyChord(m._rootFreq, t) },
+    'chord':        { label: 'Chord', type: 'enum', options: CHORD_NAMES, default: 'major',
+                      plockMode: 'js', apply: (v, t, m) => m._applyChord(m._rootFreq, t) },
+    'inversion':    { label: 'Inversion', type: 'number', min: 0, max: 3, default: 0,
+                      plockMode: 'js', apply: (v, t, m) => m._applyChord(m._rootFreq, t) },
+    'spread':       { label: 'Spread', type: 'number', min: 0, max: 50, default: 8,
+                      modulatable: true, lfoMin: 0, lfoMax: 50, plockMode: 'js',
+                      apply: (v, t, m) => m._applyChord(m._rootFreq, t) },
+    'waveform':     { label: 'Waveform', type: 'enum', options: ['sawtooth','square','triangle','sine'],
+                      default: 'sawtooth', plockMode: 'js',
+                      apply: (v, t, m) => m._oscs.forEach(osc => { osc.type = v; }) },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.7,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m.outputGain.gain, schedule: 'setValue' },
+  };
+
   constructor(context) {
     super(context);
     this.type  = 'chord';
     this.label = 'Chord';
 
-    this._params = {
-      'osc.detune':   0,
-      'chord':        'major',
-      'inversion':    0,
-      'spread':       8,
-      'waveform':     'sawtooth',
-      'output.level': 0.7,
-    };
+    this._initSpec();
+    this._rootFreq = 440;   // needed before any _applyChord (setParam during fromJSON)
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
@@ -105,8 +123,6 @@ export class ChordMachine extends Machine {
       osc.start();
       return osc;
     });
-
-    this._rootFreq = 440;
   }
 
   _applyChord(rootFreq, time) {
@@ -138,51 +154,6 @@ export class ChordMachine extends Machine {
     this._trimGain.disconnect();
   }
 
-  setParam(path, value, time) {
-    this._params[path] = value;
-    const t = time ?? this.context.currentTime;
-
-    switch (path) {
-      case 'osc.detune':
-        // Master detune — re-apply chord spread on top
-        this._applyChord(this._rootFreq, t);
-        break;
-      case 'chord':
-      case 'inversion':
-      case 'spread':
-        this._applyChord(this._rootFreq, t);
-        break;
-      case 'waveform':
-        this._oscs.forEach(osc => { osc.type = value; });
-        break;
-      case 'output.level':
-        this.outputGain.gain.setValueAtTime(value, t);
-        break;
-    }
-  }
-
-  getParam(path) { return this._params[path]; }
-
-  getParamList() {
-    return [
-      { path: 'osc.detune',   label: 'Detune',     type: 'number', min: -100, max: 100, default: 0,   modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
-      { path: 'chord',        label: 'Chord',      type: 'enum',   options: CHORD_NAMES,                                                            plockMode: 'js'        },
-      { path: 'inversion',    label: 'Inversion',  type: 'number', min: 0,    max: 3,   default: 0,                                                 plockMode: 'js'        },
-      { path: 'spread',       label: 'Spread',     type: 'number', min: 0,    max: 50,  default: 8,   modulatable: true, lfoMin: 0,    lfoMax: 50,  plockMode: 'js'        },
-      { path: 'waveform',     label: 'Waveform',   type: 'enum',   options: ['sawtooth','square','triangle','sine'],                                 plockMode: 'js'        },
-      { path: 'output.level', label: 'Level',      type: 'number', min: 0,    max: 1,   default: 0.7, modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'audioParam' },
-    ];
-  }
-
-  resolveAudioParam(path) {
-    switch (path) {
-      case 'osc.detune':   return this._oscs[0].detune;
-      case 'output.level': return this.outputGain.gain;
-      // 'spread', 'chord', 'inversion', 'waveform' are JS-only
-      default: return null;
-    }
-  }
-
-  toJSON()      { return { type: this.type, params: { ...this._params } }; }
-  fromJSON(obj) { Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v)); }
+  // Param interface derived from `static SPEC` (Machine base class). The chord
+  // recompute side-effects live in _applyChord, referenced by the spec's apply hooks.
 }

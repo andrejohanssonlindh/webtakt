@@ -33,19 +33,27 @@ const RATIOS   = [1.0, 1.3420, 1.2312, 1.6420, 1.9689, 2.0782];
 const BASE_FREQ = 300;
 
 export class HiHatMachine extends Machine {
+  static SPEC = {
+    'decay':        { label: 'Decay', type: 'number', min: 0.01, max: 0.25, default: 0.06, plockMode: 'js' },
+    'open.decay':   { label: 'Open Decay', type: 'number', min: 0.1, max: 2.0, default: 0.5, plockMode: 'js' },
+    'open':         { label: 'Open', type: 'boolean', default: false, plockMode: 'js' },
+    'cutoff':       { label: 'Cutoff', type: 'number', min: 500, max: 12000, default: 3000,
+                      modulatable: true, lfoMin: 500, lfoMax: 12000,
+                      target: m => m._hp.frequency, schedule: 'setTarget', tc: 0.01 },
+    'tone':         { label: 'Tone', type: 'number', min: 0, max: 8, default: 2.0,
+                      modulatable: true, lfoMin: 0, lfoMax: 8,
+                      target: m => m._hp.Q, schedule: 'setTarget', tc: 0.01 },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.75,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m.outputGain.gain, schedule: 'setValue' },
+  };
+
   constructor(context) {
     super(context);
     this.type  = 'hihat';
     this.label = 'HiHat';
 
-    this._params = {
-      'decay':        0.06,
-      'open.decay':   0.5,
-      'open':         false,
-      'cutoff':       3000,
-      'tone':         2.0,
-      'output.level': 0.75,
-    };
+    this._initSpec();
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
@@ -117,44 +125,5 @@ export class HiHatMachine extends Machine {
     this._trimGain.disconnect();
   }
 
-  setParam(path, value, time) {
-    this._params[path] = value;
-    const t = time ?? this.context.currentTime;
-    switch (path) {
-      case 'cutoff':
-        this._hp.frequency.setTargetAtTime(value, t, 0.01);
-        break;
-      case 'tone':
-        this._hp.Q.setTargetAtTime(value, t, 0.01);
-        break;
-      case 'output.level':
-        this.outputGain.gain.setValueAtTime(value, t);
-        break;
-    }
-  }
-
-  getParam(path) { return this._params[path]; }
-
-  getParamList() {
-    return [
-      { path: 'decay',        label: 'Decay',      type: 'number',  min: 0.01, max: 0.25,  default: 0.06,                                               plockMode: 'js'        },
-      { path: 'open.decay',   label: 'Open Decay', type: 'number',  min: 0.1,  max: 2.0,   default: 0.5,                                                plockMode: 'js'        },
-      { path: 'open',         label: 'Open',       type: 'boolean',                         default: false,                                              plockMode: 'js'        },
-      { path: 'cutoff',       label: 'Cutoff',     type: 'number',  min: 500,  max: 12000,  default: 3000, modulatable: true, lfoMin: 500,  lfoMax: 12000, plockMode: 'audioParam' },
-      { path: 'tone',         label: 'Tone',       type: 'number',  min: 0,    max: 8,      default: 2.0,  modulatable: true, lfoMin: 0,    lfoMax: 8,     plockMode: 'audioParam' },
-      { path: 'output.level', label: 'Level',      type: 'number',  min: 0,    max: 1,      default: 0.75, modulatable: true, lfoMin: 0,    lfoMax: 1,     plockMode: 'audioParam' },
-    ];
-  }
-
-  resolveAudioParam(path) {
-    switch (path) {
-      case 'cutoff':       return this._hp.frequency;
-      case 'tone':         return this._hp.Q;
-      case 'output.level': return this.outputGain.gain;
-      default: return null;
-    }
-  }
-
-  toJSON() { return { type: this.type, params: { ...this._params } }; }
-  fromJSON(obj) { Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v)); }
+  // Param interface derived from `static SPEC` (Machine base class).
 }

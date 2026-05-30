@@ -45,7 +45,12 @@ js/
     Step.js             — Single step: note, vel, length, nudge, retrigger, chance, condition, plocks
     Condition.js        — Condition objects: ratio-based (hits:of) and always
   machines/
-    Machine.js          — Abstract base class all machines extend
+    Machine.js          — Abstract base class all machines extend. Optional declarative
+                          param layer: a machine defines `static SPEC` (path → descriptor +
+                          execution fields) and calls `this._initSpec()` in its constructor;
+                          the base then derives setParam/getParam/getParamList (cached on the
+                          class)/resolveAudioParam/toJSON/fromJSON. Opt-in & incremental —
+                          un-converted machines keep hand-rolled methods. See design/machines.md.
     SynthMachine.js     — Main oscillator + sub-oscillator, waveform select
     KickMachine.js      — Backward-compat alias → KickSilkMachine (type: 'kick')
     KickSilkMachine.js  — Clean kick: sine + pitch sweep + noise punch (type: 'kick.silk')

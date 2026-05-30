@@ -37,6 +37,46 @@ export class Machine {
     this.label   = 'Machine';
   }
 
+  // ──────────────────────────────────────────────────────────────────────
+  // Declarative param spec (opt-in)
+  // ──────────────────────────────────────────────────────────────────────
+  // A machine opts in by defining `static SPEC` and calling `this._initSpec()`
+  // at the END of its constructor (after its audio nodes exist). The base then
+  // derives setParam / getParam / getParamList / resolveAudioParam / toJSON /
+  // fromJSON from the spec, so the machine deletes those six members.
+  //
+  // Machines that do NOT call _initSpec() keep their own hand-rolled overrides
+  // untouched — both styles coexist, so migration is incremental.
+  //
+  // Spec entry per path:
+  //   label, type ('number'|'enum'|'boolean'), min, max, default, options,
+  //   hidden, modulatable, lfoMin, lfoMax, plockMode   — descriptor fields,
+  //     copied verbatim into getParamList() (these NAMES are a contract read by
+  //     the sequencer, LFO routing, UI panels, formatParam, serialization).
+  //   target       (m) => AudioParam   — lazy; drives auto-schedule + resolveAudioParam
+  //   schedule     'setTarget' (default) | 'setValue'
+  //   tc           setTargetAtTime time-constant (default 0.005)
+  //   apply        (value, time, m) => void  — JS side-effect, runs after store
+  //   manualTarget true → `target` is exposed to resolveAudioParam/LFO only;
+  //                setParam does NOT auto-schedule it (the `apply` hook owns the
+  //                write). Used by ChordMachine 'osc.detune' and samplers'
+  //                'output.level' (resolved for LFO, applied per-noteOn).
+  //
+  // `default` doubles as the _params init value. SPEC is static (one allocation
+  // per class); getParamList() is cached on the class (descriptors are read-only).
+
+  /** Initialise _params from the class SPEC defaults. Call at end of constructor. */
+  _initSpec() {
+    this._spec = this.constructor.SPEC;
+    if (!this._params) this._params = {};
+    for (const [path, s] of Object.entries(this._spec)) {
+      if (!(path in this._params)) this._params[path] = s.default;
+    }
+  }
+
+  /** True when this instance opted into the declarative spec. */
+  _hasSpec() { return this._spec != null; }
+
   /** @param {number} midiNote @param {number} velocity @param {number} time */
   noteOn(midiNote, velocity, time) {
     throw new Error(`${this.constructor.name} must implement noteOn()`);
@@ -53,21 +93,70 @@ export class Machine {
    * @param {number} [time] — optional AudioContext time for scheduled change
    */
   setParam(path, value, time) {
-    throw new Error(`${this.constructor.name} must implement setParam()`);
+    if (!this._hasSpec()) {
+      throw new Error(`${this.constructor.name} must implement setParam()`);
+    }
+    this._params[path] = value;
+    const s = this._spec[path];
+    if (!s) return;                       // unknown path → store-only (matches old switch default)
+    const t = time ?? this.context.currentTime;
+    if (s.target && !s.manualTarget) {
+      const ap = s.target(this);
+      if (s.schedule === 'setValue') ap.setValueAtTime(value, t);
+      else ap.setTargetAtTime(value, t, s.tc ?? 0.005);
+    }
+    if (s.apply) s.apply(value, t, this);
   }
 
   /** @param {string} path */
   getParam(path) {
-    throw new Error(`${this.constructor.name} must implement getParam()`);
+    if (!this._hasSpec()) {
+      throw new Error(`${this.constructor.name} must implement getParam()`);
+    }
+    return this._params[path];
   }
 
   /**
    * Returns list of all controllable parameters for this machine.
    * Used by LFO destination selector, mod wheel assignment, and p-lock editor.
+   * Spec-driven machines derive (and cache) this from `static SPEC`; the cache
+   * lives on the class because the spec is static and the result is read-only.
    * @returns {{ path: string, label: string, min: number, max: number, default: number }[]}
    */
   getParamList() {
-    return [];
+    if (!this._hasSpec()) return [];
+    const cls = this.constructor;
+    if (!cls._paramListCache) cls._paramListCache = Machine._buildParamList(cls.SPEC);
+    return cls._paramListCache;
+  }
+
+  /**
+   * Build descriptor array from a SPEC, emitting fields with the SAME branching
+   * the hand-written getParamList()s used, so truthiness matches exactly (a
+   * stray `undefined` field would change `p.hidden`/`p.modulatable` checks).
+   */
+  static _buildParamList(spec) {
+    return Object.entries(spec).map(([path, s]) => {
+      const d = { path, label: s.label, type: s.type };
+      if (s.type === 'number')  { d.min = s.min; d.max = s.max; d.default = s.default; }
+      if (s.type === 'enum')    { d.options = s.options; }
+      if (s.type === 'boolean') { d.default = s.default; }
+      if (s.modulatable)        { d.modulatable = true; d.lfoMin = s.lfoMin; d.lfoMax = s.lfoMax; }
+      else if ('modulatable' in s) d.modulatable = false;   // samplers emit this explicitly
+      if (s.hidden) d.hidden = true;
+      d.plockMode = s.plockMode ?? (s.target ? 'audioParam' : 'js');
+      return d;
+    });
+  }
+
+  /**
+   * @param {string} path @returns {AudioParam|null}
+   * Spec-driven: returns the param's `target()` (incl. manualTarget params, so
+   * LFO/mod-wheel can still bind them). Un-converted machines override this.
+   */
+  resolveAudioParam(path) {
+    const s = this._spec?.[path];
+    return s?.target ? s.target(this) : null;
   }
 
   /** @param {AudioNode} destinationNode */
@@ -86,12 +175,16 @@ export class Machine {
   }
 
   toJSON() {
+    if (this._hasSpec()) return { type: this.type, params: { ...this._params } };
     return { type: this.type };
   }
 
   /** @param {object} obj */
   fromJSON(obj) {
-    // subclasses implement
+    if (this._hasSpec()) {
+      Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v));
+    }
+    // non-spec subclasses implement
   }
 
   /**

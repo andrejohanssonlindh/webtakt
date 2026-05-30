@@ -33,19 +33,24 @@ import { Machine } from './Machine.js';
 import { makeTrimGain } from './LoudnessTrim.js';
 
 export class KarplusMachine extends Machine {
+  // All synthesis params are JS-only (read per-noteOn during buffer synthesis).
+  static SPEC = {
+    'damping':      { label: 'Damping', type: 'number', min: 0, max: 1, default: 0.5, plockMode: 'js' },
+    'feedback':     { label: 'Feedback', type: 'number', min: 0.8, max: 0.999, default: 0.985, plockMode: 'js' },
+    'excite':       { label: 'Excite', type: 'number', min: 1, max: 50, default: 8, plockMode: 'js' },
+    'excite.tone':  { label: 'Excite Tone', type: 'number', min: 200, max: 20000, default: 8000, plockMode: 'js' },
+    'stretch':      { label: 'Stretch', type: 'number', min: -12, max: 12, default: 0, plockMode: 'js' },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m.outputGain.gain, schedule: 'setValue' },
+  };
+
   constructor(context) {
     super(context);
     this.type  = 'karplus';
     this.label = 'Karplus';
 
-    this._params = {
-      'damping':      0.5,
-      'feedback':     0.985,
-      'excite':       8,
-      'excite.tone':  8000,
-      'stretch':      0,
-      'output.level': 0.8,
-    };
+    this._initSpec();
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
@@ -157,34 +162,5 @@ export class KarplusMachine extends Machine {
     this._trimGain.disconnect();
   }
 
-  setParam(path, value, time) {
-    this._params[path] = value;
-    if (path === 'output.level') {
-      const t = time ?? this.context.currentTime;
-      this.outputGain.gain.setValueAtTime(value, t);
-    }
-  }
-
-  getParam(path) { return this._params[path]; }
-
-  getParamList() {
-    return [
-      { path: 'damping',      label: 'Damping',     type: 'number', min: 0,    max: 1,     default: 0.5,   plockMode: 'js' },
-      { path: 'feedback',     label: 'Feedback',    type: 'number', min: 0.8,  max: 0.999, default: 0.985, plockMode: 'js' },
-      { path: 'excite',       label: 'Excite',      type: 'number', min: 1,    max: 50,    default: 8,     plockMode: 'js' },
-      { path: 'excite.tone',  label: 'Excite Tone', type: 'number', min: 200,  max: 20000, default: 8000,  plockMode: 'js' },
-      { path: 'stretch',      label: 'Stretch',     type: 'number', min: -12,  max: 12,    default: 0,     plockMode: 'js' },
-      { path: 'output.level', label: 'Level',       type: 'number', min: 0,    max: 1,     default: 0.8,   modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
-    ];
-  }
-
-  resolveAudioParam(path) {
-    switch (path) {
-      case 'output.level': return this.outputGain.gain;
-      default: return null;
-    }
-  }
-
-  toJSON()      { return { type: this.type, params: { ...this._params } }; }
-  fromJSON(obj) { Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v)); }
+  // Param interface derived from `static SPEC` (Machine base class).
 }

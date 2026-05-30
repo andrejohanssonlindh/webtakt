@@ -37,19 +37,32 @@ const _noiseCache = { buf: null };
 const _getNoiseBuffer = ctx => getNoiseBuffer(ctx, _noiseCache, 0.5);
 
 export class SnareMachine extends Machine {
+  static SPEC = {
+    'tune':         { label: 'Tune', type: 'number', min: 100, max: 400, default: 200,
+                      modulatable: true, lfoMin: 100, lfoMax: 400,
+                      target: m => m._tuneOsc.frequency, schedule: 'setTarget', tc: 0.01 },
+    'decay':        { label: 'Decay', type: 'number', min: 0.05, max: 1.0, default: 0.18,
+                      plockMode: 'js' },
+    'tone':         { label: 'Tone', type: 'number', min: 0, max: 1, default: 0.4,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m._toneGain.gain, schedule: 'setTarget', tc: 0.01 },
+    'snap':         { label: 'Snap', type: 'number', min: 0, max: 1, default: 0.8,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m._snapGain.gain, schedule: 'setTarget', tc: 0.01 },
+    'noise.cutoff': { label: 'Noise Cut', type: 'number', min: 200, max: 8000, default: 2000,
+                      modulatable: true, lfoMin: 200, lfoMax: 8000,
+                      target: m => m._noiseHP.frequency, schedule: 'setTarget', tc: 0.01 },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m.outputGain.gain, schedule: 'setValue' },
+  };
+
   constructor(context) {
     super(context);
     this.type  = 'snare';
     this.label = 'Snare';
 
-    this._params = {
-      'tune':         200,
-      'decay':        0.18,
-      'snap':         0.8,
-      'tone':         0.4,
-      'noise.cutoff': 2000,
-      'output.level': 0.85,
-    };
+    this._initSpec();
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
@@ -152,52 +165,5 @@ export class SnareMachine extends Machine {
     this._trimGain.disconnect();
   }
 
-  setParam(path, value, time) {
-    this._params[path] = value;
-    const t = time ?? this.context.currentTime;
-    switch (path) {
-      case 'tune':
-        this._tuneOsc.frequency.setTargetAtTime(value, t, 0.01);
-        break;
-      case 'tone':
-        this._toneGain.gain.setTargetAtTime(value, t, 0.01);
-        break;
-      case 'snap':
-        this._snapGain.gain.setTargetAtTime(value, t, 0.01);
-        break;
-      case 'noise.cutoff':
-        this._noiseHP.frequency.setTargetAtTime(value, t, 0.01);
-        break;
-      case 'output.level':
-        this.outputGain.gain.setValueAtTime(value, t);
-        break;
-    }
-  }
-
-  getParam(path) { return this._params[path]; }
-
-  getParamList() {
-    return [
-      { path: 'tune',         label: 'Tune',      type: 'number', min: 100,  max: 400,  default: 200,  modulatable: true, lfoMin: 100,  lfoMax: 400,  plockMode: 'audioParam' },
-      { path: 'decay',        label: 'Decay',     type: 'number', min: 0.05, max: 1.0,  default: 0.18,                                                plockMode: 'js'        },
-      { path: 'tone',         label: 'Tone',      type: 'number', min: 0,    max: 1,    default: 0.4,  modulatable: true, lfoMin: 0,    lfoMax: 1,    plockMode: 'audioParam' },
-      { path: 'snap',         label: 'Snap',      type: 'number', min: 0,    max: 1,    default: 0.8,  modulatable: true, lfoMin: 0,    lfoMax: 1,    plockMode: 'audioParam' },
-      { path: 'noise.cutoff', label: 'Noise Cut', type: 'number', min: 200,  max: 8000, default: 2000, modulatable: true, lfoMin: 200,  lfoMax: 8000, plockMode: 'audioParam' },
-      { path: 'output.level', label: 'Level',     type: 'number', min: 0,    max: 1,    default: 0.85, modulatable: true, lfoMin: 0,    lfoMax: 1,    plockMode: 'audioParam' },
-    ];
-  }
-
-  resolveAudioParam(path) {
-    switch (path) {
-      case 'tune':         return this._tuneOsc.frequency;
-      case 'tone':         return this._toneGain.gain;
-      case 'snap':         return this._snapGain.gain;
-      case 'noise.cutoff': return this._noiseHP.frequency;
-      case 'output.level': return this.outputGain.gain;
-      default: return null;
-    }
-  }
-
-  toJSON() { return { type: this.type, params: { ...this._params } }; }
-  fromJSON(obj) { Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v)); }
+  // Param interface derived from `static SPEC` (Machine base class).
 }

@@ -35,19 +35,26 @@ import { Machine } from './Machine.js';
 import { makeTrimGain } from './LoudnessTrim.js';
 
 export class CombMachine extends Machine {
+  // All partial params are JS-only (read per-noteOn during buffer synthesis).
+  // 'decay'/'mix' are modulatable but plockMode:'js' (no AudioParam target);
+  // 'ratio'/'decay2'/'strike' emit modulatable:false explicitly.
+  static SPEC = {
+    'ratio':        { label: 'Ratio', type: 'number', min: 0.5, max: 8, default: 2.756, modulatable: false, plockMode: 'js' },
+    'decay':        { label: 'Decay', type: 'number', min: 0.1, max: 8, default: 1.8, modulatable: true, lfoMin: 0.1, lfoMax: 8, plockMode: 'js' },
+    'decay2':       { label: 'Decay 2', type: 'number', min: 0.1, max: 2, default: 0.35, modulatable: false, plockMode: 'js' },
+    'mix':          { label: 'Mix', type: 'number', min: 0, max: 1, default: 0.4, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'js' },
+    'strike':       { label: 'Strike', type: 'number', min: 0, max: 1, default: 0.6, modulatable: false, plockMode: 'js' },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m.outputGain.gain, schedule: 'setValue' },
+  };
+
   constructor(context) {
     super(context);
     this.type  = 'comb';
     this.label = 'Comb';
 
-    this._params = {
-      'ratio':        2.756,
-      'decay':        1.8,
-      'decay2':       0.35,
-      'mix':          0.4,
-      'strike':       0.6,
-      'output.level': 0.8,
-    };
+    this._initSpec();
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
@@ -165,34 +172,5 @@ export class CombMachine extends Machine {
     this._trimGain.disconnect();
   }
 
-  setParam(path, value, time) {
-    this._params[path] = value;
-    if (path === 'output.level') {
-      const t = time ?? this.context.currentTime;
-      this.outputGain.gain.setValueAtTime(value, t);
-    }
-  }
-
-  getParam(path) { return this._params[path]; }
-
-  getParamList() {
-    return [
-      { path: 'ratio',        label: 'Ratio',      type: 'number', min: 0.5,  max: 8,   default: 2.756, modulatable: false,                               plockMode: 'js'        },
-      { path: 'decay',        label: 'Decay',      type: 'number', min: 0.1,  max: 8,   default: 1.8,   modulatable: true,  lfoMin: 0.1,  lfoMax: 8,      plockMode: 'js'        },
-      { path: 'decay2',       label: 'Decay 2',    type: 'number', min: 0.1,  max: 2,   default: 0.35,  modulatable: false,                               plockMode: 'js'        },
-      { path: 'mix',          label: 'Mix',        type: 'number', min: 0,    max: 1,   default: 0.4,   modulatable: true,  lfoMin: 0,    lfoMax: 1,      plockMode: 'js'        },
-      { path: 'strike',       label: 'Strike',     type: 'number', min: 0,    max: 1,   default: 0.6,   modulatable: false,                               plockMode: 'js'        },
-      { path: 'output.level', label: 'Level',      type: 'number', min: 0,    max: 1,   default: 0.8,   modulatable: true,  lfoMin: 0,    lfoMax: 1,      plockMode: 'audioParam' },
-    ];
-  }
-
-  resolveAudioParam(path) {
-    switch (path) {
-      case 'output.level': return this.outputGain.gain;
-      default: return null;
-    }
-  }
-
-  toJSON()      { return { type: this.type, params: { ...this._params } }; }
-  fromJSON(obj) { Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v)); }
+  // Param interface derived from `static SPEC` (Machine base class).
 }

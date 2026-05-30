@@ -44,21 +44,33 @@ const _noiseCache = { buf: null };
 const _getNoiseBuffer = ctx => getNoiseBuffer(ctx, _noiseCache, 0.5);
 
 export class TransientMachine extends Machine {
+  // 'pitch' is modulatable but JS-only (used to set the body start freq in
+  // noteOn — not a standing AudioParam). 'body.wave' swaps the osc type.
+  static SPEC = {
+    'pitch':        { label: 'Pitch', type: 'number', min: 0, max: 2000, default: 0,
+                      modulatable: true, lfoMin: 0, lfoMax: 2000, plockMode: 'js' },
+    'pitch.end':    { label: 'Pitch End', type: 'number', min: 0.05, max: 1.0, default: 0.4, plockMode: 'js' },
+    'body.decay':   { label: 'Body Decay', type: 'number', min: 0.01, max: 2.0, default: 0.12, plockMode: 'js' },
+    'body.wave':    { label: 'Body Wave', type: 'enum', options: ['sine','triangle'], default: 'sine',
+                      plockMode: 'js', apply: (v, t, m) => { m._bodyOsc.type = v; } },
+    'click.freq':   { label: 'Click Freq', type: 'number', min: 100, max: 8000, default: 1200,
+                      modulatable: true, lfoMin: 100, lfoMax: 8000,
+                      target: m => m._clickOsc.frequency, schedule: 'setTarget', tc: 0.005 },
+    'click.decay':  { label: 'Click Decay', type: 'number', min: 0.001, max: 0.05, default: 0.008, plockMode: 'js' },
+    'noise.click':  { label: 'Crack', type: 'number', min: 0, max: 1, default: 0.3,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m._noiseClickGain.gain, schedule: 'setTarget', tc: 0.01 },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m.outputGain.gain, schedule: 'setValue' },
+  };
+
   constructor(context) {
     super(context);
     this.type  = 'transient';
     this.label = 'Transient';
 
-    this._params = {
-      'pitch':        0,      // 0 = follow MIDI note
-      'pitch.end':    0.4,    // sweep to 40% of start pitch
-      'body.decay':   0.12,
-      'body.wave':    'sine',
-      'click.freq':   1200,
-      'click.decay':  0.008,
-      'noise.click':  0.3,
-      'output.level': 0.85,
-    };
+    this._initSpec();
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
@@ -179,52 +191,5 @@ export class TransientMachine extends Machine {
     this._trimGain.disconnect();
   }
 
-  setParam(path, value, time) {
-    this._params[path] = value;
-    const t = time ?? this.context.currentTime;
-
-    switch (path) {
-      case 'click.freq':
-        this._clickOsc.frequency.setTargetAtTime(value, t, 0.005);
-        break;
-      case 'noise.click':
-        this._noiseClickGain.gain.setTargetAtTime(value, t, 0.01);
-        break;
-      case 'body.wave':
-        this._bodyOsc.type = value;
-        break;
-      case 'output.level':
-        this.outputGain.gain.setValueAtTime(value, t);
-        break;
-      // 'pitch', 'pitch.end', 'body.decay', 'click.decay' are JS-only — read in noteOn
-    }
-  }
-
-  getParam(path) { return this._params[path]; }
-
-  getParamList() {
-    return [
-      { path: 'pitch',        label: 'Pitch',       type: 'number', min: 0,     max: 2000, default: 0,    modulatable: true, lfoMin: 0,   lfoMax: 2000, plockMode: 'js'        },
-      { path: 'pitch.end',    label: 'Pitch End',   type: 'number', min: 0.05,  max: 1.0,  default: 0.4,                                               plockMode: 'js'        },
-      { path: 'body.decay',   label: 'Body Decay',  type: 'number', min: 0.01,  max: 2.0,  default: 0.12,                                              plockMode: 'js'        },
-      { path: 'body.wave',    label: 'Body Wave',   type: 'enum',   options: ['sine','triangle'],                                                       plockMode: 'js'        },
-      { path: 'click.freq',   label: 'Click Freq',  type: 'number', min: 100,   max: 8000, default: 1200, modulatable: true, lfoMin: 100, lfoMax: 8000, plockMode: 'audioParam' },
-      { path: 'click.decay',  label: 'Click Decay', type: 'number', min: 0.001, max: 0.05, default: 0.008,                                             plockMode: 'js'        },
-      { path: 'noise.click',  label: 'Crack',       type: 'number', min: 0,     max: 1,    default: 0.3,  modulatable: true, lfoMin: 0,   lfoMax: 1,    plockMode: 'audioParam' },
-      { path: 'output.level', label: 'Level',       type: 'number', min: 0,     max: 1,    default: 0.85, modulatable: true, lfoMin: 0,   lfoMax: 1,    plockMode: 'audioParam' },
-    ];
-  }
-
-  resolveAudioParam(path) {
-    switch (path) {
-      case 'click.freq':   return this._clickOsc.frequency;
-      case 'noise.click':  return this._noiseClickGain.gain;
-      case 'output.level': return this.outputGain.gain;
-      // 'pitch' is JS-only (used in noteOn), can't be an AudioParam target
-      default: return null;
-    }
-  }
-
-  toJSON() { return { type: this.type, params: { ...this._params } }; }
-  fromJSON(obj) { Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v)); }
+  // Param interface derived from `static SPEC` (Machine base class).
 }

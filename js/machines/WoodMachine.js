@@ -38,21 +38,39 @@ const _noiseCache = { buf: null };
 const _getNoiseBuffer = ctx => getNoiseBuffer(ctx, _noiseCache, 0.5);
 
 export class WoodMachine extends Machine {
+  // 'ring' = manualTarget: resolves to _ring1.Q for LFO, but setParam sets Q on
+  // both resonators via apply.
+  static SPEC = {
+    'freq1':        { label: 'Freq 1', type: 'number', min: 200, max: 4000, default: 600,
+                      modulatable: true, lfoMin: 200, lfoMax: 4000,
+                      target: m => m._ring1.frequency, schedule: 'setTarget', tc: 0.005 },
+    'freq2':        { label: 'Freq 2', type: 'number', min: 400, max: 8000, default: 1400,
+                      modulatable: true, lfoMin: 400, lfoMax: 8000,
+                      target: m => m._ring2.frequency, schedule: 'setTarget', tc: 0.005 },
+    'ring':         { label: 'Ring', type: 'number', min: 1, max: 30, default: 12,
+                      modulatable: true, lfoMin: 1, lfoMax: 30, plockMode: 'audioParam',
+                      target: m => m._ring1.Q, manualTarget: true,
+                      apply: (v, t, m) => {
+                        m._ring1.Q.setTargetAtTime(v, t, 0.005);
+                        m._ring2.Q.setTargetAtTime(v, t, 0.005);
+                      } },
+    'mix':          { label: 'Mix', type: 'number', min: 0, max: 1, default: 0.35, plockMode: 'js' },
+    'decay':        { label: 'Decay', type: 'number', min: 0.001, max: 0.4, default: 0.08, plockMode: 'js' },
+    'click':        { label: 'Click', type: 'number', min: 0, max: 1, default: 0.6, plockMode: 'js' },
+    'click.freq':   { label: 'Click Freq', type: 'number', min: 500, max: 12000, default: 3000,
+                      modulatable: true, lfoMin: 500, lfoMax: 12000,
+                      target: m => m._clickOsc.frequency, schedule: 'setTarget', tc: 0.005 },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 1.0,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m.outputGain.gain, schedule: 'setValue' },
+  };
+
   constructor(context) {
     super(context);
     this.type  = 'wood';
     this.label = 'Wood';
 
-    this._params = {
-      'freq1':        600,
-      'freq2':        1400,
-      'ring':         12,
-      'mix':          0.35,
-      'decay':        0.08,
-      'click':        0.6,
-      'click.freq':   3000,
-      'output.level': 1.0,
-    };
+    this._initSpec();
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
@@ -170,57 +188,5 @@ export class WoodMachine extends Machine {
     this._trimGain.disconnect();
   }
 
-  setParam(path, value, time) {
-    this._params[path] = value;
-    const t = time ?? this.context.currentTime;
-
-    switch (path) {
-      case 'freq1':
-        this._ring1.frequency.setTargetAtTime(value, t, 0.005);
-        break;
-      case 'freq2':
-        this._ring2.frequency.setTargetAtTime(value, t, 0.005);
-        break;
-      case 'ring':
-        this._ring1.Q.setTargetAtTime(value, t, 0.005);
-        this._ring2.Q.setTargetAtTime(value, t, 0.005);
-        break;
-      case 'click.freq':
-        this._clickOsc.frequency.setTargetAtTime(value, t, 0.005);
-        break;
-      case 'output.level':
-        this.outputGain.gain.setValueAtTime(value, t);
-        break;
-      // 'mix', 'decay', 'click' — JS-only, read in noteOn
-    }
-  }
-
-  getParam(path) { return this._params[path]; }
-
-  getParamList() {
-    return [
-      { path: 'freq1',        label: 'Freq 1',     type: 'number', min: 200,   max: 4000,  default: 600,  modulatable: true,  lfoMin: 200,   lfoMax: 4000,  plockMode: 'audioParam' },
-      { path: 'freq2',        label: 'Freq 2',     type: 'number', min: 400,   max: 8000,  default: 1400, modulatable: true,  lfoMin: 400,   lfoMax: 8000,  plockMode: 'audioParam' },
-      { path: 'ring',         label: 'Ring',       type: 'number', min: 1,     max: 30,    default: 12,   modulatable: true,  lfoMin: 1,     lfoMax: 30,    plockMode: 'audioParam' },
-      { path: 'mix',          label: 'Mix',        type: 'number', min: 0,     max: 1,     default: 0.35,                                                   plockMode: 'js'        },
-      { path: 'decay',        label: 'Decay',      type: 'number', min: 0.001, max: 0.4,   default: 0.08,                                                   plockMode: 'js'        },
-      { path: 'click',        label: 'Click',      type: 'number', min: 0,     max: 1,     default: 0.6,                                                    plockMode: 'js'        },
-      { path: 'click.freq',   label: 'Click Freq', type: 'number', min: 500,   max: 12000, default: 3000, modulatable: true,  lfoMin: 500,   lfoMax: 12000, plockMode: 'audioParam' },
-      { path: 'output.level', label: 'Level',      type: 'number', min: 0,     max: 1,     default: 1.0,  modulatable: true,  lfoMin: 0,     lfoMax: 1,     plockMode: 'audioParam' },
-    ];
-  }
-
-  resolveAudioParam(path) {
-    switch (path) {
-      case 'freq1':        return this._ring1.frequency;
-      case 'freq2':        return this._ring2.frequency;
-      case 'ring':         return this._ring1.Q;
-      case 'click.freq':   return this._clickOsc.frequency;
-      case 'output.level': return this.outputGain.gain;
-      default: return null;
-    }
-  }
-
-  toJSON()      { return { type: this.type, params: { ...this._params } }; }
-  fromJSON(obj) { Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v)); }
+  // Param interface derived from `static SPEC` (Machine base class).
 }
