@@ -247,9 +247,16 @@ suite('Param spec (declarative machines)', () => {
     test(`${type}: toJSON/fromJSON round-trips all params`, async () => {
       const { track } = await makeOfflineTrack(type, 0.1);
       const m = track.machine;
-      // Mutate one numeric + one enum param, then round-trip into a fresh machine.
-      const numParam = m.getParamList().find(d => d.type === 'number');
-      m.setParam(numParam.path, (numParam.min + numParam.max) / 2);
+
+      // Mutate EVERY param to a non-default value (per type) so the round-trip
+      // exercises all of them, not just the first — otherwise a param that
+      // silently fails to serialise/restore would still pass.
+      for (const d of m.getParamList()) {
+        if (d.type === 'number')  m.setParam(d.path, (d.min + d.max) / 2);
+        else if (d.type === 'boolean') m.setParam(d.path, !m.getParam(d.path));
+        else if (d.type === 'enum')    m.setParam(d.path, d.options[d.options.length - 1]);
+      }
+
       const json = m.toJSON();
       assert.ok(json.type === type, `toJSON type should be '${type}'`);
       assert.ok(json.params && typeof json.params === 'object', 'toJSON must carry params');
@@ -262,4 +269,26 @@ suite('Param spec (declarative machines)', () => {
       }
     });
   }
+
+  // Sampler keeps an overridden toJSON/fromJSON (it carries sampleId/sampleName
+  // alongside params, rather than the base's {type, params}). The generic loop
+  // above only checks params; this guards the custom fields the override exists
+  // for — the exact thing that makes Sampler non-generic.
+  test('sampler: toJSON/fromJSON round-trips sampleId/sampleName', async () => {
+    const { track } = await makeOfflineTrack('sampler', 0.1);
+    const m = track.machine;
+    m.sampleId   = 'sample-abc-123';
+    m.sampleName = 'kick.wav';
+
+    const json = m.toJSON();
+    assert.ok(json.sampleId === 'sample-abc-123', 'toJSON must carry sampleId');
+    assert.ok(json.sampleName === 'kick.wav',     'toJSON must carry sampleName');
+
+    const { track: t2 } = await makeOfflineTrack('sampler', 0.1);
+    t2.machine.fromJSON(json);
+    assert.ok(t2.machine.sampleId === 'sample-abc-123',
+      `sampleId did not round-trip (${t2.machine.sampleId})`);
+    assert.ok(t2.machine.sampleName === 'kick.wav',
+      `sampleName did not round-trip (${t2.machine.sampleName})`);
+  });
 });
