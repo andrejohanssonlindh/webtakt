@@ -216,7 +216,7 @@ export class VoicePool {
 
     for (let i = 0; i < this._slots.length; i++) {
       const slot = this._slots[i];
-      // Disconnect old machine from the slot's envelope ampGain
+      // Disconnect old machine from the slot's signal chain.
       slot.machine.disconnect();
       // Cancel any in-flight envelope automation so the new machine isn't
       // silenced by a long release tail from the previous machine type.
@@ -224,10 +224,13 @@ export class VoicePool {
       g.cancelScheduledValues(this._context.currentTime);
       g.setValueAtTime(0, this._context.currentTime);
       slot._freeAt = 0;
-      // Build new machine and reconnect to slot's envelope gate
+      // Build new machine and reconnect to the slot's FILTER input — the slot
+      // chain is machine → filter → envelope.ampGain (as set up in the VoiceSlot
+      // constructor). Connecting to ampGain directly would bypass the filter,
+      // so the machine must feed the filter's base-HPF entry node.
       const newMachine = makeMachine(this._context);
       if (newMachine.type === oldType) newMachine.fromJSON(canonicalJSON);
-      newMachine.connect(slot.envelope.ampGain);
+      newMachine.connect(slot._filter._baseHPF);
       slot.machine = newMachine;
     }
   }

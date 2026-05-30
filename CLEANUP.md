@@ -3,9 +3,50 @@
 > Audit date: 2026-05-29. Scope: full `js/` tree (~17.4k LOC), `DESIGN.md`, `index.html`.
 > Goal: flag code that will or can bite us later. Ranked by impact, not effort.
 > Bar: "4/5 is good enough" — this list is what to fix to clear that bar, not a repaint.
->
-> **Status (updated):** P1 #1, #2, #3 done; P2 #4, #5, #6 done; P3 #8 (SynthPanel
-> split) done. Remaining: P2 #7 (timer-contract doc), P3 #9/#10 (watch-only).
+
+---
+
+## Work Log (2026-05-29 cleanup session)
+
+Two commits on branch `refactor/synthpanel-split` (off `main`), plus uncommitted
+fixes from the bug-smashing pass. Numbers below refer to the findings further down.
+
+**Done — committed (commit 1, "Split SynthPanel into per-tab panel modules"):**
+- **P3 #8** — SynthPanel split: 2,675 → 514 lines. 11 new panels in `js/ui/panels/`
+  (Trig, Scales, Filter, Amp, LFO, FX, MidiIn, Mixer, MachinePicker, Sounds +
+  shared `formatParam.js`). Removed dead `_renderParamList`, duplicate format
+  rules, and 5 dead imports. `MACHINE_GROUPS`/`MACHINE_DEFS` moved to
+  MachinePickerPanel; SynthPanel re-exports them for back-compat.
+
+**Done — committed (commit 2, "Cleanup: audio-thread timers, …"):**
+- **P1 #1** — setTimeout→scheduleCallback in Noise/Transient/Wood/Marimba/Cymbal.
+- **P1 #2** — Clock onStart/onStop listener hooks; MidiEngine subscribes instead
+  of monkey-patching clock.start/stop.
+- **P1 #3** — MidiEngine header documents the setTimeout jitter as a Web MIDI
+  platform limit (not a bug).
+- **P2 #4** — DESIGN.md "MIDI | Out of scope" row fixed.
+- **P2 #5** — Sequencer caches the plock-mode map (was rebuilt per p-locked fire);
+  Track.setMachine invalidates it.
+- **P2 #6** — `Condition.always()` factory; Track.clearNotes uses it.
+
+**Done — uncommitted (bug-smashing pass, to be committed next):**
+- **FILTER BUG (pre-existing, found during testing)** — `VoicePool.setMachine`
+  reconnected each new machine to `slot.envelope.ampGain`, **bypassing the
+  filter**, so the filter stopped working after any machine switch (even back on
+  synth). The VoiceSlot constructor wires `machine → filter._baseHPF → … →
+  ampGain`; setMachine now reconnects to `slot._filter._baseHPF` to match.
+  NOTE: this bug predates this session's refactor (identical in commit 8ce2045) —
+  the refactor only made it easier to hit during testing. `js/signal/VoicePool.js`.
+- **P2 #7** — documented the `Machine.disconnect()` timer-release contract.
+  Verified Swarm/SampleSwarm honour it (both clearInterval first).
+
+**Remaining / not done:**
+- **P3 #9** — `innerHTML=''` full-rebuild churn on every render. Watch-only; no
+  action unless panels start to feel janky.
+- **P3 #10** — addEventListener/removeEventListener imbalance. Watch-only; GC
+  handles detached-node listeners.
+- **Other minor bugs** noted by the user during testing — not yet itemised.
+  Add them here as they're found.
 
 The codebase is in good shape overall: clear module boundaries, the ownership graph
 in DESIGN.md matches reality, p-lock dispatch is well-documented, and the voice-pool

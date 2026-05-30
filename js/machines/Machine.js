@@ -75,6 +75,12 @@ export class Machine {
     throw new Error(`${this.constructor.name} must implement connect()`);
   }
 
+  /**
+   * Disconnect all of this machine's outputs AND release any background timers
+   * (setInterval drift timers, etc.) it owns. Callers (e.g. VoicePool.setMachine)
+   * drop the machine reference right after, so anything not released here leaks
+   * for the lifetime of the page. Machines with no timers just disconnect nodes.
+   */
   disconnect() {
     throw new Error(`${this.constructor.name} must implement disconnect()`);
   }
