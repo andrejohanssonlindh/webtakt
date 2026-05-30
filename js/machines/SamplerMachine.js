@@ -26,23 +26,31 @@
 import { Machine } from './Machine.js';
 
 export class SamplerMachine extends Machine {
+  // All params are store-only (read fresh per-noteOn) — setParam writes no
+  // AudioParam, so no entry has a non-manual `target`. output.level is
+  // manualTarget: exposed to resolveAudioParam/LFO via `target`, but setParam
+  // must NOT auto-schedule it (combined level × gain is applied per-noteOn).
+  static SPEC = {
+    'sample.start':     { label: 'Start',    type: 'number',  min: 0,   max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
+    'sample.end':       { label: 'End',      type: 'number',  min: 0,   max: 1,   default: 1,    modulatable: false, plockMode: 'js' },
+    'sample.loopStart': { label: 'Loop Strt',type: 'number',  min: 0,   max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
+    'sample.speed':     { label: 'Speed',    type: 'number',  min: 0.125, max: 4, default: 1,    modulatable: false, plockMode: 'js' },
+    'sample.gain':      { label: 'Gain',     type: 'number',  min: 0,   max: 20,  default: 1,    modulatable: false, plockMode: 'js' },
+    'sample.root':      { label: 'Root',     type: 'number',  min: 0,   max: 127, default: 60,   modulatable: false, plockMode: 'js' },
+    'sample.reverse':   { label: 'Reverse',  type: 'boolean', default: false,                    plockMode: 'js' },
+    'sample.loop':      { label: 'Loop',     type: 'boolean', default: false,                    plockMode: 'js' },
+    'sample.pitch':     { label: 'Pitch',    type: 'boolean', default: true,                     plockMode: 'js' },
+    'output.level':     { label: 'Level',    type: 'number',  min: 0,   max: 1,   default: 0.85,
+                          modulatable: true, lfoMin: 0, lfoMax: 1,
+                          target: m => m.outputGain.gain, manualTarget: true },
+  };
+
   constructor(context) {
     super(context);
     this.type  = 'sampler';
     this.label = 'Sampler';
 
-    this._params = {
-      'sample.start':     0,
-      'sample.end':       1,
-      'sample.loopStart': 0,
-      'sample.speed':     1,
-      'sample.gain':      1,      // pre-amp multiplier (0–4), boosts quiet recordings
-      'sample.reverse':   false,
-      'sample.loop':      false,
-      'sample.pitch':     true,   // when true: track keyboard note; false = fixed pitch (drum mode)
-      'sample.root':      60,     // MIDI root note the sample is tuned to (C4 = 60)
-      'output.level':     0.85,
-    };
+    this._initSpec();
 
     // The decoded AudioBuffer (or null if no sample loaded)
     this._buffer = null;
@@ -176,36 +184,8 @@ export class SamplerMachine extends Machine {
     this.outputGain.disconnect();
   }
 
-  setParam(path, value, time) {
-    this._params[path] = value;
-    // output.level and sample.gain both feed outputGain — recompute on either change.
-    // We don't touch the AudioParam here for gain (no scheduled automation needed);
-    // the combined level × gain is applied fresh on every noteOn.
-  }
-
-  getParam(path) {
-    return this._params[path];
-  }
-
-  resolveAudioParam(path) {
-    if (path === 'output.level') return this.outputGain.gain;
-    return null;
-  }
-
-  getParamList() {
-    return [
-      { path: 'sample.start',     label: 'Start',    type: 'number',  min: 0,   max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
-      { path: 'sample.end',       label: 'End',      type: 'number',  min: 0,   max: 1,   default: 1,    modulatable: false, plockMode: 'js' },
-      { path: 'sample.loopStart', label: 'Loop Strt',type: 'number',  min: 0,   max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
-      { path: 'sample.speed',   label: 'Speed',   type: 'number',  min: 0.125, max: 4, default: 1,    modulatable: false, plockMode: 'js' },
-      { path: 'sample.gain',    label: 'Gain',    type: 'number',  min: 0,   max: 20,  default: 1,    modulatable: false, plockMode: 'js' },
-      { path: 'sample.root',    label: 'Root',    type: 'number',  min: 0,   max: 127, default: 60,   modulatable: false, plockMode: 'js' },
-      { path: 'sample.reverse', label: 'Reverse', type: 'boolean', default: false,                    plockMode: 'js' },
-      { path: 'sample.loop',    label: 'Loop',    type: 'boolean', default: false,                    plockMode: 'js' },
-      { path: 'sample.pitch',   label: 'Pitch',   type: 'boolean', default: true,                     plockMode: 'js' },
-      { path: 'output.level',   label: 'Level',   type: 'number',  min: 0,   max: 1,   default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
-    ];
-  }
+  // setParam/getParam/getParamList/resolveAudioParam derived from `static SPEC`.
+  // toJSON/fromJSON stay overridden (carry sampleId/sampleName, not just params).
 
   toJSON() {
     return {

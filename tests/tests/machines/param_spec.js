@@ -176,6 +176,18 @@ const EXPECTED = {
     { path: 'noise.color',  label: 'Noise Rate', type: 'number', min: 0,    max: 1,   default: 0.15, modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'js'        },
     { path: 'output.level', label: 'Level',      type: 'number', min: 0,    max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'audioParam' },
   ],
+  sampler: [
+    { path: 'sample.start',     label: 'Start',    type: 'number',  min: 0,   max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
+    { path: 'sample.end',       label: 'End',      type: 'number',  min: 0,   max: 1,   default: 1,    modulatable: false, plockMode: 'js' },
+    { path: 'sample.loopStart', label: 'Loop Strt',type: 'number',  min: 0,   max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
+    { path: 'sample.speed',   label: 'Speed',   type: 'number',  min: 0.125, max: 4, default: 1,    modulatable: false, plockMode: 'js' },
+    { path: 'sample.gain',    label: 'Gain',    type: 'number',  min: 0,   max: 20,  default: 1,    modulatable: false, plockMode: 'js' },
+    { path: 'sample.root',    label: 'Root',    type: 'number',  min: 0,   max: 127, default: 60,   modulatable: false, plockMode: 'js' },
+    { path: 'sample.reverse', label: 'Reverse', type: 'boolean', default: false,                    plockMode: 'js' },
+    { path: 'sample.loop',    label: 'Loop',    type: 'boolean', default: false,                    plockMode: 'js' },
+    { path: 'sample.pitch',   label: 'Pitch',   type: 'boolean', default: true,                     plockMode: 'js' },
+    { path: 'output.level',   label: 'Level',   type: 'number',  min: 0,   max: 1,   default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+  ],
 };
 
 // Paths that must resolve to a real AudioParam (incl. manualTarget ones).
@@ -196,6 +208,7 @@ const RESOLVES = {
   wood: ['freq1', 'freq2', 'ring', 'click.freq', 'output.level'],
   bass: ['osc.detune', 'sub.level', 'output.level'],
   swarm: ['osc.detune', 'height', 'output.level'],
+  sampler: ['output.level'],
 };
 
 suite('Param spec (declarative machines)', () => {
@@ -204,7 +217,7 @@ suite('Param spec (declarative machines)', () => {
     'synth', 'snare', 'chord',
     'kick.silk', 'kick.hard', 'hihat', 'clapp', 'cymbal',
     'noise', 'karplus', 'comb', 'marimba', 'transient', 'wood',
-    'bass', 'swarm',
+    'bass', 'swarm', 'sampler',
   ]) {
 
     test(`${type}: getParamList matches original descriptors`, async () => {
