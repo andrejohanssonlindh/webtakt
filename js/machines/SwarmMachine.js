@@ -34,19 +34,31 @@ import { makeTrimGain } from './LoudnessTrim.js';
 const NUM_SWARM = 6; // voices around the root (3 above, 3 below)
 
 export class SwarmMachine extends Machine {
+  static SPEC = {
+    'osc.detune':   { label: 'Detune', type: 'number', min: -100, max: 100, default: 0,
+                      modulatable: true, lfoMin: -100, lfoMax: 100, hidden: true,
+                      target: m => m._root.detune, schedule: 'setTarget', tc: 0.005 },
+    'spread':       { label: 'Spread', type: 'number', min: 0, max: 100, default: 15, plockMode: 'js',
+                      apply: (v, t, m) => { m._applySpread(t); } },
+    'height':       { label: 'Height', type: 'number', min: 0, max: 1, default: 0.7,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m._swarmGain.gain, schedule: 'setTarget', tc: 0.005 },
+    'noise.amount': { label: 'Noise Amt', type: 'number', min: 0, max: 50, default: 8,
+                      modulatable: true, lfoMin: 0, lfoMax: 50, plockMode: 'js' },
+    'noise.color':  { label: 'Noise Rate', type: 'number', min: 0, max: 1, default: 0.15,
+                      modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'js',
+                      apply: (v, t, m) => { m._driftInterval = m._colorToMs(v); m._startDriftTimer(); } },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m.outputGain.gain, schedule: 'setValue' },
+  };
+
   constructor(context) {
     super(context);
     this.type  = 'swarm';
     this.label = 'Swarm';
 
-    this._params = {
-      'osc.detune':   0,
-      'spread':       15,
-      'height':       0.7,
-      'noise.amount': 8,
-      'noise.color':  0.15,
-      'output.level': 0.8,
-    };
+    this._initSpec();
 
     this._baseFreq = 440;
 
@@ -157,58 +169,5 @@ export class SwarmMachine extends Machine {
     this._trimGain.disconnect();
   }
 
-  setParam(path, value, time) {
-    this._params[path] = value;
-    const t = time ?? this.context.currentTime;
-
-    switch (path) {
-      case 'osc.detune':
-        this._root.detune.setTargetAtTime(value, t, 0.005);
-        break;
-      case 'spread':
-        this._applySpread(t);
-        break;
-      case 'height':
-        this._swarmGain.gain.setTargetAtTime(value, t, 0.005);
-        break;
-      case 'noise.amount':
-        // no audio node to update — _tickDrift reads _params directly
-        break;
-      case 'noise.color':
-        this._driftInterval = this._colorToMs(value);
-        this._startDriftTimer();
-        break;
-      case 'output.level':
-        this.outputGain.gain.setValueAtTime(value, t);
-        break;
-    }
-  }
-
-  getParam(path) { return this._params[path]; }
-
-  getParamList() {
-    return [
-      { path: 'osc.detune',   label: 'Detune',     type: 'number', min: -100, max: 100, default: 0,    modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
-      { path: 'spread',       label: 'Spread',     type: 'number', min: 0,    max: 100, default: 15,                                                  plockMode: 'js'        },
-      { path: 'height',       label: 'Height',     type: 'number', min: 0,    max: 1,   default: 0.7,  modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'audioParam' },
-      { path: 'noise.amount', label: 'Noise Amt',  type: 'number', min: 0,    max: 50,  default: 8,    modulatable: true, lfoMin: 0,    lfoMax: 50,  plockMode: 'js'        },
-      { path: 'noise.color',  label: 'Noise Rate', type: 'number', min: 0,    max: 1,   default: 0.15, modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'js'        },
-      { path: 'output.level', label: 'Level',      type: 'number', min: 0,    max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'audioParam' },
-    ];
-  }
-
-  resolveAudioParam(path) {
-    switch (path) {
-      case 'osc.detune':   return this._root.detune;
-      case 'spread':       return null; // JS-only (computed per-voice)
-      case 'height':       return this._swarmGain.gain;
-      case 'noise.amount': return null; // JS-only, read directly by drift timer
-      case 'noise.color':  return null; // JS-only, controls timer interval
-      case 'output.level': return this.outputGain.gain;
-      default: return null;
-    }
-  }
-
-  toJSON() { return { type: this.type, params: { ...this._params } }; }
-  fromJSON(obj) { Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v)); }
+  // Param interface derived from `static SPEC` (Machine base class).
 }
