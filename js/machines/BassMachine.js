@@ -46,20 +46,30 @@ function _buildClipCurve(drive) {
 }
 
 export class BassMachine extends Machine {
+  static SPEC = {
+    'osc.detune':   { label: 'Detune', type: 'number', min: -100, max: 100, default: 0,
+                      modulatable: true, lfoMin: -100, lfoMax: 100, hidden: true,
+                      target: m => m._oscMain.detune, schedule: 'setTarget', tc: 0.005 },
+    'waveform':     { label: 'Waveform', type: 'enum', options: ['sawtooth','square'], plockMode: 'js',
+                      apply: (v, t, m) => { m._oscMain.type = v; } },
+    'sub.level':    { label: 'Sub', type: 'number', min: 0, max: 1, default: 0.4,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m._subGain.gain, schedule: 'setTarget', tc: 0.005 },
+    'drive':        { label: 'Drive', type: 'number', min: 0, max: 1, default: 0.0, plockMode: 'js',
+                      apply: (v, t, m) => { m._distortion.curve = _buildClipCurve(v); } },
+    'glide':        { label: 'Glide', type: 'number', min: 0, max: 500, default: 0, plockMode: 'js' },
+    'accent':       { label: 'Accent', type: 'number', min: 0, max: 127, default: 100, plockMode: 'js' },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85,
+                      modulatable: true, lfoMin: 0, lfoMax: 1,
+                      target: m => m.outputGain.gain, schedule: 'setValue' },
+  };
+
   constructor(context) {
     super(context);
     this.type  = 'bass';
     this.label = 'Bass';
 
-    this._params = {
-      'osc.detune':   0,
-      'waveform':     'sawtooth',
-      'sub.level':    0.4,
-      'drive':        0.0,
-      'glide':        0,
-      'accent':       100,
-      'output.level': 0.85,
-    };
+    this._initSpec();
 
     this._lastFreq = 440; // for glide: freq of previous note
 
@@ -139,53 +149,5 @@ export class BassMachine extends Machine {
     this._trimGain.disconnect();
   }
 
-  setParam(path, value, time) {
-    this._params[path] = value;
-    const t = time ?? this.context.currentTime;
-
-    switch (path) {
-      case 'osc.detune':
-        this._oscMain.detune.setTargetAtTime(value, t, 0.005);
-        break;
-      case 'waveform':
-        this._oscMain.type = value;
-        break;
-      case 'sub.level':
-        this._subGain.gain.setTargetAtTime(value, t, 0.005);
-        break;
-      case 'drive':
-        this._distortion.curve = _buildClipCurve(value);
-        break;
-      case 'output.level':
-        this.outputGain.gain.setValueAtTime(value, t);
-        break;
-      // 'glide', 'accent' — JS-only, read in noteOn
-    }
-  }
-
-  getParam(path) { return this._params[path]; }
-
-  getParamList() {
-    return [
-      { path: 'osc.detune',   label: 'Detune',    type: 'number', min: -100, max: 100,  default: 0,    modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
-      { path: 'waveform',     label: 'Waveform',  type: 'enum',   options: ['sawtooth','square'],                                                    plockMode: 'js'        },
-      { path: 'sub.level',    label: 'Sub',       type: 'number', min: 0,    max: 1,    default: 0.4,  modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'audioParam' },
-      { path: 'drive',        label: 'Drive',     type: 'number', min: 0,    max: 1,    default: 0.0,                                                plockMode: 'js'        },
-      { path: 'glide',        label: 'Glide',     type: 'number', min: 0,    max: 500,  default: 0,                                                  plockMode: 'js'        },
-      { path: 'accent',       label: 'Accent',    type: 'number', min: 0,    max: 127,  default: 100,                                                plockMode: 'js'        },
-      { path: 'output.level', label: 'Level',     type: 'number', min: 0,    max: 1,    default: 0.85, modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'audioParam' },
-    ];
-  }
-
-  resolveAudioParam(path) {
-    switch (path) {
-      case 'osc.detune':   return this._oscMain.detune;
-      case 'sub.level':    return this._subGain.gain;
-      case 'output.level': return this.outputGain.gain;
-      default: return null;
-    }
-  }
-
-  toJSON()      { return { type: this.type, params: { ...this._params } }; }
-  fromJSON(obj) { Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v)); }
+  // Param interface derived from `static SPEC` (Machine base class).
 }
