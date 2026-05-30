@@ -159,6 +159,23 @@ const EXPECTED = {
     { path: 'click.freq',   label: 'Click Freq', type: 'number', min: 500, max: 12000, default: 3000, modulatable: true, lfoMin: 500, lfoMax: 12000, plockMode: 'audioParam' },
     { path: 'output.level', label: 'Level',      type: 'number', min: 0, max: 1, default: 1.0, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
   ],
+  bass: [
+    { path: 'osc.detune',   label: 'Detune',    type: 'number', min: -100, max: 100,  default: 0,    modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
+    { path: 'waveform',     label: 'Waveform',  type: 'enum',   options: ['sawtooth','square'],                                                    plockMode: 'js'        },
+    { path: 'sub.level',    label: 'Sub',       type: 'number', min: 0,    max: 1,    default: 0.4,  modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'audioParam' },
+    { path: 'drive',        label: 'Drive',     type: 'number', min: 0,    max: 1,    default: 0.0,                                                plockMode: 'js'        },
+    { path: 'glide',        label: 'Glide',     type: 'number', min: 0,    max: 500,  default: 0,                                                  plockMode: 'js'        },
+    { path: 'accent',       label: 'Accent',    type: 'number', min: 0,    max: 127,  default: 100,                                                plockMode: 'js'        },
+    { path: 'output.level', label: 'Level',     type: 'number', min: 0,    max: 1,    default: 0.85, modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'audioParam' },
+  ],
+  swarm: [
+    { path: 'osc.detune',   label: 'Detune',     type: 'number', min: -100, max: 100, default: 0,    modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
+    { path: 'spread',       label: 'Spread',     type: 'number', min: 0,    max: 100, default: 15,                                                  plockMode: 'js'        },
+    { path: 'height',       label: 'Height',     type: 'number', min: 0,    max: 1,   default: 0.7,  modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'audioParam' },
+    { path: 'noise.amount', label: 'Noise Amt',  type: 'number', min: 0,    max: 50,  default: 8,    modulatable: true, lfoMin: 0,    lfoMax: 50,  plockMode: 'js'        },
+    { path: 'noise.color',  label: 'Noise Rate', type: 'number', min: 0,    max: 1,   default: 0.15, modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'js'        },
+    { path: 'output.level', label: 'Level',      type: 'number', min: 0,    max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'audioParam' },
+  ],
 };
 
 // Paths that must resolve to a real AudioParam (incl. manualTarget ones).
@@ -177,6 +194,8 @@ const RESOLVES = {
   marimba: ['p2ratio', 'p3ratio', 'mallet.tone', 'output.level'],
   transient: ['click.freq', 'noise.click', 'output.level'],
   wood: ['freq1', 'freq2', 'ring', 'click.freq', 'output.level'],
+  bass: ['osc.detune', 'sub.level', 'output.level'],
+  swarm: ['osc.detune', 'height', 'output.level'],
 };
 
 suite('Param spec (declarative machines)', () => {
@@ -185,6 +204,7 @@ suite('Param spec (declarative machines)', () => {
     'synth', 'snare', 'chord',
     'kick.silk', 'kick.hard', 'hihat', 'clapp', 'cymbal',
     'noise', 'karplus', 'comb', 'marimba', 'transient', 'wood',
+    'bass', 'swarm',
   ]) {
 
     test(`${type}: getParamList matches original descriptors`, async () => {
