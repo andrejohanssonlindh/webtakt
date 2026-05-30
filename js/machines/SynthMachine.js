@@ -25,6 +25,7 @@
  */
 
 import { Machine } from './Machine.js';
+import { makeTrimGain } from './LoudnessTrim.js';
 
 export class SynthMachine extends Machine {
   constructor(context) {
@@ -43,6 +44,10 @@ export class SynthMachine extends Machine {
     // Persistent output gain
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
+
+    // Loudness normalisation trim (see LoudnessTrim.js) — fixed, post-output.
+    this._trimGain = makeTrimGain(context, this.type);
+    this.outputGain.connect(this._trimGain);
 
     // Persistent sub gain — LFO connects here
     this._subGain = context.createGain();
@@ -79,13 +84,14 @@ export class SynthMachine extends Machine {
   noteOff(time) {}
 
   connect(destinationNode) {
-    this.outputGain.connect(destinationNode);
+    this._trimGain.connect(destinationNode);
   }
 
   disconnect() {
     try { this._oscMain.stop(); } catch (_) {}
     try { this._oscSub.stop();  } catch (_) {}
     this.outputGain.disconnect();
+    this._trimGain.disconnect();
   }
 
   setParam(path, value, time) {

@@ -60,6 +60,7 @@
  */
 
 import { Machine } from './Machine.js';
+import { makeTrimGain } from './LoudnessTrim.js';
 
 const MAX_MOD_RATIO = 10;
 
@@ -127,6 +128,10 @@ export class FMMachine extends Machine {
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
+
+    // Loudness normalisation trim (see LoudnessTrim.js) — fixed, post-output.
+    this._trimGain = makeTrimGain(context, this.type);
+    this.outputGain.connect(this._trimGain);
 
     // ── OP1 (carrier) ──
     // Signal: op1Osc → op1EnvGain (ADSR on carrier level) → op1Gain (static level) → outputGain
@@ -287,13 +292,14 @@ export class FMMachine extends Machine {
     this._scheduleOpR('op4', time);
   }
 
-  connect(destinationNode)  { this.outputGain.connect(destinationNode); }
+  connect(destinationNode)  { this._trimGain.connect(destinationNode); }
 
   disconnect() {
     [this._op1Osc, this._op2Osc, this._op3Osc, this._op4Osc].forEach(osc => {
       try { osc.stop(); } catch (_) {}
     });
     this.outputGain.disconnect();
+    this._trimGain.disconnect();
   }
 
   setParam(path, value, time) {

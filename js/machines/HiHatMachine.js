@@ -26,6 +26,7 @@
  */
 
 import { Machine }            from './Machine.js';
+import { makeTrimGain } from './LoudnessTrim.js';
 import { scheduleCallback }  from '../util/AudioBuffers.js';
 
 const RATIOS   = [1.0, 1.3420, 1.2312, 1.6420, 1.9689, 2.0782];
@@ -48,6 +49,10 @@ export class HiHatMachine extends Machine {
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
+
+    // Loudness normalisation trim (see LoudnessTrim.js) — fixed, post-output.
+    this._trimGain = makeTrimGain(context, this.type);
+    this.outputGain.connect(this._trimGain);
 
     // Persistent mix gain
     this._mixGain = context.createGain();
@@ -104,11 +109,12 @@ export class HiHatMachine extends Machine {
 
   noteOff(time) {}  // Self-enveloping
 
-  connect(destinationNode) { this.outputGain.connect(destinationNode); }
+  connect(destinationNode) { this._trimGain.connect(destinationNode); }
 
   disconnect() {
     this._oscs.forEach(osc => { try { osc.stop(); } catch (_) {} });
     this.outputGain.disconnect();
+    this._trimGain.disconnect();
   }
 
   setParam(path, value, time) {

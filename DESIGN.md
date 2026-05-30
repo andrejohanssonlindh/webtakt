@@ -203,6 +203,7 @@ UI (reads AppState, calls Track/Sequencer/Machine methods)
 | Bitcrush | Per-track bit-depth + rate reduction, p-lockable + LFO-assignable |
 | Reverb | Per-track convolution reverb (synth IR), p-lockable + LFO-assignable |
 | MIDI | MIDI out (MidiMachine per track), MIDI In CC routing, 24-PPQN clock sync out. Timing via setTimeout (Web MIDI has no sample-accurate send) — see MidiEngine.js header. |
+| Loudness | Per-machine fixed trim (`js/machines/LoudnessTrim.js`) normalises every machine to a common loudness. Measured/re-tuned via the loudness bench at `tests/loudness.html`. See `design/machines.md` → Loudness Normalisation. |
 | Analogue emulation | Out of scope |
 
 ---

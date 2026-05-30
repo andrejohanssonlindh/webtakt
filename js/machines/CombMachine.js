@@ -32,6 +32,7 @@
  */
 
 import { Machine } from './Machine.js';
+import { makeTrimGain } from './LoudnessTrim.js';
 
 export class CombMachine extends Machine {
   constructor(context) {
@@ -50,6 +51,10 @@ export class CombMachine extends Machine {
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
+
+    // Loudness normalisation trim (see LoudnessTrim.js) — fixed, post-output.
+    this._trimGain = makeTrimGain(context, this.type);
+    this.outputGain.connect(this._trimGain);
 
     this._activeSrc = null;
   }
@@ -148,7 +153,7 @@ export class CombMachine extends Machine {
 
   noteOff(time) {} // Self-decaying
 
-  connect(destinationNode) { this.outputGain.connect(destinationNode); }
+  connect(destinationNode) { this._trimGain.connect(destinationNode); }
 
   disconnect() {
     if (this._activeSrc) {
@@ -157,6 +162,7 @@ export class CombMachine extends Machine {
       this._activeSrc = null;
     }
     this.outputGain.disconnect();
+    this._trimGain.disconnect();
   }
 
   setParam(path, value, time) {

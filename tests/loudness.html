@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Webtakt — Loudness Bench</title>
+  <style>
+    body { background:#111; color:#ccc; font-family:monospace; padding:1.5rem; }
+    h1   { color:#fff; margin-bottom:0.5rem; }
+    p    { color:#888; margin:0 0 1rem; font-size:0.85rem; max-width:64rem; }
+    button {
+      background:#333; color:#fff; border:1px solid #555;
+      padding:0.5rem 1.2rem; font-family:monospace; font-size:1rem;
+      cursor:pointer; border-radius:3px; margin-bottom:1rem;
+    }
+    button:hover { background:#444; }
+    button:disabled { opacity:0.4; cursor:default; }
+    #status { color:#888; font-size:0.85rem; margin-bottom:0.5rem; min-height:1.2em; }
+    #results {
+      white-space:pre; font-size:0.82rem; line-height:1.5;
+      background:#1a1a1a; padding:1rem; border-radius:4px;
+      border:1px solid #333; min-height:4rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>Webtakt Loudness Bench</h1>
+  <p>
+    Renders every audio-producing machine through the production stack offline
+    under identical conditions (same note, velocity, filter wide open, FX off),
+    measures peak + RMS loudness, and suggests a per-machine gain to match the
+    loudest machine. Use this to tune instruments that are mismatched in volume.
+    Not a pass/fail test — read the table and bake the suggested levels in.
+  </p>
+  <button id="run">Run Loudness Bench</button>
+  <button id="copy" style="display:none">Copy Results</button>
+  <button id="save" style="display:none">Save to File</button>
+  <div id="status">Ready.</div>
+  <pre id="results"></pre>
+
+  <script type="module">
+    import { runLoudness, renderLoudness } from './loudness.js';
+    import { Track } from '../js/state/Track.js';
+
+    const btn    = document.getElementById('run');
+    const copy   = document.getElementById('copy');
+    const save   = document.getElementById('save');
+    const status = document.getElementById('status');
+    const pre    = document.getElementById('results');
+
+    // Build a throwaway track per machine type to read its default output.level,
+    // so the "suggested level" column is concrete.
+    async function currentLevels() {
+      const ctx = new OfflineAudioContext(1, 256, 44100);
+      const fx  = ctx.createGain(); fx.connect(ctx.destination);
+      const audio = { context: ctx, fxBus: fx };
+      const clock = { bpm:120, ticksPerBeat:4, get _secondsPerTick(){return 60/(this.bpm*this.ticksPerBeat);}, register(){}, unregister(){}, audio:null };
+      clock.audio = audio;
+      const t = new Track(0, audio, clock);
+      const levels = {};
+      return (machine) => {
+        try {
+          t.setMachine(machine);
+          const v = t.machine.getParam('output.level');
+          return typeof v === 'number' ? v : null;
+        } catch (_) { return null; }
+      };
+    }
+
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      copy.style.display = 'none';
+      save.style.display = 'none';
+      status.textContent = 'Rendering machines…';
+      status.style.color = '#888';
+      try {
+        const getLevel = await currentLevels();
+        const result   = await runLoudness();
+        renderLoudness(result, pre, getLevel);
+        const errs = result.rows.filter(r => r.error).length;
+        status.textContent = errs ? `Done — ${errs} machine(s) errored (see table).`
+                                  : 'Done.';
+        status.style.color = errs ? '#fd8' : '#8f8';
+        copy.style.display = '';
+        save.style.display = '';
+      } catch (e) {
+        status.textContent = `Bench error: ${e.message}`;
+        status.style.color = '#f88';
+        console.error(e);
+      }
+      btn.disabled = false;
+    });
+
+    copy.addEventListener('click', () => {
+      navigator.clipboard.writeText(pre.textContent).then(() => {
+        copy.textContent = 'Copied!';
+        setTimeout(() => { copy.textContent = 'Copy Results'; }, 1500);
+      });
+    });
+
+    save.addEventListener('click', () => {
+      const blob = new Blob([pre.textContent], { type:'text/plain' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      const ts   = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      a.href = url; a.download = `webtakt-loudness-${ts}.txt`; a.click();
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>

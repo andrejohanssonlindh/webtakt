@@ -21,6 +21,7 @@
  */
 
 import { Machine }                        from './Machine.js';
+import { makeTrimGain } from './LoudnessTrim.js';
 import { getNoiseBuffer, scheduleCallback } from '../util/AudioBuffers.js';
 
 const _noiseCache = { buf: null };
@@ -43,6 +44,10 @@ export class KickSilkMachine extends Machine {
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
+
+    // Loudness normalisation trim (see LoudnessTrim.js) — fixed, post-output.
+    this._trimGain = makeTrimGain(context, this.type);
+    this.outputGain.connect(this._trimGain);
 
     // Persistent body oscillator — LFO connects to .frequency directly
     this._tuneOsc = context.createOscillator();
@@ -120,12 +125,13 @@ export class KickSilkMachine extends Machine {
   }
 
   connect(destinationNode) {
-    this.outputGain.connect(destinationNode);
+    this._trimGain.connect(destinationNode);
   }
 
   disconnect() {
     try { this._tuneOsc.stop(); } catch (_) {}
     this.outputGain.disconnect();
+    this._trimGain.disconnect();
   }
 
   setParam(path, value, time) {

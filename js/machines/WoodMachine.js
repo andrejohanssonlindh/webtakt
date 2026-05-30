@@ -31,6 +31,7 @@
  */
 
 import { Machine }        from './Machine.js';
+import { makeTrimGain }   from './LoudnessTrim.js';
 import { getNoiseBuffer, scheduleCallback } from '../util/AudioBuffers.js';
 
 const _noiseCache = { buf: null };
@@ -55,6 +56,11 @@ export class WoodMachine extends Machine {
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
+
+    // Loudness normalisation trim (see LoudnessTrim.js) — fixed, post-output,
+    // untouched by output.level / p-locks / LFOs.
+    this._trimGain = makeTrimGain(context, this.type);
+    this.outputGain.connect(this._trimGain);
 
     // Persistent noise source — driven through per-note gains into the resonators
     this._noiseSrc        = context.createBufferSource();
@@ -155,12 +161,13 @@ export class WoodMachine extends Machine {
 
   noteOff(time) {} // Self-enveloping
 
-  connect(destinationNode) { this.outputGain.connect(destinationNode); }
+  connect(destinationNode) { this._trimGain.connect(destinationNode); }
 
   disconnect() {
     try { this._noiseSrc.stop(); } catch (_) {}
     try { this._clickOsc.stop(); } catch (_) {}
     this.outputGain.disconnect();
+    this._trimGain.disconnect();
   }
 
   setParam(path, value, time) {

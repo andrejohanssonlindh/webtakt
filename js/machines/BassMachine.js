@@ -29,6 +29,7 @@
  */
 
 import { Machine } from './Machine.js';
+import { makeTrimGain } from './LoudnessTrim.js';
 
 function _buildClipCurve(drive) {
   const CURVE_LEN = 512;
@@ -64,6 +65,10 @@ export class BassMachine extends Machine {
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
+
+    // Loudness normalisation trim (see LoudnessTrim.js) — fixed, post-output.
+    this._trimGain = makeTrimGain(context, this.type);
+    this.outputGain.connect(this._trimGain);
 
     // Distortion waveshaper — persistent
     this._distortion            = context.createWaveShaper();
@@ -125,12 +130,13 @@ export class BassMachine extends Machine {
 
   noteOff(time) {} // Envelope handles amplitude
 
-  connect(destinationNode) { this.outputGain.connect(destinationNode); }
+  connect(destinationNode) { this._trimGain.connect(destinationNode); }
 
   disconnect() {
     try { this._oscMain.stop(); } catch (_) {}
     try { this._oscSub.stop();  } catch (_) {}
     this.outputGain.disconnect();
+    this._trimGain.disconnect();
   }
 
   setParam(path, value, time) {

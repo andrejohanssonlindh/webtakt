@@ -6,7 +6,7 @@ Each track runs 8 voice slots in parallel. Each slot owns its own machine, envel
 
 ```
 VoiceSlot ×8 (each slot is fully self-contained up to the shared outputGain):
-  Machine (oscillator nodes)
+  Machine (oscillator nodes → machine.outputGain → machine._trimGain)
     → Filter._baseHPF (BiquadFilterNode, highpass, per-slot)
       → Filter._baseLPF (BiquadFilterNode, lowpass, per-slot)
         → Filter.node (+ slope stages) (BiquadFilterNode, per-slot — type/cutoff/resonance)
@@ -23,6 +23,10 @@ VoiceSlot ×8 (each slot is fully self-contained up to the shared outputGain):
 
 Each slot's Envelope drives ITS OWN Filter.node.frequency (per-voice filter envelope) —
 no cross-slot races on a shared frequency param.
+
+`machine._trimGain` is a fixed per-machine loudness-normalisation gain sitting between the
+machine's own `outputGain` and the filter chain — it equalises perceived loudness across
+machine types and is never modulated. See `design/machines.md` → Loudness Normalisation.
 
 The amp gate sits AFTER the filter (machine → filter → ampGain → outputGain). This is the
 pre-polyphony topology, restored per voice: the gate silences the filter's own resonant ring

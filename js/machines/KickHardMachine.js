@@ -30,6 +30,7 @@
  */
 
 import { Machine }                        from './Machine.js';
+import { makeTrimGain } from './LoudnessTrim.js';
 import { getNoiseBuffer, scheduleCallback } from '../util/AudioBuffers.js';
 
 const _noiseCache = { buf: null };
@@ -64,6 +65,10 @@ export class KickHardMachine extends Machine {
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
+
+    // Loudness normalisation trim (see LoudnessTrim.js) — fixed, post-output.
+    this._trimGain = makeTrimGain(context, this.type);
+    this.outputGain.connect(this._trimGain);
 
     // Waveshaper — body + sub pass through this before output
     this._shaper = context.createWaveShaper();
@@ -174,13 +179,14 @@ export class KickHardMachine extends Machine {
   }
 
   connect(destinationNode) {
-    this.outputGain.connect(destinationNode);
+    this._trimGain.connect(destinationNode);
   }
 
   disconnect() {
     try { this._tuneOsc.stop(); } catch (_) {}
     try { this._subOsc.stop();  } catch (_) {}
     this.outputGain.disconnect();
+    this._trimGain.disconnect();
   }
 
   setParam(path, value, time) {

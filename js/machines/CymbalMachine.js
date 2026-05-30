@@ -30,6 +30,7 @@
  */
 
 import { Machine } from './Machine.js';
+import { makeTrimGain } from './LoudnessTrim.js';
 import { scheduleCallback } from '../util/AudioBuffers.js';
 
 const RATIOS   = [1.0, 1.4142, 1.5399, 1.7320, 2.0000, 2.3784];
@@ -55,6 +56,10 @@ export class CymbalMachine extends Machine {
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
+
+    // Loudness normalisation trim (see LoudnessTrim.js) — fixed, post-output.
+    this._trimGain = makeTrimGain(context, this.type);
+    this.outputGain.connect(this._trimGain);
 
     // Mix gain — normalise by voice count, then boost to compensate for
     // filter attenuation (HPF + BP strip most energy from the square waves).
@@ -120,11 +125,12 @@ export class CymbalMachine extends Machine {
 
   noteOff(time) {} // Self-enveloping
 
-  connect(destinationNode) { this.outputGain.connect(destinationNode); }
+  connect(destinationNode) { this._trimGain.connect(destinationNode); }
 
   disconnect() {
     this._oscs.forEach(osc => { try { osc.stop(); } catch (_) {} });
     this.outputGain.disconnect();
+    this._trimGain.disconnect();
   }
 
   setParam(path, value, time) {

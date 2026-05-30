@@ -6,6 +6,27 @@ Custom SYNTH tab UIs live in `js/ui/panels/<MachineName>Panel.js`. Machines with
 
 ---
 
+## Loudness Normalisation (per-machine trim)
+
+Machines were built with mismatched internal amp scaling, so at equal `output.level` they
+came out up to ~30× apart in perceived loudness. Each machine carries a **fixed trim gain**
+that normalises it to a common reference.
+
+- Factors live in `js/machines/LoudnessTrim.js` (`LOUDNESS_TRIM` map keyed by machine type,
+  `1.0` = no change). `makeTrimGain(context, type)` builds the node.
+- Each machine creates `this._trimGain = makeTrimGain(...)` right after `outputGain`, wires
+  `outputGain → _trimGain`, and connects `_trimGain` (not `outputGain`) in `connect()`.
+- The trim is a **dedicated node downstream of `outputGain`** so it is never touched by
+  `output.level`, p-locks, or LFOs (all of which target `outputGain.gain`).
+- **Derivation:** measured by `tests/loudness.html` (the loudness bench). Target = median RMS
+  of the set (≈0.068). Factor = target / machine RMS, except spiky percussion (clapp, snare,
+  cymbal, hihat, noise, wood) whose factor is capped so the projected peak stays ≤ 0.90 —
+  they sit slightly below median RMS by design. **Re-run the bench after changing any
+  machine's synthesis and update the factor.** See `design/tests.md`.
+- **New machine:** add an entry to `LOUDNESS_TRIM` (start at 1.0), run the bench, set the value.
+
+---
+
 ## Drum Machine Architecture
 
 KickMachine, SnareMachine, and HiHatMachine are **self-enveloping**: they manage their own

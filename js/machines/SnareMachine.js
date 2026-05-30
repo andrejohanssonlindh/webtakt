@@ -30,6 +30,7 @@
  */
 
 import { Machine }                        from './Machine.js';
+import { makeTrimGain } from './LoudnessTrim.js';
 import { getNoiseBuffer, scheduleCallback } from '../util/AudioBuffers.js';
 
 const _noiseCache = { buf: null };
@@ -52,6 +53,10 @@ export class SnareMachine extends Machine {
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
+
+    // Loudness normalisation trim (see LoudnessTrim.js) — fixed, post-output.
+    this._trimGain = makeTrimGain(context, this.type);
+    this.outputGain.connect(this._trimGain);
 
     // ── Persistent body oscillator ──
     this._tuneOsc = context.createOscillator();
@@ -138,12 +143,13 @@ export class SnareMachine extends Machine {
 
   noteOff(time) {}  // Self-enveloping
 
-  connect(destinationNode) { this.outputGain.connect(destinationNode); }
+  connect(destinationNode) { this._trimGain.connect(destinationNode); }
 
   disconnect() {
     try { this._tuneOsc.stop();   } catch (_) {}
     try { this._noiseSrc.stop();  } catch (_) {}
     this.outputGain.disconnect();
+    this._trimGain.disconnect();
   }
 
   setParam(path, value, time) {

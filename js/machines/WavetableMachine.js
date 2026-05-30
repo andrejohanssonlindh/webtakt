@@ -37,6 +37,7 @@
  */
 
 import { Machine } from './Machine.js';
+import { makeTrimGain } from './LoudnessTrim.js';
 
 const NUM_WAVETABLES = 8;
 const PARTIAL_COUNT  = 32; // harmonics to use when building PeriodicWave
@@ -129,6 +130,10 @@ export class WavetableMachine extends Machine {
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
 
+    // Loudness normalisation trim (see LoudnessTrim.js) — fixed, post-output.
+    this._trimGain = makeTrimGain(context, this.type);
+    this.outputGain.connect(this._trimGain);
+
     // Mix node
     this._mix = context.createGain();
     this._mix.gain.value = 0.5;
@@ -209,13 +214,14 @@ export class WavetableMachine extends Machine {
 
   noteOff(time) {} // Envelope handles amplitude
 
-  connect(destinationNode) { this.outputGain.connect(destinationNode); }
+  connect(destinationNode) { this._trimGain.connect(destinationNode); }
 
   disconnect() {
     try { this._oscA.stop();   } catch (_) {}
     try { this._oscB.stop();   } catch (_) {}
     try { this._oscSub.stop(); } catch (_) {}
     this.outputGain.disconnect();
+    this._trimGain.disconnect();
   }
 
   setParam(path, value, time) {

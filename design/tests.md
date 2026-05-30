@@ -5,6 +5,7 @@ Located in `tests/`. Runs entirely in the browser against `OfflineAudioContext` 
 **Entry points:**
 - `tests/index.html` — run all tests, results rendered in-page and written to `localStorage`
 - `tests/results.html` — read last results from `localStorage` (used for post-run inspection)
+- `tests/loudness.html` — **loudness bench** (not pass/fail): renders every audio-producing machine offline under identical conditions (note 60, vel 100, 8 hits, filter open, FX off), measures peak + RMS per machine, and suggests a per-machine gain (`refPeak / machinePeak`) + new `output.level` to normalise all machines to the loudest one. Used to tune instruments that are mismatched in volume. Logic in `tests/loudness.js` (reuses `makeOfflineTrack` / `fireStep` / `rms` from `runner.js`). Excludes `sampler` / `wt-sampler` / `midi` (no offline audio); `sample-swarm` gets a synthetic tone buffer injected.
 
 **Architecture:**
 - `tests/runner.js` — shared harness: `makeOfflineTrack(type, duration)` builds a full `Track` against an offline context using shims for `AudioEngine` and `Clock`; `renderSteps()` fires N steps via `sequencer._fireStep()` directly (bypassing the Clock loop); `rms()`, `spectralCentroid()`, `bandEnergy()` measure the rendered buffer

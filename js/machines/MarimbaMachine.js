@@ -33,6 +33,7 @@
  */
 
 import { Machine }        from './Machine.js';
+import { makeTrimGain } from './LoudnessTrim.js';
 import { getNoiseBuffer, scheduleCallback } from '../util/AudioBuffers.js';
 
 const _noiseCache = { buf: null };
@@ -60,6 +61,10 @@ export class MarimbaMachine extends Machine {
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
+
+    // Loudness normalisation trim (see LoudnessTrim.js) — fixed, post-output.
+    this._trimGain = makeTrimGain(context, this.type);
+    this.outputGain.connect(this._trimGain);
 
     // Persistent sine oscillators — frequency updated each noteOn
     this._osc1 = context.createOscillator();
@@ -172,7 +177,7 @@ export class MarimbaMachine extends Machine {
 
   noteOff(time) {} // Self-enveloping
 
-  connect(destinationNode) { this.outputGain.connect(destinationNode); }
+  connect(destinationNode) { this._trimGain.connect(destinationNode); }
 
   disconnect() {
     try { this._osc1.stop(); } catch (_) {}
@@ -180,6 +185,7 @@ export class MarimbaMachine extends Machine {
     try { this._osc3.stop(); } catch (_) {}
     try { this._malletSrc.stop(); } catch (_) {}
     this.outputGain.disconnect();
+    this._trimGain.disconnect();
   }
 
   setParam(path, value, time) {

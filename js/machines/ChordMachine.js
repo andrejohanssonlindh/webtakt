@@ -34,6 +34,7 @@
  */
 
 import { Machine } from './Machine.js';
+import { makeTrimGain } from './LoudnessTrim.js';
 
 const CHORD_DEFS = {
   major:  [0,  4,  7,  12],
@@ -86,6 +87,10 @@ export class ChordMachine extends Machine {
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
 
+    // Loudness normalisation trim (see LoudnessTrim.js) — fixed, post-output.
+    this._trimGain = makeTrimGain(context, this.type);
+    this.outputGain.connect(this._trimGain);
+
     // Mix gain — normalise 4 voices so volume is consistent
     this._mixGain = context.createGain();
     this._mixGain.gain.value = 1 / NUM_VOICES;
@@ -125,11 +130,12 @@ export class ChordMachine extends Machine {
 
   noteOff(time) {} // Envelope handles amplitude
 
-  connect(destinationNode) { this.outputGain.connect(destinationNode); }
+  connect(destinationNode) { this._trimGain.connect(destinationNode); }
 
   disconnect() {
     this._oscs.forEach(osc => { try { osc.stop(); } catch (_) {} });
     this.outputGain.disconnect();
+    this._trimGain.disconnect();
   }
 
   setParam(path, value, time) {

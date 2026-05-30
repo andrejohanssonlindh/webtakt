@@ -36,6 +36,7 @@
  */
 
 import { Machine } from './Machine.js';
+import { makeTrimGain } from './LoudnessTrim.js';
 
 const NUM_SWARM = 6; // voices around root (3 above, 3 below)
 
@@ -76,6 +77,10 @@ export class SampleSwarmMachine extends Machine {
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
+
+    // Loudness normalisation trim (see LoudnessTrim.js) — fixed, post-output.
+    this._trimGain = makeTrimGain(context, this.type);
+    this.outputGain.connect(this._trimGain);
 
     // Summing node — normalise by voice count
     this._mix = context.createGain();
@@ -251,13 +256,14 @@ export class SampleSwarmMachine extends Machine {
   }
 
   connect(destinationNode) {
-    this.outputGain.connect(destinationNode);
+    this._trimGain.connect(destinationNode);
   }
 
   disconnect() {
     if (this._driftTimer !== null) { clearInterval(this._driftTimer); this._driftTimer = null; }
     this._stopActive(this.context.currentTime);
     this.outputGain.disconnect();
+    this._trimGain.disconnect();
   }
 
   setParam(path, value, time) {
