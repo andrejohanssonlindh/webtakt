@@ -19,6 +19,7 @@ The panel header has two zones in a single row:
 | LFO | LFO sub-selector (LFO 1, LFO 2, …, +) capped at 220px wide, destination dropdown (grouped), waveform/trig, unified RATE knob (click center HZ↔BPM), depth/phase/fade knobs |
 | MIDI | Per-track MIDI In: input port dropdown, channel filter (All / Ch 1–16), CC→param mapping table (CC# + target param dropdown, + Add CC / × remove). |
 | MIXER | All-tracks mixer island: one strip per track showing Level, DLY wet, CRUSH wet, REV wet, and DJ Filter knobs. Clicking a strip selects that track. |
+| DECK | DJ crossfade between two decks (Project instances). Two symmetric deck columns (A/B) with a constant-power crossfader between them. Per deck: LOAD song, CONTROL (point editing UI at this deck), SILENCE (mute deck bus), UNLOAD (free CPU). See Deck Tab section below. |
 
 ### Oscilloscope Strip (centre of header, always visible)
 
@@ -81,6 +82,47 @@ A global overview tab showing all tracks simultaneously (8–12). Each strip con
 Clicking a strip (not a knob) selects that track. Selected strip is amber-highlighted.
 
 The LEVEL, DLY, CRUSH, and REV knobs write directly to the live AudioParam — no p-locking (this is a performance mixer, not a step sequencer view).
+
+---
+
+## Deck Tab (DJ crossfade)
+
+A two-deck DJ layer. The app runs **two independent `Project` instances** ("deck A"
+and "deck B") that share the one `AudioEngine` and the one `Clock` — both decks play
+at the same BPM (**beatmatch**; a loaded song's saved BPM is discarded). Owned by
+`js/state/DeckManager.js`; the `DeckPanel` (`js/ui/panels/DeckPanel.js`) is its UI.
+
+**Audio routing** — each deck's tracks funnel into that deck's `Project.busGain`,
+which feeds the shared master FX bus. The crossfader rides the two bus gains. See
+`audio-signal-chain.md` → Deck Buses & Crossfader.
+
+**Layout** — deck A column (left) · crossfader (centre) · deck B column (right).
+Per-deck buttons:
+
+| Button | Action |
+|---|---|
+| LOAD | File picker → `DeckManager.loadFile(id, file)`. Loads a project JSON into that deck, beatmatched. Plays silently in the background until faded toward. Confirms first only if replacing an audible deck. |
+| CONTROL | `DeckManager.setControl(id)` — points the **entire editing UI** (track row, panels, step grid, keyboard) at that deck. `AppState.project` is a getter that returns the controlled deck's project, so on control switch index.html re-renders everything. Independent of the fader. **Disabled / no-op for an unloaded deck** (`setControl` returns early if `!_loaded[id]`) so control never lands on a 0-track deck. |
+| SILENCE | `DeckManager.setSilenced(id, on)` — multiplies that deck's bus gain by 0, independent of the fader. |
+| UNLOAD | `DeckManager.unload(id)` — disposes every track (frees CPU) and resets the deck to **empty (0 tracks)**. Disabled for the last loaded deck (nothing would be left to control). If the controlled deck is unloaded, control switches to the surviving deck first. |
+
+**Crossfader** — horizontal slider, 0 = full deck A (left), 1 = full deck B (right).
+Constant-power law: `gainA = cos(x·π/2)`, `gainB = sin(x·π/2)` — perceived loudness
+stays roughly constant, no centre dip. Readout shows the A/B percentage split.
+
+**Deck states** (shown as a chip in each column header): EMPTY (unloaded, 0 tracks),
+CUED (loaded but inaudible — fader away / silenced), PLAYING (loaded + audible),
+SILENCED.
+
+**Filename** — each column shows the loaded file's name (`DeckManager.name(id)`,
+captured from `File.name` on LOAD and from the IMPORT button for the controlled
+deck). Deck A boots with none → "(unnamed)"; an empty deck shows "—".
+
+**Workflow** — fade A→B, UNLOAD A to free resources, LOAD the next song into the
+now-free deck A, fade back. Endless mixing into new songs. Deck B boots empty.
+
+**Not persisted** — the deck split is a live performance layer; only the controlled
+deck's own project is what EXPORT/IMPORT and localStorage save touch.
 
 ---
 

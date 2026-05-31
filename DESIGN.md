@@ -114,6 +114,7 @@ js/
       FXPanel.js              — Generic DELAY/CRUSH/REVERB tab: render(ctx, fxObj, fmtOverrides)
       MidiInPanel.js          — MIDI tab: per-track MIDI In source/channel/CC→param mappings (distinct from MidiPanel)
       MixerPanel.js           — MIXER tab: per-track strip (level, DLY/CRUSH/REV/DJ knobs, FX toggles)
+      DeckPanel.js            — DECK tab: DJ crossfade between two decks (A/B columns + constant-power crossfader); per-deck LOAD/CONTROL/SILENCE/UNLOAD. Reads ctx.state.decks (DeckManager).
       MachinePickerPanel.js   — MACHINE tab: searchable grouped machine card grid. Owns canonical MACHINE_GROUPS / MACHINE_DEFS (re-exported by SynthPanel for back-compat).
       SoundsPanel.js          — SOUNDS tab: wraps SoundLibraryPanel + preview/restore logic
       SoundLibraryPanel.js    — SOUNDS tab content: tag filter chips + scrollable sound card list
@@ -125,8 +126,9 @@ js/
     BpmSync.js          — Shared BPM-sync utility. Unified sync-knob model: 1/32-note integer counts (count32ToSeconds, MUSICAL_SNAP_32, formatCount32, divToCount32). Used by DelayFX, ReverbFX, LFO, Arpeggiator. Legacy DIV_QN/SYNC_DIVISIONS/divToSeconds kept for load back-compat.
   state/
     Track.js            — Owns VoicePool + sequencer + filter + FX chain + LFOs + pannerNode + Arpeggiator
-    Project.js          — 8–12 tracks (dynamic), BPM, export/import JSON file
-    AppState.js         — Selected track/step, active tab/LFO, event bus
+    Project.js          — 8–12 tracks (dynamic), BPM, export/import JSON file. Owns a per-deck busGain (tracks route here → master fxBus). loadDeckJSON/reset for the deck layer.
+    DeckManager.js      — Two-deck DJ layer: owns Project A + B (shared Clock/AudioEngine, beatmatched), constant-power crossfader on the two busGains, per-deck silence, "control" (which deck the UI edits), load/unload. See design/ui.md → Deck Tab.
+    AppState.js         — Selected track/step, active tab/LFO, event bus. `.project` is a getter following the controlled deck (DeckManager).
     SoundLibrary.js     — Persistent sound library (localStorage): save/load/delete named voice snapshots
     SampleStore.js      — Persistent sample store (localStorage): WAV-base64 per sample, referenced by sampleId
     Scales.js           — Scale definitions (20 scales) + noteInScale() helper
@@ -139,24 +141,26 @@ js/
 ## Ownership & Dependency Graph
 
 ```
-AppState
-  └── Project
-        └── Track (×8–12, dynamic)
-              ├── Sequencer
-              │     └── Step (×64)
-              │           └── Condition
-              ├── VoicePool (8 slots)
-              │     └── VoiceSlot (×8)
-              │           ├── Machine (SynthMachine | BassMachine | ChordMachine | … one per slot)
-              │           ├── Envelope (one per slot — prevents amplitude stacking on overlap)
-              │           └── Filter (one per slot — amp gate sits AFTER filter so idle voices
-              │                       are fully silent, incl. filter ring; slot-0 filter is
-              │                       canonical & mirrors params to siblings)
-              ├── Filter (Track.filter === pool slot-0 filter; canonical for UI/sequencer)
-              ├── StereoPannerNode (pannerNode — owned directly by Track)
-              ├── Arpeggiator (intercepts Sequencer triggers when enabled; Input mode is keyboard-driven instead)
-              ├── LiveArp (drives Arpeggiator 'input' mode from held keyboard keys; free-running)
-              └── LFO (×N, at least 1; machine-param LFOs connect to all 4 slot machines)
+AppState  (.project getter → DeckManager.activeProject)
+  └── DeckManager
+        └── Project (×2 — deck A + deck B; share Clock + AudioEngine, beatmatched)
+              │  (each Project owns a busGain → AudioEngine.fxBus; crossfader rides the two)
+              └── Track (×8–12, dynamic)
+                    ├── Sequencer
+                    │     └── Step (×64)
+                    │           └── Condition
+                    ├── VoicePool (8 slots)
+                    │     └── VoiceSlot (×8)
+                    │           ├── Machine (SynthMachine | BassMachine | ChordMachine | … one per slot)
+                    │           ├── Envelope (one per slot — prevents amplitude stacking on overlap)
+                    │           └── Filter (one per slot — amp gate sits AFTER filter so idle voices
+                    │                       are fully silent, incl. filter ring; slot-0 filter is
+                    │                       canonical & mirrors params to siblings)
+                    ├── Filter (Track.filter === pool slot-0 filter; canonical for UI/sequencer)
+                    ├── StereoPannerNode (pannerNode — owned directly by Track)
+                    ├── Arpeggiator (intercepts Sequencer triggers when enabled; Input mode is keyboard-driven instead)
+                    ├── LiveArp (drives Arpeggiator 'input' mode from held keyboard keys; free-running)
+                    └── LFO (×N, at least 1; machine-param LFOs connect to all 4 slot machines)
 
 AudioEngine
   └── Clock
@@ -210,6 +214,7 @@ UI (reads AppState, calls Track/Sequencer/Machine methods)
 | Delay | Per-track feedback delay, p-lockable + LFO-assignable |
 | Bitcrush | Per-track bit-depth + rate reduction, p-lockable + LFO-assignable |
 | Reverb | Per-track convolution reverb (synth IR), p-lockable + LFO-assignable |
+| Deck / DJ crossfade | Two decks (Project A+B) on a shared beatmatched clock; constant-power crossfader, per-deck control/silence/load/unload. DECK tab. Not persisted (live performance layer). |
 | MIDI | MIDI out (MidiMachine per track), MIDI In CC routing, 24-PPQN clock sync out. Timing via setTimeout (Web MIDI has no sample-accurate send) — see MidiEngine.js header. |
 | Loudness | Per-machine fixed trim (`js/machines/LoudnessTrim.js`) normalises every machine to a common loudness. Measured/re-tuned via the loudness bench at `tests/loudness.html`. See `design/machines.md` → Loudness Normalisation. |
 | Analogue emulation | Out of scope |

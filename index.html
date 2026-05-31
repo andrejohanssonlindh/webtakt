@@ -100,6 +100,7 @@
     import { MidiEngine }    from './js/core/MidiEngine.js';
     import { AppState }      from './js/state/AppState.js';
     import { Project }       from './js/state/Project.js';
+    import { DeckManager }   from './js/state/DeckManager.js';
     import { SoundLibrary }  from './js/state/SoundLibrary.js';
     import { TrackRow }      from './js/ui/TrackRow.js';
     import { StepGrid }      from './js/ui/StepGrid.js';
@@ -113,7 +114,10 @@
     const recorder = new GlobalRecorder(audio);
     const clock    = new Clock(audio);
     const project = new Project(audio, clock);
-    const state   = new AppState(project);
+    // Two-deck DJ layer: deck A is the boot project, deck B starts empty.
+    // state.project follows whichever deck has control (see DeckManager / AppState).
+    const decks   = new DeckManager(audio, clock, project);
+    const state   = new AppState(project, decks);
     const library = new SoundLibrary();
 
     // ── MIDI ─────────────────────────────────────────────────
@@ -121,10 +125,10 @@
     midiEngine.init().then(() => {
       if (midiEngine.available) {
         midiEngine.connectClock(clock, audio.context);
-        project.setMidiEngine(midiEngine);
+        decks.setMidiEngine(midiEngine);
         // Route incoming CC to mapped track params
         midiEngine.onCC((inputId, channel, cc, value) => {
-          project.tracks.forEach(track => {
+          state.project.tracks.forEach(track => {
             const cfg = track.midiIn;
             if (!cfg.inputId || cfg.inputId !== inputId) return;
             if (cfg.channel !== 0 && cfg.channel !== channel) return;
@@ -156,7 +160,7 @@
         midiEngine.onNoteOn((inputId, channel, note, velocity) => {
           const ctx = audio.context;
           const time = ctx.currentTime + 0.015;
-          project.tracks.forEach(track => {
+          state.project.tracks.forEach(track => {
             const cfg = track.midiIn;
             if (!cfg.inputId || cfg.inputId !== inputId) return;
             if (cfg.channel !== 0 && cfg.channel !== channel) return;
@@ -168,7 +172,7 @@
             machine?.noteOn(note, velocity, time);
             envelope?.noteOn(time);
             // Fire followers
-            project.tracks.forEach(follower => {
+            state.project.tracks.forEach(follower => {
               if (follower.followSource !== track.index) return;
               follower.fireFollowNote(note, velocity, time, time + 0.5);
             });
@@ -239,12 +243,12 @@
     btnPlay.addEventListener('click', () => {
       audio.resume();
       if (!playing) {
-        project.start();
+        decks.startAll();
         playing = true;
         btnPlay.textContent = '▮▮ STOP';
         btnPlay.classList.add('playing');
       } else {
-        project.stop();
+        decks.stopAll();
         playing = false;
         btnPlay.textContent = '▶ PLAY';
         btnPlay.classList.remove('playing');
@@ -259,7 +263,7 @@
     // record mode. A hard reset of the audible state.
     btnStopAll.addEventListener('click', () => {
       audio.resume();
-      project.silence();
+      decks.silenceAll();
       if (state.recording) state.setRecording(false);
       state.emit('panic', {});
       playing = false;
@@ -318,7 +322,7 @@
 
     bpmSlider.addEventListener('input', () => {
       const bpm = parseInt(bpmSlider.value);
-      project.setBPM(bpm);
+      decks.setBPM(bpm);
       bpmDisplay.textContent = bpm;
     });
 
@@ -358,11 +362,11 @@
     const trackCountDisplay = document.getElementById('track-count-display');
 
     function _setTrackCount(n) {
-      project.setTrackCount(n);
-      trackCountDisplay.textContent = project.tracks.length;
+      state.project.setTrackCount(n);
+      trackCountDisplay.textContent = state.project.tracks.length;
       // Clamp selected track if it no longer exists
-      if (state.selectedTrackIndex >= project.tracks.length) {
-        state.selectTrack(project.tracks.length - 1);
+      if (state.selectedTrackIndex >= state.project.tracks.length) {
+        state.selectTrack(state.project.tracks.length - 1);
       }
       trackRow._build();
       synthPanel.render();
@@ -370,10 +374,10 @@
     }
 
     document.getElementById('btn-tracks-minus').addEventListener('click', () => {
-      _setTrackCount(project.tracks.length - 1);
+      _setTrackCount(state.project.tracks.length - 1);
     });
     document.getElementById('btn-tracks-plus').addEventListener('click', () => {
-      _setTrackCount(project.tracks.length + 1);
+      _setTrackCount(state.project.tracks.length + 1);
     });
 
     // ── Clear ─────────────────────────────────────────────────
@@ -402,14 +406,14 @@
 
     document.getElementById('btn-clear-notes-all').addEventListener('click', () => {
       confirmAction('Clear notes on ALL tracks?', () => {
-        project.tracks.forEach(t => t.clearNotes());
+        state.project.tracks.forEach(t => t.clearNotes());
         _afterClear();
       });
     });
 
     document.getElementById('btn-clear-all').addEventListener('click', () => {
       confirmAction('Reset ALL tracks to defaults?\nEverything will be cleared.', () => {
-        project.tracks.forEach(t => t.resetTrack());
+        state.project.tracks.forEach(t => t.resetTrack());
         _afterClear();
       });
     });
@@ -418,7 +422,7 @@
     document.getElementById('btn-export').addEventListener('click', () => {
       promptFilename('webtakt-project', (name) => {
         const filename = name.trim() || 'webtakt-project';
-        const json = JSON.stringify(project.toJSON(), null, 2);
+        const json = JSON.stringify(state.project.toJSON(), null, 2);
         const blob = new Blob([json], { type: 'application/json' });
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement('a');
@@ -431,11 +435,16 @@
     document.getElementById('btn-import').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      await project.importFile(file);
-      trackCountDisplay.textContent = project.tracks.length;
-      if (state.selectedTrackIndex >= project.tracks.length) {
-        state.selectedTrackIndex = project.tracks.length - 1;
+      await state.project.importFile(file);
+      // IMPORT loads into the controlled deck; mark it loaded + name it for the DECK tab.
+      decks._loaded[decks.active] = true;
+      decks.setName(decks.active, file.name);
+      trackCountDisplay.textContent = state.project.tracks.length;
+      if (state.selectedTrackIndex >= state.project.tracks.length) {
+        state.selectedTrackIndex = state.project.tracks.length - 1;
       }
+      bpmSlider.value = clock.bpm;
+      bpmDisplay.textContent = clock.bpm;
       trackRow._build();
       synthPanel.render();
       stepGrid._build();
@@ -549,6 +558,31 @@
     state.on('trackSelected', _updatePageCounter);
     _updatePageCounter();
 
+    // ── Deck (DJ) wiring ──────────────────────────────────────
+    // Re-point the whole UI at the controlled deck. selectedTrackIndex is
+    // clamped to the new deck's track count; everything reads state.project.
+    function _refreshControlledDeck() {
+      if (state.selectedTrackIndex >= state.project.tracks.length) {
+        state.selectedTrackIndex = state.project.tracks.length - 1;
+      }
+      state.selectStep(-1);
+      trackCountDisplay.textContent = state.project.tracks.length;
+      trackRow._build();
+      stepGrid._build();
+      synthPanel.render();
+      _updatePageCounter();
+      // Notify listeners (page counter, etc.) that the active track changed.
+      state.emit('trackSelected', { index: state.selectedTrackIndex, track: state.selectedTrack });
+    }
+
+    // Control switch: full UI re-point.
+    decks.on('controlChanged', () => _refreshControlledDeck());
+    // Deck load/unload/silence: if it touched the controlled deck, re-render;
+    // always refresh the DECK tab so its state labels/buttons stay current.
+    decks.on('deckChanged', () => {
+      _refreshControlledDeck();
+    });
+
     // ── Keyboard shortcuts ────────────────────────────────────
     document.addEventListener('keydown', (e) => {
       if (e.target.tagName === 'INPUT') return;
@@ -571,8 +605,8 @@
         _goToPage(num - 1);
         return;
       }
-      if (!isNaN(num) && num >= 1 && num <= project.tracks.length && !e.shiftKey && !state.drumMode) {
-        const track = project.tracks[num - 1];
+      if (!isNaN(num) && num >= 1 && num <= state.project.tracks.length && !e.shiftKey && !state.drumMode) {
+        const track = state.project.tracks[num - 1];
         track.muted ? track.unmute() : track.mute();
         trackRow.render();
       }

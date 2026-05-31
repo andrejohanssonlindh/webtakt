@@ -26,6 +26,7 @@ import { ScalesPanel }          from './panels/ScalesPanel.js';
 import { FilterPanel }          from './panels/FilterPanel.js';
 import { MidiInPanel }          from './panels/MidiInPanel.js';
 import { MixerPanel }           from './panels/MixerPanel.js';
+import { DeckPanel }            from './panels/DeckPanel.js';
 import { AmpPanel }             from './panels/AmpPanel.js';
 import { FXPanel }              from './panels/FXPanel.js';
 import { SoundsPanel }          from './panels/SoundsPanel.js';
@@ -46,7 +47,8 @@ export class SynthPanel {
     this.state        = state;
     this.library      = library;
     this.openModal    = openModal;
-    this.sampleStore  = sampleStore  ?? null;
+    // Fallback only; the live store follows the controlled deck (see getter below).
+    this._sampleStore = sampleStore  ?? null;
     this.audioContext = audioContext ?? null;
     this.midiEngine   = midiEngine   ?? null;
 
@@ -80,6 +82,11 @@ export class SynthPanel {
     });
   }
 
+  /** Sample store of the controlled deck (so sampler tabs hit the right store). */
+  get sampleStore() {
+    return this.state.project?.sampleStore ?? this._sampleStore;
+  }
+
   _buildShell() {
     this.container.innerHTML = '';
 
@@ -91,7 +98,7 @@ export class SynthPanel {
     this._tabBar.className = 'tab-bar';
 
     // Voice tabs only — FX moved to right-side toggles
-    const leftTabs = ['machine', 'sounds', 'scales', 'trig', 'synth', 'arp', 'filter', 'amp', 'lfo', 'midi', 'mixer'];
+    const leftTabs = ['machine', 'sounds', 'scales', 'trig', 'synth', 'arp', 'filter', 'amp', 'lfo', 'midi', 'mixer', 'deck'];
     leftTabs.forEach(tab => {
       const btn = document.createElement('button');
       btn.className   = 'tab-btn';
@@ -359,6 +366,7 @@ export class SynthPanel {
     switch (this.state.activeTab) {
       case 'machine': this._renderMachineTab(track); break;
       case 'mixer':   this._renderMixer();           break;
+      case 'deck':    this._renderDeck();            break;
       case 'sounds':  this._renderSounds(track);  break;
       case 'scales':  this._renderScales(track);  break;
       case 'trig':   this._renderTrig(track);   break;
@@ -430,6 +438,10 @@ export class SynthPanel {
 
   _renderMixer() {
     new MixerPanel().render(this._makeTabContext(this.state.selectedTrack));
+  }
+
+  _renderDeck() {
+    new DeckPanel().render(this._makeTabContext(this.state.selectedTrack));
   }
 
   // Machine list re-exported from MachinePickerPanel for backward compat.

@@ -16,10 +16,15 @@ VoiceSlot ×8 (each slot is fully self-contained up to the shared outputGain):
                 → DelayFX.inputNode
                   → BitcrushFX.inputNode
                     → ReverbFX.inputNode
-                      → AudioEngine.fxBus (GainNode)
-                        → AudioEngine.masterGain
-                          → AudioContext.destination
-                          → AudioEngine.analyser (AnalyserNode — parallel tap, no audio output)
+                      → Project.busGain (GainNode, per-deck — crossfader/silence)
+                        → AudioEngine.fxBus (GainNode)
+                          → AudioEngine.masterGain
+                            → AudioContext.destination
+                            → AudioEngine.analyser (AnalyserNode — parallel tap, no audio output)
+
+A track's FX-chain tail connects to its Project's `busGain` (passed to `Track` as
+the optional 4th constructor arg, defaulting to `AudioEngine.fxBus` for back-compat).
+This per-deck sub-bus is what the DECK tab's crossfader rides — see Deck Buses below.
 
 Each slot's Envelope drives ITS OWN Filter.node.frequency (per-voice filter envelope) —
 no cross-slot races on a shared frequency param.
@@ -171,6 +176,35 @@ Each track has a single **DJ filter** control (`track.djFilter`, −1 to +1, def
 **Implementation:** `Track.applyDJFilter(value)` sets `filter._baseLPF.frequency` and `filter._baseHPF.frequency` directly via `setTargetAtTime`. This shares the same BiquadFilterNodes as `base.lpf` / `base.hpf` in the FILTER tab — they are the same nodes but driven by a single unified knob in the mixer context.
 
 **Serialised** as `djFilter` in `track.toJSON()`. Reset to 0 by `resetTrack()`.
+
+---
+
+## Deck Buses & Crossfader
+
+The app runs two `Project` instances ("decks") sharing one `AudioEngine` + one
+`Clock` (beatmatch — same BPM). Each deck owns a `Project.busGain` GainNode; every
+track in that deck routes its FX-chain tail to that bus instead of the master bus:
+
+```
+deck A tracks → projectA.busGain ┐
+                                 ├→ AudioEngine.fxBus → masterGain → destination
+deck B tracks → projectB.busGain ┘
+```
+
+`DeckManager` (`js/state/DeckManager.js`) rides the two bus gains:
+
+- **Crossfader** `x ∈ [0,1]` (0 = full A, 1 = full B), **constant-power**:
+  `gainA = cos(x·π/2)`, `gainB = sin(x·π/2)` — applied via `setTargetAtTime`
+  (≈12 ms smoothing) so fader drags don't zipper.
+- **Per-deck silence** multiplies that deck's bus by 0, independent of the fader.
+- Both are folded into one `_applyGains()` pass: `gain = silenced ? 0 : faderGain`.
+
+A single master `AnalyserNode` taps `masterGain`, so the oscilloscope shows the
+**blended** mix of both decks.
+
+**Empty decks cost nothing:** an unloaded deck is reset to 0 tracks (no voices,
+no sequencers); only its `busGain` node remains (cheap, still connected) so the
+deck is instantly reusable. Deck B boots empty. See `ui.md` → Deck Tab.
 
 ---
 

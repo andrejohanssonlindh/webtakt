@@ -136,12 +136,17 @@ export class Track {
    * @param {import('../core/AudioEngine.js').AudioEngine} audio
    * @param {import('../core/Clock.js').Clock} clock
    */
-  constructor(index, audio, clock) {
+  constructor(index, audio, clock, outputBus = null) {
     this.index   = index;
     this.audio   = audio;
     this.clock   = clock;
     this.muted   = false;
     this.followSource = null;
+
+    // The node this track's FX chain feeds into. Defaults to the shared master
+    // FX bus, but a Project may pass its own per-deck bus (DeckManager) so the
+    // whole deck can be crossfaded/silenced as a unit. See design/audio-signal-chain.md.
+    this._outputBus = outputBus ?? audio.fxBus;
 
     // Output gain — mute implemented here
     this.outputGain = audio.context.createGain();
@@ -167,7 +172,7 @@ export class Track {
     this.pannerNode.connect(this.delayFX.inputNode);
     this.delayFX.connect(this.bitcrushFX.inputNode);
     this.bitcrushFX.connect(this.reverbFX.inputNode);
-    this.reverbFX.connect(audio.fxBus);
+    this.reverbFX.connect(this._outputBus);
 
     // Canonical (slot-0) filter — UI/sequencer read & write params here. Each
     // voice slot owns its own filter (created by the pool); this one is slot 0's
@@ -349,6 +354,23 @@ export class Track {
     this.liveArp?.releaseAll();
     if (this._pool) this._pool.silence(t);
     else this.envelope?.silence(t);
+  }
+
+  /**
+   * Tear this track out of the audio graph and release its resources. Stops the
+   * sequencer, hard-silences voices, stops LFOs, and disconnects the FX chain
+   * from its output bus. Used when a deck is unloaded (DeckManager) to free CPU.
+   * After dispose() the track must not be reused.
+   */
+  dispose() {
+    try { this.sequencer?.stop(); } catch (_) {}
+    this.silence(this.audio.context.currentTime);
+    this.liveArp?.releaseAll?.();
+    this.lfos?.forEach(lfo => { try { lfo.stop?.(); } catch (_) {} });
+    // Disconnect the chain tail from the (per-deck) output bus so the deck's
+    // bus can be GC'd and the nodes stop pulling on the graph.
+    try { this.reverbFX?.disconnect?.(); } catch (_) {}
+    try { this.outputGain?.disconnect?.(); } catch (_) {}
   }
 
   /**

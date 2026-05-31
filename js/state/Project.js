@@ -35,22 +35,41 @@ export class Project {
    * @param {import('../core/AudioEngine.js').AudioEngine} audio
    * @param {import('../core/Clock.js').Clock} clock
    */
-  constructor(audio, clock) {
+  /**
+   * @param {import('../core/AudioEngine.js').AudioEngine} audio
+   * @param {import('../core/Clock.js').Clock} clock
+   * @param {object} [opts]
+   * @param {number}  [opts.trackCount]  — initial track count (default 8)
+   * @param {GainNode} [opts.outputBus]  — node the deck bus feeds into (default audio.fxBus)
+   */
+  constructor(audio, clock, opts = {}) {
     this.audio  = audio;
     this.clock  = clock;
     this.sampleStore = new SampleStore();
 
     this._midiEngine = null;
 
+    // Per-deck sub-bus: every track in this project funnels here, then this bus
+    // feeds the shared master FX bus. A DeckManager rides busGain.gain to
+    // crossfade / silence the whole deck as a unit. See design/audio-signal-chain.md.
+    this.busGain = audio.context.createGain();
+    this.busGain.gain.value = 1.0;
+    this.busGain.connect(opts.outputBus ?? audio.fxBus);
+
+    const count = opts.trackCount ?? TRACK_COUNT_DEFAULT;
     this.tracks = Array.from(
-      { length: TRACK_COUNT_DEFAULT },
-      (_, i) => {
-        const t = new Track(i, audio, clock);
-        t.sampleStore = this.sampleStore;
-        return t;
-      }
+      { length: count },
+      (_, i) => this._makeTrack(i)
     );
     this._wireFollowTracks();
+  }
+
+  /** Build a Track wired to this deck's bus + sample store. */
+  _makeTrack(i) {
+    const t = new Track(i, this.audio, this.clock, this.busGain);
+    t.sampleStore = this.sampleStore;
+    if (this._midiEngine) t.setMidiEngine(this._midiEngine);
+    return t;
   }
 
   /** Give every sequencer a live reference to the project's tracks array. */
@@ -81,10 +100,7 @@ export class Project {
     if (n > this.tracks.length) {
       // Add tracks — start sequencer immediately if clock is already running
       while (this.tracks.length < n) {
-        const i = this.tracks.length;
-        const t = new Track(i, this.audio, this.clock);
-        t.sampleStore = this.sampleStore;
-        if (this._midiEngine) t.setMidiEngine(this._midiEngine);
+        const t = this._makeTrack(this.tracks.length);
         this.tracks.push(t);
         if (this.clock.isPlaying) t.sequencer.start();
       }
@@ -92,7 +108,7 @@ export class Project {
       // Remove tracks from the end — stop their sequencers first
       while (this.tracks.length > n) {
         const t = this.tracks.pop();
-        t.sequencer.stop();
+        t.dispose();
       }
     }
     this._wireFollowTracks();
@@ -150,6 +166,43 @@ export class Project {
     (obj.tracks ?? []).forEach((trackObj, i) => {
       if (this.tracks[i]) this.tracks[i].fromJSON(trackObj);
     });
+  }
+
+  /**
+   * Load a project JSON into this deck *without* changing the shared transport
+   * tempo (beatmatch: the deck adopts the current clock BPM, its saved BPM is
+   * ignored). If the clock is already running, the newly-loaded sequencers are
+   * started immediately so the deck plays in the background. Used by DeckManager.
+   * @param {object} obj
+   */
+  loadDeckJSON(obj) {
+    // Beatmatch: keep the shared clock BPM. Restore tracks only.
+    if (obj.trackCount) this.setTrackCount(obj.trackCount);
+    (obj.tracks ?? []).forEach((trackObj, i) => {
+      if (this.tracks[i]) this.tracks[i].fromJSON(trackObj);
+    });
+    this.tracks.forEach(t => t.onBpmChanged(this.clock.bpm));
+    if (this.clock.isPlaying) {
+      this.tracks.forEach(t => t.sequencer.start());
+    }
+  }
+
+  /** Load a File into this deck (beatmatched). @param {File} file */
+  async loadDeckFile(file) {
+    const text = await file.text();
+    this.loadDeckJSON(JSON.parse(text));
+  }
+
+  /**
+   * Tear the whole deck out of the audio graph and reset it to EMPTY (0 tracks).
+   * Stops + disposes every track. Used when a deck is unloaded to free CPU; the
+   * next loadDeckJSON() repopulates tracks via setTrackCount(). The deck bus is
+   * kept (cheap, still connected) so the deck is instantly reusable.
+   */
+  reset() {
+    this.tracks.forEach(t => t.dispose());
+    this.tracks = [];
+    this._wireFollowTracks();
   }
 
   /** Persist to localStorage. */

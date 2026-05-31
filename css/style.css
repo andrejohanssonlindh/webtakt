@@ -446,9 +446,11 @@ body {
   min-width: 0;
 }
 
-/* Oscilloscope strip — fills gap between tab bar and FX block */
+/* Oscilloscope strip — sits between tab bar and FX block. Fixed-ish width
+   (not flex:1) so the tab bar keeps room for all tabs incl. DECK. */
 .oscilloscope {
-  flex: 1;
+  flex: 0 1 160px;
+  width: 160px;
   min-width: 0;
   align-self: stretch;
   display: block;
@@ -3195,4 +3197,146 @@ body {
 .arp-add-step-btn:hover {
   border-color: var(--accent-dim);
   color: var(--accent);
+}
+
+/* ─── DECK TAB (DJ crossfade) ─────────────────────────────── */
+
+.deck-panel {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
+  padding: 4px;
+}
+
+.deck-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 10px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.deck-col.deck-controlled {
+  border-color: var(--accent);
+  background: var(--surface-3);
+}
+
+.deck-col-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.deck-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-bright);
+  letter-spacing: 0.08em;
+}
+
+.deck-col.deck-controlled .deck-label { color: var(--accent); }
+
+.deck-filename {
+  font-size: 9px;
+  color: var(--text-dim);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+  min-height: 11px;
+}
+
+.deck-state {
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 5px;
+  border-radius: 2px;
+}
+.deck-state.empty  { color: var(--text-dim);    border: 1px solid var(--border); }
+.deck-state.loaded { color: var(--accent);      border: 1px solid var(--accent-dim); }
+
+.deck-btn {
+  background: var(--surface-1, #1c1c1c);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 7px 8px;
+  text-align: center;
+  transition: border-color 0.1s, color 0.1s, background 0.1s;
+}
+.deck-btn:hover:not(:disabled) {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+.deck-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.deck-btn.deck-control.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--surface-3);
+}
+.deck-btn.deck-silence.active {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.deck-btn.deck-unload:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* Crossfader column */
+.deck-fader-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex: 0 0 90px;
+  padding: 10px 6px;
+}
+
+.deck-fader-title {
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.deck-fader {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.deck-fader-ends {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.deck-fader-readout {
+  font-size: 9px;
+  color: var(--accent);
+  letter-spacing: 0.04em;
 }

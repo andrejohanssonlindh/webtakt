@@ -36,9 +36,14 @@
  */
 
 export class AppState {
-  /** @param {import('./Project.js').Project} project */
-  constructor(project) {
-    this.project            = project;
+  /**
+   * @param {import('./Project.js').Project} project — boot project (deck A)
+   * @param {import('./DeckManager.js').DeckManager} [decks] — two-deck manager.
+   *   When present, `.project` follows the controlled deck.
+   */
+  constructor(project, decks = null) {
+    this.decks              = decks;
+    this._project           = project;
     this.selectedTrackIndex = 0;
     this.activeTab          = 'synth';
     this.activeLFOIndex     = 0;
@@ -61,8 +66,20 @@ export class AppState {
     this.emit('drumModeChanged', { drumMode: on });
   }
 
+  /**
+   * The active Project. When a DeckManager is attached this follows the
+   * controlled deck (so the whole UI re-points on "take control"); otherwise
+   * it's the fixed boot project.
+   */
+  get project() {
+    return this.decks ? this.decks.activeProject : this._project;
+  }
+
   get selectedTrack() {
-    return this.project.tracks[this.selectedTrackIndex];
+    const tracks = this.project.tracks;
+    if (!tracks.length) return null;
+    const i = Math.max(0, Math.min(this.selectedTrackIndex, tracks.length - 1));
+    return tracks[i];
   }
 
   get selectedStep() {
