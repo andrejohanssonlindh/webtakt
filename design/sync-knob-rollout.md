@@ -36,6 +36,7 @@
 | Arp rate | `js/signal/Arpeggiator.js`, `js/ui/panels/ArpPanel.js` | after pilot (custom panel — needs own knob wiring) | ✅ done. `bpmDiv`→`bpmCount32` for chord/random **and** per-step manual. Shared `ArpPanel._makeSyncKnob` (accessor-bundle, works for params + step objects). FX-style: integer count, shift-snaps. |
 | LFO rate | `js/signal/LFO.js`, `js/ui/panels/LFOPanel.js` | after pilot (custom panel) | ✅ done. `lfo.bpmDiv`→`lfo.bpmCount32` (count = LFO *period*, `Hz = 1/count32ToSeconds`); Advanced per-section too (`lfo.adsr.<sec>.bpmCount32`). Shared `LFOPanel._makeSyncKnob`. **Continuous in BPM mode, shift-drag/scroll snaps.** Hz-mode **Mult knob dropped** (`lfo.speedMult`/`.mult` kept in `_params` for load back-compat only). |
 | Amp/filter envelope times | `js/signal/Envelope.js`, `ADSRWidget.js`, `AmpPanel.js`, `FilterPanel.js`, `VoicePool.js`, `Track.js` | new feature (user-approved) | ✅ done. Per-stage MS↔BPM on A/D/R of `env.*` **and** `fenv.*` (sustain excluded). New params `<prefix>.<stage>.syncMode` + `.bpmCount32`. Resolved at note-fire (`Envelope._stageSeconds`, `count32ToSeconds`) — no write-back. BPM via `Track.onBpmChanged → VoicePool.setBpm → Envelope.setBpm`. ADSRWidget: per-stage MS/BPM tag under each timed knob; canvas plots resolved seconds; BPM-stage knob drives the 1/32 count, drag snaps it (shift → musical division). Both modes p-lockable (active param), syncMode p-lockable too. |
+| FM per-operator ADSR times | `js/machines/FMMachine.js`, `FMPanel.js`, `VoicePool.js` | follow-up — FM carries its OWN ADSR (4 ops × A/D/S/R), separate from `Envelope.js`, and was missed in the row above | ✅ done. Per-stage MS↔BPM on A/D/R of all four operators (`opN.env.{a,d,r}`; sustain excluded — it's a level, not a time). New params `opN.env.<stage>.syncMode` + `.bpmCount32`, JS-only + hidden (`plockMode:'js'`) like the existing FM env params. Resolved at note-fire (`FMMachine._stageSeconds` in `_scheduleOpADS/_scheduleOpR`, `count32ToSeconds`) — no write-back. BPM reaches the machine via the **already-existing** `Track.onBpmChanged → VoicePool.setBpm` path, extended to also call `machine.setBpm?.(bpm)` (and seed BPM in `_makeSlot` + `setMachine`). FMPanel: each op's A/D/R knob gets the click-center MS↔BPM toggle (KnobWidget `centerLabel`/`onCenterClick`/`setRange`); BPM knob drives the integer 1/32 count (shown "1/8", shift-snaps via `MUSICAL_SNAP_32`), the per-op canvas plots resolved seconds. Both modes p-lockable, syncMode too. Back-compat: legacy FM projects lack the keys → constructor defaults (`'ms'`/count 4); no `bpmDiv` migration needed (FM never had sync). Covered by `tests/tests/sync_knob.js`. |
 
 ## Notes / gotchas
 
@@ -53,6 +54,13 @@
   divisions. The Hz-mode **Mult knob was dropped** (count model makes it
   redundant); `lfo.speedMult`/`lfo.adsr.*.mult` stay in `_params` for load
   back-compat but are no longer surfaced.
+- **FM has its own ADSR** (a parallel copy of `Envelope.js`'s scheduling, per
+  operator) — it is NOT routed through `Envelope`, which is why the amp/filter
+  envelope migration didn't cover it. The follow-up row added the same per-stage
+  MS↔BPM model directly on `FMMachine`. The BPM plumbing already reached
+  `VoicePool` (for the track envelopes); FM only needed the final hop
+  (`machine.setBpm?.()`). If another machine grows its own internal envelope,
+  it needs the same treatment.
 - **Serialization / back-compat**: every migrated class maps legacy `*.bpmDiv`
   strings → 32nd count in `fromJSON` (via `divToCount32`) and deletes the legacy
   key: DelayFX, ReverbFX, LFO (global + per-section), Arpeggiator (chord/random +

@@ -248,4 +248,52 @@ suite('Sync knob (MS/BPM unified)', () => {
     assert.ok(t2.envelope.getParam('fenv.release.bpmCount32') === 4, 'fenv count round-trip');
   });
 
+  test('FMMachine: per-operator ADSR tempo-sync resolves seconds + round-trips', async () => {
+    const { track } = await makeOfflineTrack('fm', 0.1);   // clock 120 BPM
+    const fm = track.machine;
+    fm.setBpm(120);
+
+    // Default ms mode: op1 attack stays the raw seconds value.
+    fm.setParam('op1.env.a', 0.05);
+    assert.near(fm._stageSeconds('op1', 'a'), 0.05, 1e-9, 'ms stage = raw seconds');
+
+    // BPM mode: attack follows the 1/32 count (8 = 1/4 = 0.5s @120).
+    fm.setParam('op1.env.a.syncMode', 'bpm');
+    fm.setParam('op1.env.a.bpmCount32', 8);
+    assert.near(fm._stageSeconds('op1', 'a'), 0.5, 1e-6, 'bpm stage from count');
+
+    // BPM change re-resolves live (no write-back to op1.env.a).
+    fm.setBpm(60);
+    assert.near(fm._stageSeconds('op1', 'a'), 1.0, 1e-6, 'bpm stage follows tempo');
+    assert.near(fm.getParam('op1.env.a'), 0.05, 1e-9, 'seconds param untouched in bpm mode');
+
+    // Per-operator independence: op2 release is its own synced stage.
+    fm.setParam('op2.env.r.syncMode', 'bpm');
+    fm.setParam('op2.env.r.bpmCount32', 4);
+    fm.setBpm(120);
+    assert.near(fm._stageSeconds('op2', 'r'), 0.25, 1e-6, 'op2 release from count');
+    // op3 left in ms mode is unaffected.
+    fm.setParam('op3.env.d', 0.2);
+    assert.near(fm._stageSeconds('op3', 'd'), 0.2, 1e-9, 'untouched op stays ms');
+
+    // BPM propagates through the track (onBpmChanged → VoicePool → machine).
+    track.onBpmChanged(60);
+    assert.near(track.machine._stageSeconds('op1', 'a'), 1.0, 1e-6, 'track BPM reaches FM machine');
+    track.onBpmChanged(120);
+
+    // Round-trip the new sync params.
+    const json = fm.toJSON();
+    const { track: t2 } = await makeOfflineTrack('fm', 0.1);
+    t2.machine.fromJSON(json);
+    assert.ok(t2.machine.getParam('op1.env.a.syncMode') === 'bpm', 'syncMode round-trip');
+    assert.ok(t2.machine.getParam('op1.env.a.bpmCount32') === 8, 'count round-trip');
+    assert.ok(t2.machine.getParam('op2.env.r.bpmCount32') === 4, 'op2 count round-trip');
+
+    // Back-compat: a legacy FM project with no sync keys defaults to ms mode.
+    const { track: t3 } = await makeOfflineTrack('fm', 0.1);
+    t3.machine.fromJSON({ type: 'fm', params: { 'op1.env.a': 0.02 } });
+    assert.ok(t3.machine.getParam('op1.env.a.syncMode') === 'ms', 'missing syncMode defaults to ms');
+    assert.near(t3.machine._stageSeconds('op1', 'a'), 0.02, 1e-9, 'legacy stage = raw seconds');
+  });
+
 });

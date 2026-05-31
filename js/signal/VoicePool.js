@@ -132,6 +132,7 @@ export class VoicePool {
 
   _makeSlot(isCanonical = false) {
     const machine  = this._makeMachine(this._context);
+    machine.setBpm?.(this._bpm);   // machines with tempo-synced env stages (FM)
     const envelope = new Envelope(this._context);
     envelope.setBpm(this._bpm);
     // Slot 0 uses the canonical track filter; other slots get their own filter
@@ -155,10 +156,13 @@ export class VoicePool {
   /** All per-slot filters — used for direct AudioParam writes (e.g. DJ filter). */
   get filters()  { return this._slots.map(s => s._filter); }
 
-  /** Propagate the current BPM to every slot's envelope (for tempo-synced stages). */
+  /** Propagate the current BPM to every slot's envelope + machine (tempo-synced stages). */
   setBpm(bpm) {
     this._bpm = bpm;
-    for (const slot of this._slots) slot.envelope.setBpm(bpm);
+    for (const slot of this._slots) {
+      slot.envelope.setBpm(bpm);
+      slot.machine.setBpm?.(bpm);   // machines with tempo-synced env stages (FM)
+    }
   }
 
   /** Hard kill every voice slot (global STOP/panic). */
@@ -255,6 +259,7 @@ export class VoicePool {
       // constructor). Connecting to ampGain directly would bypass the filter,
       // so the machine must feed the filter's base-HPF entry node.
       const newMachine = makeMachine(this._context);
+      newMachine.setBpm?.(this._bpm);   // tempo-synced env stages (FM)
       if (newMachine.type === oldType) newMachine.fromJSON(canonicalJSON);
       newMachine.connect(slot._filter._baseHPF);
       slot.machine = newMachine;

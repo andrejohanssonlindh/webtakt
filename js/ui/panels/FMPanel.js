@@ -6,13 +6,26 @@
  *
  * Receives the same panel context as DefaultMachinePanel:
  *   { machine, step, hasStep, container, activeWidgets, writeValue, emitStep, fmtParam }
+ *
+ * Per-operator ADSR tempo-sync: each operator's A/D/R knob carries a clickable
+ * MS/BPM label in its body (center-click toggles, like the FX delay knob and
+ * ADSRWidget). In BPM mode the knob drives a 1/32 count (`${path}.bpmCount32`)
+ * shown as "1/8", shift-snapping to musical divisions; FMMachine resolves it to
+ * seconds at note-fire from the track BPM. Sustain has no duration → no toggle.
+ * See js/machines/FMMachine.js and design/sync-knob-rollout.md.
  */
 
 import { KnobWidget } from '../KnobWidget.js';
+import { formatCount32, count32ToSeconds, MUSICAL_SNAP_32 } from '../../util/BpmSync.js';
+
+// Count bounds for BPM-mode operator-env knobs (1/32 … 4 bars in 1/32 units).
+const FM_COUNT_LO = 1, FM_COUNT_HI = 128;
 
 export class FMPanel {
   render(ctx) {
-    const { machine, step, hasStep, container, activeWidgets, knobByPath, writeValue, emitStep, fmtParam } = ctx;
+    const { machine, track, step, hasStep, container, activeWidgets, knobByPath, writeValue, emitStep, fmtParam } = ctx;
+
+    const getBpm = () => track?.clock?.bpm ?? 120;
 
     const allParams = machine.getParamList();
     const paramMap  = Object.fromEntries(allParams.map(p => [p.path, p]));
@@ -71,6 +84,16 @@ export class FMPanel {
 
       const envKeys = [`${opKey}.env.a`, `${opKey}.env.d`, `${opKey}.env.s`, `${opKey}.env.r`];
 
+      // Resolve a timed stage (a/d/r) to seconds, honouring its sync mode — so
+      // the canvas shape reflects real durations even when a stage is BPM-synced.
+      // Mirrors FMMachine._stageSeconds / Envelope._stageSeconds.
+      const stageSecs = (key) => {
+        if (machine.getParam(`${key}.syncMode`) === 'bpm') {
+          return count32ToSeconds(machine.getParam(`${key}.bpmCount32`), getBpm());
+        }
+        return machine.getParam(key);
+      };
+
       const drawEnvCanvas = () => {
         const W = envCanvas.clientWidth  || 60;
         const H = envCanvas.clientHeight || 40;
@@ -85,10 +108,10 @@ export class FMPanel {
         ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx2.clearRect(0, 0, W, H);
 
-        const A  = machine.getParam(`${opKey}.env.a`);
-        const D  = machine.getParam(`${opKey}.env.d`);
+        const A  = stageSecs(`${opKey}.env.a`);
+        const D  = stageSecs(`${opKey}.env.d`);
         const S  = machine.getParam(`${opKey}.env.s`);
-        const Rv = machine.getParam(`${opKey}.env.r`);
+        const Rv = stageSecs(`${opKey}.env.r`);
         const total = A + D + 0.1 + Rv;
         const pad   = { l: 3, r: 3, t: 4, b: 4 };
         const uw    = W - pad.l - pad.r;
@@ -127,21 +150,62 @@ export class FMPanel {
         const envLabels = ['A', 'D', 'S', 'R'];
         const p = paramMap[path];
         if (!p) return;
-        const hasPLock   = hasStep && step.plocks.has(path);
-        const displayVal = hasPLock ? step.plocks.get(path) : machine.getParam(path);
+
+        // Sustain has no duration → plain percent knob, no MS/BPM toggle.
+        const syncable = !path.endsWith('.s');
+        const modeKey  = `${path}.syncMode`;
+        const countKey = `${path}.bpmCount32`;
+
+        // P-lock-aware read of any param (step override wins when a step is held).
+        const get = (key) => (hasStep && step.plocks.has(key))
+          ? step.plocks.get(key) : machine.getParam(key);
+
+        const isBpm = () => syncable && get(modeKey) === 'bpm';
+        // Active param: the 1/32 count in BPM mode, raw seconds otherwise.
+        const activeKey = () => isBpm() ? countKey : path;
+        const range = () => isBpm()
+          ? { min: FM_COUNT_LO, max: FM_COUNT_HI }
+          : { min: p.min, max: p.max };
+        const fmt = (v) => {
+          if (!syncable) return Math.round(v * 100) + '%';     // sustain
+          return isBpm() ? formatCount32(v) : Math.round(v * 1000) + 'ms';
+        };
+        const centerLabel = () => syncable ? (isBpm() ? 'BPM' : 'MS') : null;
+
+        const hasPLock = hasStep && (step.plocks.has(activeKey())
+                                     || (syncable && step.plocks.has(modeKey)));
+        const r0 = range();
         const knob = new KnobWidget({
-          label:   envLabels[i],
-          min:     p.min, max: p.max,
-          value:   displayVal ?? p.default ?? p.min,
-          bipolar: false,
-          size:    44,
-          fmt:     v => path.endsWith('.s') ? Math.round(v * 100) + '%' : Math.round(v * 1000) + 'ms',
+          label:       envLabels[i],
+          min:         r0.min, max: r0.max,
+          value:       get(activeKey()) ?? p.default ?? r0.min,
+          bipolar:     false,
+          size:        44,
+          fmt,
+          centerLabel: centerLabel(),
+          // BPM mode: shift-snap the 1/32 count to musical divisions.
+          snapPoints:  isBpm() ? MUSICAL_SNAP_32 : null,
           onChange: v => {
-            writeValue(machine, path, v, false);
+            // BPM mode stores an integer 1/32 count (like the FX sync knobs).
+            const val = isBpm() ? Math.round(v) : v;
+            writeValue(machine, activeKey(), val, false);
             knob.setHasPLock(hasStep);
             drawEnvCanvas();
           },
           onRelease: () => { if (hasStep) emitStep(); },
+          // Center-click flips MS↔BPM, then re-skin the knob to the new param.
+          onCenterClick: !syncable ? null : () => {
+            const next = isBpm() ? 'ms' : 'bpm';
+            writeValue(machine, modeKey, next, false);
+            const r = range();
+            knob.setRange(r.min, r.max, fmt, isBpm() ? MUSICAL_SNAP_32 : null);
+            knob.setValue(get(activeKey()) ?? r.min);
+            knob.setCenterLabel(centerLabel());
+            knob.setHasPLock(hasStep && (step.plocks.has(activeKey())
+                                         || step.plocks.has(modeKey)));
+            drawEnvCanvas();
+            if (hasStep) emitStep();
+          },
         });
         knob.setHasPLock(hasPLock);
         envKnobWrap.appendChild(knob.el);

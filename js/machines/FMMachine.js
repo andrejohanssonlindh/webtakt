@@ -61,6 +61,7 @@
 
 import { Machine } from './Machine.js';
 import { makeTrimGain } from './LoudnessTrim.js';
+import { count32ToSeconds } from '../util/BpmSync.js';
 
 const MAX_MOD_RATIO = 10;
 
@@ -122,9 +123,27 @@ export class FMMachine extends Machine {
       'op4.env.r':    0.05,
 
       'output.level': 0.8,
+
+      // Per-stage tempo-sync: mode ('ms' | 'bpm') + 1/32 count for each timed
+      // stage (A/D/R) of every operator. Default count 4 = 1/8. Resolved to
+      // seconds at note-fire when mode='bpm' (see _scheduleOpADS/_scheduleOpR).
+      // Sustain has no duration, so it is never synced.
+      'op1.env.a.syncMode': 'ms', 'op1.env.a.bpmCount32': 4,
+      'op1.env.d.syncMode': 'ms', 'op1.env.d.bpmCount32': 4,
+      'op1.env.r.syncMode': 'ms', 'op1.env.r.bpmCount32': 4,
+      'op2.env.a.syncMode': 'ms', 'op2.env.a.bpmCount32': 4,
+      'op2.env.d.syncMode': 'ms', 'op2.env.d.bpmCount32': 4,
+      'op2.env.r.syncMode': 'ms', 'op2.env.r.bpmCount32': 4,
+      'op3.env.a.syncMode': 'ms', 'op3.env.a.bpmCount32': 4,
+      'op3.env.d.syncMode': 'ms', 'op3.env.d.bpmCount32': 4,
+      'op3.env.r.syncMode': 'ms', 'op3.env.r.bpmCount32': 4,
+      'op4.env.a.syncMode': 'ms', 'op4.env.a.bpmCount32': 4,
+      'op4.env.d.syncMode': 'ms', 'op4.env.d.bpmCount32': 4,
+      'op4.env.r.syncMode': 'ms', 'op4.env.r.bpmCount32': 4,
     };
 
     this._baseFreq = 440;
+    this._bpm      = 120;  // current tempo, for resolving BPM-synced env stages
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
@@ -233,6 +252,25 @@ export class FMMachine extends Machine {
     this._op4Osc.start();
   }
 
+  /** Update BPM used to resolve tempo-synced operator envelope stages. */
+  setBpm(bpm) {
+    this._bpm = bpm;
+  }
+
+  /**
+   * Resolve an operator stage duration to seconds, honouring its sync mode.
+   * `op` is 'op1'..'op4'; `stage` is 'a' | 'd' | 'r'. When the stage is
+   * BPM-synced the duration comes from its 1/32 count at the current BPM;
+   * otherwise the plain seconds param is used. Mirrors Envelope._stageSeconds.
+   */
+  _stageSeconds(op, stage) {
+    const secKey = `${op}.env.${stage}`;
+    if (this._params[`${secKey}.syncMode`] === 'bpm') {
+      return count32ToSeconds(this._params[`${secKey}.bpmCount32`], this._bpm);
+    }
+    return this._params[secKey];
+  }
+
   // offTime is the gate-close time; when provided, the full ADSR (A+D+S+R) is
   // scheduled immediately so note length is respected regardless of when the
   // sequencer calls noteOff().
@@ -273,15 +311,15 @@ export class FMMachine extends Machine {
   }
 
   _scheduleOpADS(op, time) {
-    const a = this._params[`${op}.env.a`];
-    const d = this._params[`${op}.env.d`];
+    const a = this._stageSeconds(op, 'a');
+    const d = this._stageSeconds(op, 'd');
     const s = this._params[`${op}.env.s`];
     _scheduleADS(this[`_${op}EnvGain`].gain, time, a, d, 1.0, s);
   }
 
   _scheduleOpR(op, offTime) {
     const s = this._params[`${op}.env.s`];
-    const r = this._params[`${op}.env.r`];
+    const r = this._stageSeconds(op, 'r');
     _scheduleR(this[`_${op}EnvGain`].gain, offTime, s, r, 0);
   }
 
@@ -373,32 +411,44 @@ export class FMMachine extends Machine {
       max: suffix === 's' ? 1 : (suffix === 'r' ? 8 : 4),
       default: def, modulatable: false, hidden: true, plockMode: 'js',
     });
+    // Per-stage tempo-sync siblings (A/D/R only — sustain has no duration).
+    // JS-only + hidden like the seconds params; both modes are p-lockable.
+    const syncDefs = (op, suffix) => [
+      { path: `${op}.env.${suffix}.syncMode`,   label: `${suffix.toUpperCase()} Sync`,
+        type: 'enum', default: 'ms', modulatable: false, hidden: true, plockMode: 'js' },
+      { path: `${op}.env.${suffix}.bpmCount32`, label: `${suffix.toUpperCase()} Count`,
+        type: 'number', min: 1, max: 128, default: 4,
+        modulatable: false, hidden: true, plockMode: 'js' },
+    ];
+    const envDefs = (op, suffix, label, def) =>
+      suffix === 's' ? [envDef(op, suffix, label, def)]
+                     : [envDef(op, suffix, label, def), ...syncDefs(op, suffix)];
     return [
       // OP1 — carrier
       { path: 'op1.ratio',    label: 'Ratio',  type: 'number', min: 0.25, max: 8,  default: 1.0, modulatable: true, lfoMin: 0.25, lfoMax: 8,  plockMode: 'js'        },
       { path: 'op1.level',    label: 'Level',  type: 'number', min: 0,    max: 1,  default: 0.8, modulatable: true, lfoMin: 0,    lfoMax: 1,  plockMode: 'audioParam' },
       { path: 'op1.detune',   label: 'Detune', type: 'number', min: -50,  max: 50, default: 0,   modulatable: true, lfoMin: -50,  lfoMax: 50, plockMode: 'audioParam' },
-      envDef('op1', 'a', 'A', 0.01), envDef('op1', 'd', 'D', 0.1),
-      envDef('op1', 's', 'S', 0.8),  envDef('op1', 'r', 'R', 0.3),
+      ...envDefs('op1', 'a', 'A', 0.01), ...envDefs('op1', 'd', 'D', 0.1),
+      ...envDefs('op1', 's', 'S', 0.8),  ...envDefs('op1', 'r', 'R', 0.3),
       // OP2 — modulator with feedback
       { path: 'op2.ratio',    label: 'Ratio',  type: 'number', min: 0.25, max: 16, default: 1.5, modulatable: true, lfoMin: 0.25, lfoMax: 16, plockMode: 'js'        },
       { path: 'op2.level',    label: 'Index',  type: 'number', min: 0,    max: 1,  default: 0.5, modulatable: true, lfoMin: 0,    lfoMax: 1,  plockMode: 'audioParam' },
       { path: 'op2.feedback', label: 'FB',     type: 'number', min: 0,    max: 1,  default: 0.0, modulatable: true, lfoMin: 0,    lfoMax: 1,  plockMode: 'audioParam' },
       { path: 'op2.detune',   label: 'Detune', type: 'number', min: -50,  max: 50, default: 0,   modulatable: true, lfoMin: -50,  lfoMax: 50, plockMode: 'audioParam' },
-      envDef('op2', 'a', 'A', 0.001), envDef('op2', 'd', 'D', 0.3),
-      envDef('op2', 's', 'S', 0.0),   envDef('op2', 'r', 'R', 0.1),
+      ...envDefs('op2', 'a', 'A', 0.001), ...envDefs('op2', 'd', 'D', 0.3),
+      ...envDefs('op2', 's', 'S', 0.0),   ...envDefs('op2', 'r', 'R', 0.1),
       // OP3 — modulator → op1
       { path: 'op3.ratio',    label: 'Ratio',  type: 'number', min: 0.25, max: 16, default: 2.0, modulatable: true, lfoMin: 0.25, lfoMax: 16, plockMode: 'js'        },
       { path: 'op3.level',    label: 'Index',  type: 'number', min: 0,    max: 1,  default: 0.3, modulatable: true, lfoMin: 0,    lfoMax: 1,  plockMode: 'audioParam' },
       { path: 'op3.detune',   label: 'Detune', type: 'number', min: -50,  max: 50, default: 0,   modulatable: true, lfoMin: -50,  lfoMax: 50, plockMode: 'audioParam' },
-      envDef('op3', 'a', 'A', 0.001), envDef('op3', 'd', 'D', 0.2),
-      envDef('op3', 's', 'S', 0.0),   envDef('op3', 'r', 'R', 0.1),
+      ...envDefs('op3', 'a', 'A', 0.001), ...envDefs('op3', 'd', 'D', 0.2),
+      ...envDefs('op3', 's', 'S', 0.0),   ...envDefs('op3', 'r', 'R', 0.1),
       // OP4 — modulator → op3
       { path: 'op4.ratio',    label: 'Ratio',  type: 'number', min: 0.25, max: 16, default: 3.0, modulatable: true, lfoMin: 0.25, lfoMax: 16, plockMode: 'js'        },
       { path: 'op4.level',    label: 'Index',  type: 'number', min: 0,    max: 1,  default: 0.2, modulatable: true, lfoMin: 0,    lfoMax: 1,  plockMode: 'audioParam' },
       { path: 'op4.detune',   label: 'Detune', type: 'number', min: -50,  max: 50, default: 0,   modulatable: true, lfoMin: -50,  lfoMax: 50, plockMode: 'audioParam' },
-      envDef('op4', 'a', 'A', 0.001), envDef('op4', 'd', 'D', 0.15),
-      envDef('op4', 's', 'S', 0.0),   envDef('op4', 'r', 'R', 0.05),
+      ...envDefs('op4', 'a', 'A', 0.001), ...envDefs('op4', 'd', 'D', 0.15),
+      ...envDefs('op4', 's', 'S', 0.0),   ...envDefs('op4', 'r', 'R', 0.05),
       // Output
       { path: 'output.level', label: 'Level',  type: 'number', min: 0,    max: 1,  default: 0.8, modulatable: true, lfoMin: 0,    lfoMax: 1,  plockMode: 'audioParam' },
     ];
