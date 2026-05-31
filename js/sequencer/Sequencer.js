@@ -60,7 +60,7 @@ export class Sequencer {
     // Wall-clock trigger state — read by TrackRow for the trig glow animation
     this.lastFireTime     = 0;   // performance.now() at last fire
     this.lastFireDuration = 0;   // gate length in ms
-    this.lastScheduledTime = 0;  // AudioContext time of the most recently scheduled tick
+    this.lastScheduledTime = null;  // AudioContext time of the most recently scheduled tick (null = not ticked yet)
 
     // Active gate windows — read by StepGrid to show sustain dots on steps
     // Each entry: { absStep, voiceCount, endMs }
@@ -98,7 +98,7 @@ export class Sequencer {
    * @returns {{ absStep: number, nudge: number } | null}
    */
   stepIndexAtTime(time) {
-    if (!this.lastScheduledTime || this.stepCount <= 0) return null;
+    if (this.lastScheduledTime === null || this.stepCount <= 0) return null;
     const secondsPerTick = this.clock._secondsPerTick;
     const lastFired  = (this._stepIndex - 1 + this.stepCount) % this.stepCount;
     const deltaTicks = (time - this.lastScheduledTime) / secondsPerTick;
@@ -213,6 +213,30 @@ getVisibleSteps() {
     map.set('arp.gate',     'js');
     map.set('arp.variance', 'js');
     return map;
+  }
+
+  /**
+   * Pre-position a firing voice's filter cutoff to a p-locked value BEFORE the
+   * note, while the slot's amp gate is still shut (so the move is silent). A fresh
+   * pool slot's filter rests at its 8 kHz default; without this, a note p-locked to
+   * a low cutoff plays its onset through the still-open filter → a short muffled
+   * thump on the first 8 notes (once per slot). Pre-settling at scheduling time
+   * (well ahead of the note via the scheduler lookahead) means scheduleNote's
+   * envelope starts from the right cutoff with no audible transient. No-op unless
+   * the step actually p-locks filter.cutoff. Slot-0 (canonical) is included — it
+   * is never re-synced from siblings, so it can be stale too.
+   *
+   * Only runs when the slot was IDLE (gate shut) before this note — moving the
+   * cutoff on a slot whose previous note is still ringing its release tail would
+   * audibly alter that tail. A busy slot keeps the cancelAndHoldAtTime path in
+   * scheduleFrequency, which at worst re-thumps that one note.
+   */
+  _anchorVoiceCutoff(voice, envOverrides, voiceWasIdle) {
+    if (!voiceWasIdle) return;
+    const cut = envOverrides['filter.cutoff'];
+    if (cut === undefined || !voice?._filter) return;
+    // Settle starting now (scheduling time), ahead of the scheduled note start.
+    voice._filter.anchorFrequency(cut, this.clock.audio.context.currentTime);
   }
 
   _fireStep(step, scheduledTime) {
@@ -391,10 +415,20 @@ getVisibleSteps() {
         this.lastFireTime     = nowMs + startOffsetMs;
         this.lastFireDuration = (offTime - time) * 1000;
 
-        // Record active gate for sustain-dot rendering in StepGrid
-        const gateMs = (offTime - time) * 1000;
+        // Record active gate for sustain-dot rendering in StepGrid.
+        // spanSteps = how many steps the note's gate reaches forward from its
+        // origin (1 tick == 1 step). StepGrid paints a sustain dot only on the
+        // steps actually inside this span — not on every other step — so a single
+        // long note can't light up the whole row.
+        const gateMs    = (offTime - time) * 1000;
+        const spanSteps = Math.max(1, Math.ceil(step.voices[0].length));
         this._activeGates = this._activeGates.filter(g => g.endMs > nowMs);
-        this._activeGates.push({ absStep: this._stepIndex, voiceCount: step.voices.length, endMs: nowMs + startOffsetMs + gateMs });
+        this._activeGates.push({
+          absStep:   this._stepIndex,
+          spanSteps,
+          voiceCount: step.voices.length,
+          endMs:     nowMs + startOffsetMs + gateMs,
+        });
       }
 
       const finalNote = Math.max(0, Math.min(127, sv.note + Math.round(tone)));
@@ -406,11 +440,14 @@ getVisibleSteps() {
         events.forEach(ev => {
           const oscOff = ev.offTime + release;
           const voice  = this.track._pool?.nextVoice(ev.time);
+          // Capture idle state BEFORE claim() overwrites _freeAt with this note's end.
+          const voiceWasIdle = voice ? !voice.isBusy(ev.time) : false;
           if (voice) voice.claim(oscOff);
           const machine  = voice?.machine  ?? this.track.machine;
           const envelope = voice?.envelope ?? this.track.envelope;
           machine?.syncParamsAt?.(ev.time);
           if (hasMachinePlocks) applyMachinePlocks(machine, ev.time);
+          this._anchorVoiceCutoff(voice, envOverrides, voiceWasIdle);
           machine?.noteOn(ev.note, ev.velocity, ev.time, ev.offTime);
           machine?.noteOff(oscOff);
           envelope?.scheduleNote(ev.time, ev.offTime, envOverrides);
@@ -423,11 +460,14 @@ getVisibleSteps() {
       } else {
         const oscOffTime = offTime + release;
         const voice    = this.track._pool?.nextVoice(time);
+        // Capture idle state BEFORE claim() overwrites _freeAt with this note's end.
+        const voiceWasIdle = voice ? !voice.isBusy(time) : false;
         if (voice) voice.claim(oscOffTime);
         const machine  = voice?.machine  ?? this.track.machine;
         const envelope = voice?.envelope ?? this.track.envelope;
         machine?.syncParamsAt?.(time);
         if (hasMachinePlocks) applyMachinePlocks(machine, time);
+        this._anchorVoiceCutoff(voice, envOverrides, voiceWasIdle);
         machine?.noteOn(finalNote, sv.velocity, time, offTime);
         machine?.noteOff(oscOffTime);
         envelope?.scheduleNote(time, offTime, envOverrides);

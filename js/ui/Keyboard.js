@@ -65,6 +65,10 @@ export class Keyboard {
     this._recordNoteOnStep = new Map(); // midiNote → { stepIndex, pageOffset }
     // Dynamic key → midiNote map (rebuilt on folding/scale/octave change)
     this._keyMap = new Map();
+    // Physical key → the MIDI note actually triggered at key-down time. Read on
+    // key-up so that an octave/scale switch mid-hold (which rebuilds _keyMap)
+    // still releases the original note instead of leaking a stuck voice.
+    this._keyToNote = new Map();
 
     this._buildOctaveControls();
     this._build();
@@ -80,6 +84,7 @@ export class Keyboard {
       // can't leave an arp free-running with no key to stop it.
       this.state.project.tracks.forEach(t => t.liveArp?.releaseAll());
       this._heldKeys.clear();
+      this._keyToNote.clear();
       this.keyboardEl.querySelectorAll('.key.held').forEach(k => k.classList.remove('held'));
       this._attachLiveArpHooks();  // cover any tracks added at runtime
       this._applyScale(); this._updateKeyLabels();
@@ -91,6 +96,7 @@ export class Keyboard {
         this._recordNoteOnStep.clear();
         this._heldSlots.clear();
         this._heldKeys.clear();
+        this._keyToNote.clear();
       }
     });
 
@@ -101,6 +107,7 @@ export class Keyboard {
       this._recordNoteOnStep.clear();
       this._heldSlots.clear();
       this._heldKeys.clear();
+      this._keyToNote.clear();
       this.keyboardEl.querySelectorAll('.key.held').forEach(k => k.classList.remove('held'));
     });
   }
@@ -452,7 +459,12 @@ export class Keyboard {
       }
 
       const midi = this._keyMap.get(e.key);
-      if (midi !== undefined) this._noteOn(midi);
+      if (midi !== undefined) {
+        // Remember which note this physical key fired, so key-up releases the
+        // same note even if the octave/scale changed while it was held.
+        this._keyToNote.set(e.key, midi);
+        this._noteOn(midi);
+      }
     });
 
     document.addEventListener('keyup', (e) => {
@@ -467,8 +479,13 @@ export class Keyboard {
         }
       }
 
-      const midi = this._keyMap.get(e.key);
-      if (midi !== undefined) this._noteOff(midi);
+      // Release the exact note this key fired at key-down, falling back to the
+      // current map for keys pressed before this tracking existed.
+      const midi = this._keyToNote.get(e.key) ?? this._keyMap.get(e.key);
+      if (midi !== undefined) {
+        this._keyToNote.delete(e.key);
+        this._noteOff(midi);
+      }
     });
   }
 
@@ -506,7 +523,7 @@ export class Keyboard {
         const step = seq.getVisibleSteps()[visIdx];
         if (step) {
           let nudge = 0;
-          if (seq.lastScheduledTime) {
+          if (seq.lastScheduledTime !== null) {
             const secondsPerTick = seq.clock._secondsPerTick;
             const offsetTicks    = (ctx.currentTime - seq.lastScheduledTime) / secondsPerTick;
             nudge = Math.max(-0.99, Math.min(0.99, offsetTicks));

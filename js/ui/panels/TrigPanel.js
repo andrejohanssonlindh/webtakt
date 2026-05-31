@@ -378,6 +378,17 @@ export class TrigPanel {
 
     const rebuildVoices = () => {
       voicesSection.innerHTML = '';
+      // An inactive step still carries a default voice ({note:60/C4}) in its data
+      // so that activating it (keyboard / double-click) has something to fill in —
+      // but it has no notes yet. Don't render that placeholder as a real voice, or
+      // every empty step you select looks like it holds a C4.
+      if (!step.active) {
+        const empty = document.createElement('div');
+        empty.className = 'trig-no-step';
+        empty.textContent = 'Empty step — play a note or double-click the step to add one';
+        voicesSection.appendChild(empty);
+        return;
+      }
       step.voices.forEach((sv, vi) => {
         const card = document.createElement('div');
         card.className = 'trig-voice-card';

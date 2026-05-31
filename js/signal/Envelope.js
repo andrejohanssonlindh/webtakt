@@ -148,10 +148,16 @@ export class Envelope {
       const fr = this._stageSeconds('fenv', 'release', overrides);
 
       const envAmt    = overrides['filter.envAmount'] ?? this._filter.getParam('filter.envAmount');
-      // trueCut: the persistent cutoff that the filter returns to after the note.
-      // baseCut: the cutoff from which the envelope sweep is anchored (may be p-locked).
-      const trueCut = this._filter.getParam('filter.cutoff');
-      const baseCut = overrides['filter.cutoff'] ?? trueCut;
+      // baseCut: the cutoff the envelope sweep is anchored from (may be p-locked).
+      // trueCut: the cutoff the filter rests at once the note's release ends.
+      const persistentCut = this._filter.getParam('filter.cutoff');
+      const baseCut = overrides['filter.cutoff'] ?? persistentCut;
+      // When the cutoff is p-locked, the release tail must stay at the p-locked
+      // value too — otherwise the filter springs back to the persistent cutoff at
+      // note-off while the amp is still ringing, and you hear an unfiltered tail
+      // ("dark plop, then the note"). The persistent param is untouched, so the
+      // NEXT (non-p-locked) note sweeps from/to the real baseline correctly.
+      const trueCut = overrides['filter.cutoff'] ?? persistentCut;
 
       // Positive envAmt sweeps toward 20000 Hz, negative toward 20 Hz.
       // 100% always reaches the limit of the range from the current cutoff position.
@@ -161,7 +167,7 @@ export class Envelope {
       const sustainCut = baseCut + modDepth * fs;
 
       // Schedule across primary node + all slope stages via Filter.scheduleFrequency
-      this._filter.scheduleFrequency(time, fa, fd, peakCut, sustainCut, offTime, fr, trueCut);
+      this._filter.scheduleFrequency(time, fa, fd, peakCut, sustainCut, offTime, fr, trueCut, baseCut);
     }
   }
 

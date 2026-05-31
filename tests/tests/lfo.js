@@ -129,9 +129,14 @@ suite('LFO', () => {
     assert.gt(up.centroid, 3000,
       `bias +100 from low base did not open the filter (centroid=${up.centroid.toFixed(0)}Hz) — sweep not reaching the ceiling`);
 
-    // Only-up must be dramatically brighter than only-down at the same base.
-    assert.gt(up.centroid / Math.max(down.centroid, 1), 3,
-      `bias should be directional (up=${up.centroid.toFixed(0)}Hz, down=${down.centroid.toFixed(0)}Hz)`);
+    // Directionality is best read as ENERGY through the filter, not centroid:
+    // bias -100 holds the cutoff at the 60 Hz base, which passes almost nothing
+    // of a note at MIDI 48 (~130 Hz) and its harmonics — the output is near
+    // silence, whose spectral centroid is dominated by numerical noise and so is
+    // meaningless. So compare how much sound gets through: only-up must pass much
+    // more than only-down.
+    assert.gt(up.rms, down.rms * 3,
+      `bias should be directional (up passes far more energy than down) — up.rms=${up.rms.toFixed(5)}, down.rms=${down.rms.toFixed(5)}`);
   });
 
   test('LFO TRG mode resets phase — identical renders produce matching RMS per step', async () => {

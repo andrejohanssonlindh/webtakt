@@ -165,13 +165,23 @@ export class StepGrid {
     dotsEl.innerHTML = '';
     const voiceCount = step.active ? Math.min(step.voices.length, MAX_VOICE_DOTS) : 0;
 
-    // Sum voices from all gates that are still ringing and didn't originate on this step.
-    // endMs is a wall-clock expiry, so loop wrap and pause are handled automatically:
-    // a held note sustains into the next loop pass as long as it hasn't expired.
+    // Sum voices from gates still ringing that reach forward over THIS step.
+    // A gate covers steps (origin, origin+spanSteps) along play order, wrapping
+    // mod stepCount — so a long note paints sustain dots only on the steps it
+    // actually spans, not on every other step in the row. Only while playing:
+    // when stopped, wall-clock keeps advancing but nothing is really ringing, so
+    // a frozen gate must not keep lighting steps up.
     const nowMs  = performance.now();
-    const gates  = seq._activeGates ?? [];
+    const gates  = (seq.clock?.isPlaying) ? (seq._activeGates ?? []) : [];
+    const stepCount = seq.stepCount;
+    const coversThisStep = (g) => {
+      const span = g.spanSteps ?? 1;
+      // distance from the gate's origin to this step, forward, modulo the pattern
+      const dist = ((absIndex - g.absStep) % stepCount + stepCount) % stepCount;
+      return dist >= 1 && dist < span;   // (origin, origin+span) — not the origin itself
+    };
     const rawSustain = gates
-      .filter(g => g.absStep !== absIndex && g.endMs > nowMs)
+      .filter(g => g.endMs > nowMs && coversThisStep(g))
       .reduce((sum, g) => sum + g.voiceCount, 0);
     const sustainCount = Math.min(rawSustain, MAX_VOICE_DOTS);
 

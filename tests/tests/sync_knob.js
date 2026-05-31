@@ -23,12 +23,20 @@ suite('Sync knob (MS/BPM unified)', () => {
   });
 
   test('DelayFX: bpm mode sets delay time from 1/32 count', async () => {
-    const { track } = await makeOfflineTrack('synth', 0.1);   // clock 120 BPM
+    const { track, ctx } = await makeOfflineTrack('synth', 0.1);   // clock 120 BPM
     const d = track.delayFX;
     d.setBpm(120);
     d.setParam('delay.syncMode', 'bpm');
-    d.setParam('delay.bpmCount32', 8);   // 1/4 = 0.5s
-    assert.near(d._delayNode.delayTime.value, 0.5, 0.02, 'delay time follows bpm count');
+    d.setParam('delay.bpmCount32', 8);   // 1/4 = 0.5s @120
+
+    // The math the node is driven from (delay time uses setTargetAtTime, which
+    // only reaches its target after the audio graph runs, so reading
+    // delayTime.value synchronously would still show the default).
+    assert.near(count32ToSeconds(8, 120), 0.5, 1e-9, 'count32ToSeconds(8,120) = 0.5');
+
+    // Render so the setTargetAtTime ramp settles, then confirm the node followed.
+    await ctx.startRendering();
+    assert.near(d._delayNode.delayTime.value, 0.5, 0.02, 'delay node settled to bpm-derived time');
   });
 
   test('ReverbFX: bpm pre-delay + bpmDiv back-compat on load', async () => {

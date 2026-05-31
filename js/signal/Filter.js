@@ -40,6 +40,10 @@
 
 const EXTRA_STAGES = 7; // 7 extra → 8 poles max (96 dB/oct)
 
+// Short glide used to reach the note-on cutoff without a coefficient-step click
+// (see scheduleFrequency baseCut anchor).
+const ANCHOR_GLIDE = 0.0015;
+
 export class Filter {
   /** @param {AudioContext} context */
   constructor(context) {
@@ -238,8 +242,24 @@ export class Filter {
    * @param {number} offTime    — note-off time (start of release)
    * @param {number} fr         — fenv release
    * @param {number} trueCut    — Hz to restore to after release
+   * @param {number} [baseCut]  — Hz the sweep starts from at note-on. A fresh voice
+   *   slot's filter rests at its constructed default (8 kHz) until its first note.
+   *   Without anchoring, the attack of a note p-locked to a low cutoff is played
+   *   while the filter is still open/settling, so a low-frequency chunk of the
+   *   onset leaks through — a short muffled "thump" on the first 8 notes (once per
+   *   pool slot), then gone once every slot has rested at the locked cutoff.
+   *
+   *   We can't fix that with a ramp at `time`: an instant jump steps the biquad
+   *   coefficients (click), and a short glide *sweeps the cutoff through the whole
+   *   midrange* during the audible attack (a descending chirp/thump — worse). The
+   *   filter sits BEFORE the amp gate, which is shut while the slot is idle, so we
+   *   instead pre-position it: `anchorFrequency(baseCut, settleTime)` is called at
+   *   scheduling time (ahead of `time`), letting the filter settle to baseCut
+   *   silently before the gate opens. `scheduleFrequency` then just runs the
+   *   envelope from baseCut with no discontinuity. baseCut here is informational /
+   *   back-compat for the sweep start; the actual pre-position is anchorFrequency.
    */
-  scheduleFrequency(time, a, d, peakCut, sustainCut, offTime, fr, trueCut) {
+  scheduleFrequency(time, a, d, peakCut, sustainCut, offTime, fr, trueCut, baseCut = null) {
     const nodes = [this.node, ...this._stages.map(s => s.biquad)];
     for (const n of nodes) {
       const freq = n.frequency;
@@ -249,10 +269,31 @@ export class Filter {
         freq.cancelScheduledValues(time);
         freq.setValueAtTime(freq.value, time);
       }
+      if (baseCut !== null) freq.setValueAtTime(baseCut, time);
       freq.linearRampToValueAtTime(peakCut,    time + a);
       freq.linearRampToValueAtTime(sustainCut, time + a + d);
       freq.setValueAtTime(sustainCut, offTime);
       freq.linearRampToValueAtTime(trueCut, offTime + fr);
+    }
+  }
+
+  /**
+   * Pre-position every filter node's cutoff to `freqHz`, settling by `settleTime`.
+   * Called at scheduling time (ahead of the note) while the slot's amp gate is
+   * still shut, so the move is inaudible. This lets a note whose cutoff is p-locked
+   * far from where the slot's filter currently rests start from the right cutoff
+   * with no onset thump/click — see scheduleFrequency's baseCut note.
+   *
+   * The settle uses a short setTargetAtTime so the biquad coefficients move
+   * continuously (no coefficient-step click) and reach the target well before the
+   * gate opens. No-op-cheap when the filter is already there.
+   *
+   * @param {number} freqHz     — target cutoff Hz
+   * @param {number} settleTime — AudioContext time the move should start
+   */
+  anchorFrequency(freqHz, settleTime) {
+    for (const n of [this.node, ...this._stages.map(s => s.biquad)]) {
+      n.frequency.setTargetAtTime(freqHz, settleTime, ANCHOR_GLIDE);
     }
   }
 
