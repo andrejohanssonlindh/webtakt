@@ -42,6 +42,7 @@ export function formatParam(p, v) {
   if (p.path === 'lfo.depth' || p.path.endsWith('.depth')) return Math.round(v) + '%';
   if (p.path === 'lfo.startPhase')   return Math.round(v);
   if (p.path === 'lfo.fade')         return v === 0 ? 'off' : (v > 0 ? '+' : '') + Math.round(v) + '%';
+  if (p.path === 'lfo.bias')         return v === 0 ? 'off' : (v > 0 ? '+' : '') + Math.round(v) + '%';
   if (p.path.endsWith('.time'))      return (v * 1000).toFixed(0) + 'ms';
   // Drum machine params
   if (p.path === 'tune')             return Math.round(v) + 'Hz';

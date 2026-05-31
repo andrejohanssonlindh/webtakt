@@ -358,6 +358,19 @@ export class LFOPanel {
     row3.appendChild(fadeKnob.el);
     activeWidgets.push(fadeKnob);
 
+    // Bias — pushes the modulation window up/down by the depth amount, so the
+    // LFO modulates only above (+) or only below (-) the base value. See LFO.md.
+    const biasP = { path: 'lfo.bias', label: 'Bias', min: -100, max: 100 };
+    const biasKnob = new KnobWidget({
+      label: 'Bias', min: -100, max: 100,
+      value: lfo.getParam('lfo.bias'),
+      bipolar: true,
+      size: 64, fmt: v => fmtParam(biasP, v),
+      onChange: v => lfo.setParam('lfo.bias', v),
+    });
+    row3.appendChild(biasKnob.el);
+    activeWidgets.push(biasKnob);
+
     container.appendChild(row3);
   }
 

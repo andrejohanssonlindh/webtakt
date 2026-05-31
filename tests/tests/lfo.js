@@ -51,6 +51,39 @@ suite('LFO', () => {
       `LFO notes too uniform (max/min ratio=${( maxRms/minRms).toFixed(3)}) — LFO may not be modulating output.level (max=${maxRms.toFixed(4)}, min=${minRms.toFixed(4)})`);
   });
 
+  test('LFO bias shifts the modulation window up/down (mean level: +bias > 0 > -bias)', async () => {
+    // output.level base 0.5, depth 50% → amplitude ±0.25 around 0.5.
+    //   bias  0   → window [0.25, 0.75]  (symmetric)
+    //   bias +100 → window [0.50, 1.00]  (only up)   → higher mean level
+    //   bias -100 → window [0.00, 0.50]  (only down) → lower mean level
+    // A fast free-running sine averaged over the whole render isolates the DC
+    // offset (the oscillation averages out), so mean RMS tracks the window centre.
+    async function meanRmsForBias(bias) {
+      const { track, ctx, sampleRate } = await makeOfflineTrack('synth', DURATION);
+      track.filter.setParam('filter.cutoff', 20000);
+      track.machine.setParam('output.level', 0.5);
+      track.lfos[0].setParam('lfo.syncMode', 'hz');
+      track.lfos[0].setParam('lfo.speed', 8);     // fast → several cycles per step
+      track.lfos[0].setParam('lfo.waveform', 'sine');
+      track.lfos[0].setParam('lfo.depth', 50);
+      track.lfos[0].setParam('lfo.bias', bias);
+      track.setLFODestination(0, 'output.level');
+      const windows = await renderSteps(track, ctx, sampleRate, N_STEPS, STEP_SEC,
+        () => ({ note: 60, length: STEP_LEN }));
+      const rmsList = windows.map(w => rms(w));
+      return rmsList.reduce((a, b) => a + b, 0) / rmsList.length;
+    }
+
+    const up   = await meanRmsForBias(100);
+    const mid  = await meanRmsForBias(0);
+    const down = await meanRmsForBias(-100);
+
+    assert.gt(up, mid * 1.05,
+      `+bias should raise mean level above symmetric (up=${up.toFixed(4)}, mid=${mid.toFixed(4)})`);
+    assert.gt(mid, down * 1.05,
+      `-bias should lower mean level below symmetric (mid=${mid.toFixed(4)}, down=${down.toFixed(4)})`);
+  });
+
   test('LFO TRG mode resets phase — identical renders produce matching RMS per step', async () => {
     async function renderTRG() {
       const { track, ctx, sampleRate } = await makeOfflineTrack('synth', DURATION);

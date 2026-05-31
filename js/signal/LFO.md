@@ -9,9 +9,8 @@ Each track owns an array of `LFO` instances (`track.lfos`). LFOs run continuousl
 ## Audio graph
 
 ```
-OscillatorNode (_lfoOsc)
-  → GainNode (_depthGain, gain = depthScale × depth/100)
-    → destination AudioParam
+OscillatorNode (_lfoOsc) ──→ GainNode (_depthGain, gain = depthScale × depth/100) ─┐
+ConstantSourceNode (=1) ──→ GainNode (_biasGain,  gain = bias × depthGain.gain)  ─┴→ destination AudioParam
 ```
 
 In Hz mode the LFO oscillator runs at `lfo.speed` Hz. In BPM mode the rate comes
@@ -19,6 +18,19 @@ from `lfo.bpmCount32` — an integer count of 1/32 notes treated as the LFO
 *period* — so `Hz = 1 / count32ToSeconds(lfo.bpmCount32, bpm)` (see
 `js/util/BpmSync.js`). The depth gain scales the ±1 oscillator output into the
 destination's unit space before it reaches the AudioParam.
+
+**Bias (`lfo.bias`, −100…+100):** a DC offset added to the destination in
+parallel with the oscillator, equal to `bias × (current depth amplitude)`. A
+unit `ConstantSourceNode` feeds `_biasGain`, whose gain mirrors **every**
+`_depthGain` schedule (steady depth, simple-mode fade, and advanced-mode ADSR
+ramps) multiplied by `bias/100` — so the offset tracks the depth envelope
+exactly. The effect is to slide the modulation window without changing its
+width: at `+100` the window's bottom peak sits at the base value (LFO only
+modulates **up**); at `−100` the top peak sits at the base value (only **down**);
+at `0` it is symmetric (legacy behaviour). Works in both simple and advanced
+mode, and is mirrored in `getCurrentValue()` for the JS-only `trig.tone`
+destination. The bias source is started once per `start()` and recreated on
+`stop()` (a source node cannot be restarted).
 
 > The legacy Hz **Mult** knob (`lfo.speedMult`, and per-section `.mult`) was
 > dropped when the unified sync knob landed; the keys remain in `_params` for
@@ -34,6 +46,7 @@ destination's unit space before it reaches the AudioParam.
 | `lfo.speed` | number | 0.001–20 Hz | 0.1 | Hz-mode rate (`lfo.syncMode === 'hz'`) |
 | `lfo.bpmCount32` | number | 1–128 | 8 | BPM-mode rate: 1/32 count = LFO period (`lfo.syncMode === 'bpm'`); 8 = 1/4 |
 | `lfo.depth` | number | 0–100 % | 30 | Percentage of half the destination range |
+| `lfo.bias` | number | −100…+100 % | 0 | DC offset of the modulation window in units of the depth amplitude; `+` = only-up, `−` = only-down, `0` = symmetric |
 
 Effective frequency: Hz mode → `lfo.speed`; BPM mode → `1 / count32ToSeconds(lfo.bpmCount32, bpm)`.
 

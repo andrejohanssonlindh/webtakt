@@ -25,15 +25,17 @@
  *
  * Audio graph
  * ───────────
- * OscillatorNode (_lfoOsc)
- *   → GainNode (_depthGain, gain shaped by depth / ADSR envelope)
- *     → destination AudioParam(s)
+ * OscillatorNode (_lfoOsc) → GainNode (_depthGain, gain = depth/ADSR env) ┐
+ * ConstantSource (=1)      → GainNode (_biasGain, gain = bias × depth)    ┴→ destination AudioParam(s)
+ *
+ * The bias tap is a DC offset that slides the modulation window up/down (see
+ * 'lfo.bias' and LFO.md): +100 → only-up, -100 → only-down, 0 → symmetric.
  *
  * Multiple destinations are supported (one per voice-pool slot).
  * addDestination / removeDestination manage the set.
  * setDestination / clearDestination are kept for single-destination callers.
  *
- * Owns:    OscillatorNode, GainNode (_depthGain)
+ * Owns:    OscillatorNode, GainNode (_depthGain), ConstantSource + GainNode (bias)
  * Depends: Web Audio API only
  * Used by: Track.js, Sequencer.js (noteOn / noteOff calls)
  */
@@ -68,6 +70,11 @@ export class LFO {
       'lfo.depth':      30,           // 0–100 % (simple mode global depth)
       'lfo.startPhase': 0,            // 0–127; mapped to 0–2π on reset (trig mode)
       'lfo.fade':       0,            // -100…+100; neg=fade in, pos=fade out, 0=none
+      'lfo.bias':       0,            // -100…+100; DC offset of the modulation
+                                      // window in units of the depth amplitude.
+                                      // +100 → bottom peak sits at the base value
+                                      // (only modulates up); -100 → only down; 0 →
+                                      // symmetric (legacy). Applies to both modes.
 
       // ── Advanced mode params ───────────────────────────────────────────
       'lfo.adsrSource': 'own',        // 'own' | 'amp'
@@ -103,6 +110,19 @@ export class LFO {
     this._depthGain  = context.createGain();  // shaped by depth/ADSR
     this._depthGain.gain.value = 0;
 
+    // Bias: a DC offset added to the destination alongside the oscillator, so
+    // the modulation window can be pushed up/down (see 'lfo.bias'). A unit
+    // ConstantSource (value 1) feeds _biasGain, whose gain tracks
+    // bias × depthAmplitude(t) — mirroring every depth schedule below, so the
+    // offset follows the ADSR/fade envelope exactly. _biasGain connects to the
+    // same destinations as _depthGain.
+    this._biasGain   = context.createGain();
+    this._biasGain.gain.value = 0;
+    this._biasSource = context.createConstantSource();
+    this._biasSource.offset.value = 1;
+    this._biasSource.connect(this._biasGain);
+    this._biasStarted = false;
+
     // Set of connected AudioParams — supports multiple voice-pool slots.
     this._destinations = new Set();
     this._depthScale   = 1;
@@ -122,6 +142,7 @@ export class LFO {
     if (!this._destinations.has(audioParam)) {
       this._destinations.add(audioParam);
       this._depthGain.connect(audioParam);
+      this._biasGain.connect(audioParam);
     }
     this._applyDepth();
   }
@@ -130,6 +151,7 @@ export class LFO {
   removeDestination(audioParam) {
     if (this._destinations.has(audioParam)) {
       try { this._depthGain.disconnect(audioParam); } catch (_) {}
+      try { this._biasGain.disconnect(audioParam);  } catch (_) {}
       this._destinations.delete(audioParam);
     }
   }
@@ -144,6 +166,7 @@ export class LFO {
   clearDestination() {
     for (const ap of this._destinations) {
       try { this._depthGain.disconnect(ap); } catch (_) {}
+      try { this._biasGain.disconnect(ap);  } catch (_) {}
     }
     this._destinations.clear();
   }
@@ -180,10 +203,15 @@ export class LFO {
     return ((this._params[`lfo.adsr.${section}.depth`] ?? 0) / 100) * this._depthScale;
   }
 
+  /** Bias as a signed fraction (-1…+1) of the depth amplitude. */
+  _bias() { return (this._params['lfo.bias'] ?? 0) / 100; }
+
   _applyDepth() {
     if (this._params['lfo.mode'] === 'advanced') return; // ADSR controls gain
     const scaled = (this._params['lfo.depth'] / 100) * this._depthScale;
-    this._depthGain.gain.setTargetAtTime(scaled, this.context.currentTime, 0.01);
+    const t = this.context.currentTime;
+    this._depthGain.gain.setTargetAtTime(scaled, t, 0.01);
+    this._biasGain.gain.setTargetAtTime(scaled * this._bias(), t, 0.01);
   }
 
   _applySpeed() {
@@ -197,6 +225,11 @@ export class LFO {
   start(time = this.context.currentTime) {
     if (this._running) this.stop(time);
     this._startOsc(time, 0);
+    // Start the bias ConstantSource (recreated by stop()). A source node can be
+    // started only once, so stop() always leaves a fresh, un-started one here.
+    if (!this._biasStarted) {
+      try { this._biasSource.start(time); this._biasStarted = true; } catch (_) {}
+    }
     this._running = true;
     if (this._params['lfo.mode'] === 'simple') this._applyDepth();
   }
@@ -215,6 +248,16 @@ export class LFO {
     if (this._lfoOsc) {
       try { this._lfoOsc.stop(time); } catch (_) {}
       this._lfoOsc = null;
+    }
+    // Tear down the bias source and stage a fresh one (still wired to _biasGain)
+    // so a subsequent start() can start it — ConstantSource can't be restarted.
+    if (this._biasStarted) {
+      try { this._biasSource.stop(time); } catch (_) {}
+      try { this._biasSource.disconnect(); } catch (_) {}
+      this._biasSource = this.context.createConstantSource();
+      this._biasSource.offset.value = 1;
+      this._biasSource.connect(this._biasGain);
+      this._biasStarted = false;
     }
     this._running = false;
   }
@@ -261,6 +304,8 @@ export class LFO {
     const r = src === 'amp' ? (ampParams?.['env.release'] ?? 0.3)  : this._params['lfo.adsr.r.time'];
 
     const gDA = this._depthGain.gain;
+    const gB  = this._biasGain.gain;
+    const bias = this._bias();
     const tA  = time;
     const tD  = time + a;
     const tS  = time + a + d;
@@ -268,17 +313,25 @@ export class LFO {
     // Cancel any prior scheduled depth ramps from this note or previous note
     if (typeof gDA.cancelAndHoldAtTime === 'function') {
       gDA.cancelAndHoldAtTime(tA);
+      gB.cancelAndHoldAtTime(tA);
     } else {
       gDA.cancelScheduledValues(tA);
       gDA.setValueAtTime(gDA.value, tA);
+      gB.cancelScheduledValues(tA);
+      gB.setValueAtTime(gB.value, tA);
     }
 
-    // Attack ramp
-    gDA.linearRampToValueAtTime(this._sectionDepthGain('a'), tD);
-    // Decay ramp
-    gDA.linearRampToValueAtTime(this._sectionDepthGain('d'), tS);
-    // Sustain hold (implicit — no further ramp until noteOff)
-    gDA.setValueAtTime(this._sectionDepthGain('s'), tS);
+    // Depth envelope: attack → decay → sustain hold. The bias offset mirrors
+    // the same ramps (× bias) so the window stays pinned through the envelope.
+    const gA = this._sectionDepthGain('a');
+    const gD = this._sectionDepthGain('d');
+    const gS = this._sectionDepthGain('s');
+    gDA.linearRampToValueAtTime(gA, tD);
+    gDA.linearRampToValueAtTime(gD, tS);
+    gDA.setValueAtTime(gS, tS);
+    gB.linearRampToValueAtTime(gA * bias, tD);
+    gB.linearRampToValueAtTime(gD * bias, tS);
+    gB.setValueAtTime(gS * bias, tS);
 
     // Per-section speed changes (snap at section boundary — see LFO.md)
     if (this._lfoOsc) {
@@ -303,10 +356,17 @@ export class LFO {
     const pr = this._pendingRelease;
     const r  = pr ? pr.r : this._params['lfo.adsr.r.time'];
 
-    const gDA = this._depthGain.gain;
-    gDA.setValueAtTime(this._sectionDepthGain('s'), offTime);
-    gDA.linearRampToValueAtTime(this._sectionDepthGain('r'), offTime + r * 0.5);
+    const gDA  = this._depthGain.gain;
+    const gB   = this._biasGain.gain;
+    const bias = this._bias();
+    const gS   = this._sectionDepthGain('s');
+    const gR   = this._sectionDepthGain('r');
+    gDA.setValueAtTime(gS, offTime);
+    gDA.linearRampToValueAtTime(gR, offTime + r * 0.5);
     gDA.linearRampToValueAtTime(0, offTime + r);
+    gB.setValueAtTime(gS * bias, offTime);
+    gB.linearRampToValueAtTime(gR * bias, offTime + r * 0.5);
+    gB.linearRampToValueAtTime(0, offTime + r);
 
     if (this._lfoOsc) {
       this._lfoOsc.frequency.setValueAtTime(this._sectionHz('r'), offTime);
@@ -320,8 +380,13 @@ export class LFO {
   _scheduleFade(time) {
     const fade      = this._params['lfo.fade'];
     const baseDepth = (this._params['lfo.depth'] / 100) * this._depthScale;
+    const bias      = this._bias();
+    // The bias offset tracks the (faded) depth amplitude so the modulation
+    // window keeps its bottom/top peak pinned to the base value throughout.
+    const gB = this._biasGain.gain;
     if (fade === 0) {
       this._depthGain.gain.setValueAtTime(baseDepth, time);
+      gB.setValueAtTime(baseDepth * bias, time);
       return;
     }
     // Use a 4-second default fade duration; could become a parameter later.
@@ -329,13 +394,19 @@ export class LFO {
     if (fade > 0) {
       // Fade out: start at full, ramp toward 0
       const scale = fade / 100;
+      const end   = baseDepth * (1 - scale);
       this._depthGain.gain.setValueAtTime(baseDepth, time);
-      this._depthGain.gain.linearRampToValueAtTime(baseDepth * (1 - scale), time + fadeDur);
+      this._depthGain.gain.linearRampToValueAtTime(end, time + fadeDur);
+      gB.setValueAtTime(baseDepth * bias, time);
+      gB.linearRampToValueAtTime(end * bias, time + fadeDur);
     } else {
       // Fade in: start at 0, ramp to full
       const scale = (-fade) / 100;
+      const end   = baseDepth * scale;
       this._depthGain.gain.setValueAtTime(0, time);
-      this._depthGain.gain.linearRampToValueAtTime(baseDepth * scale, time + fadeDur);
+      this._depthGain.gain.linearRampToValueAtTime(end, time + fadeDur);
+      gB.setValueAtTime(0, time);
+      gB.linearRampToValueAtTime(end * bias, time + fadeDur);
     }
   }
 
@@ -352,7 +423,8 @@ export class LFO {
     else if (wave === 'square')   raw = phase < 0.5 ? 1 : -1;
     else if (wave === 'sawtooth') raw = 2 * phase - 1;
     else                          raw = phase < 0.5 ? 4 * phase - 1 : 3 - 4 * phase;
-    return raw * depth;
+    // Bias shifts the window by ±depth (matches the audio-path _biasGain offset).
+    return raw * depth + this._bias() * depth;
   }
 
   // ── setParam / getParam ───────────────────────────────────────────────────
@@ -371,6 +443,10 @@ export class LFO {
         this._applySpeed();
         break;
       case 'lfo.depth':
+      case 'lfo.bias':
+        // Simple mode: reapply steady depth+bias immediately. Advanced mode's
+        // bias is applied per-note in noteOn/noteOff (ADSR-driven), so changing
+        // it here takes effect on the next trig — matching depth behaviour.
         this._applyDepth();
         break;
     }
@@ -389,6 +465,7 @@ export class LFO {
       { path: 'lfo.depth',      label: 'Depth',       type: 'number', min: 0,     max: 100, default: 30  },
       { path: 'lfo.startPhase', label: 'Phase',       type: 'number', min: 0,     max: 127, default: 0   },
       { path: 'lfo.fade',       label: 'Fade',        type: 'number', min: -100,  max: 100, default: 0   },
+      { path: 'lfo.bias',       label: 'Bias',        type: 'number', min: -100,  max: 100, default: 0   },
     ];
     const advanced = [
       { path: 'lfo.adsrSource',    label: 'Source',  type: 'enum',   options: ['own','amp'] },
