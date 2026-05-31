@@ -32,10 +32,10 @@
 | Param | File(s) | Pilot? | Status |
 |---|---|---|---|
 | Delay time | `js/signal/DelayFX.js`, `FXPanel.js` | **PILOT** — build + bugcheck first | ✅ done + bugchecked. Both modes p-lockable; LFO range narrowed to 0.02–0.6s. |
-| Reverb pre-delay | `js/signal/ReverbFX.js`, `FXPanel.js`, `formatParam.js` | after pilot | ☐ |
-| Arp rate | `js/signal/Arpeggiator.js`, `js/ui/panels/ArpPanel.js` | after pilot (custom panel — needs own knob wiring) | ☐ |
-| LFO rate | `js/signal/LFO.js`, `js/ui/panels/LFOPanel.js` | after pilot (custom panel) | ☐ — already has dropdown BPM sync (`lfo.syncMode` hz/bpm + `lfo.bpmDiv` + `divToHz`); migrate the dropdown → unified click-center sync knob. |
-| Amp/filter envelope times | `js/signal/Envelope.js`, `js/ui/panels/AmpPanel.js`, `FilterPanel.js`, `TrigPanel.js` | candidate (user-flagged) | ☐ — `env.attack/decay/release` + `fenv.*` are plain seconds, no BPM sync today. Adding sync = a new feature (envelope-time-to-tempo), not just a UI swap. Decide whether attack/decay/release should be tempo-syncable at all before building. |
+| Reverb pre-delay | `js/signal/ReverbFX.js`, `FXPanel.js` | after pilot | ✅ done. `reverb.bpmDiv`→`reverb.bpmCount32`; uses generic `FXPanel._renderSync` (no panel change). Track-level both modes (IR rebuild ⇒ not modulatable). `formatParam` already handled `reverb.predelay`. |
+| Arp rate | `js/signal/Arpeggiator.js`, `js/ui/panels/ArpPanel.js` | after pilot (custom panel — needs own knob wiring) | ✅ done. `bpmDiv`→`bpmCount32` for chord/random **and** per-step manual. Shared `ArpPanel._makeSyncKnob` (accessor-bundle, works for params + step objects). FX-style: integer count, shift-snaps. |
+| LFO rate | `js/signal/LFO.js`, `js/ui/panels/LFOPanel.js` | after pilot (custom panel) | ✅ done. `lfo.bpmDiv`→`lfo.bpmCount32` (count = LFO *period*, `Hz = 1/count32ToSeconds`); Advanced per-section too (`lfo.adsr.<sec>.bpmCount32`). Shared `LFOPanel._makeSyncKnob`. **Continuous in BPM mode, shift-drag/scroll snaps.** Hz-mode **Mult knob dropped** (`lfo.speedMult`/`.mult` kept in `_params` for load back-compat only). |
+| Amp/filter envelope times | `js/signal/Envelope.js`, `ADSRWidget.js`, `AmpPanel.js`, `FilterPanel.js`, `VoicePool.js`, `Track.js` | new feature (user-approved) | ✅ done. Per-stage MS↔BPM on A/D/R of `env.*` **and** `fenv.*` (sustain excluded). New params `<prefix>.<stage>.syncMode` + `.bpmCount32`. Resolved at note-fire (`Envelope._stageSeconds`, `count32ToSeconds`) — no write-back. BPM via `Track.onBpmChanged → VoicePool.setBpm → Envelope.setBpm`. ADSRWidget: per-stage MS/BPM tag under each timed knob; canvas plots resolved seconds; BPM-stage knob drives the 1/32 count, drag snaps it (shift → musical division). Both modes p-lockable (active param), syncMode p-lockable too. |
 
 ## Notes / gotchas
 
@@ -43,9 +43,17 @@
   `plockMode` per path, and `Track._resolveAudioParam` already routes
   `delay.*`/`reverb.*` to the FX object's AudioParam. Keeping the two-param
   split means those layers are untouched.
-- **Arp & LFO use custom panels**, not the generic FXPanel — they need their own
-  sync-knob wiring (or a shared helper extracted from FXPanel). Arp also has
-  *per-step* manual-mode sync values (`steps[].bpmDiv`), a bigger surface.
-- **Serialization / back-compat**: old projects store `*.bpmDiv` strings. On
-  load, map the string → 32nd count (via `DIV_QN[div]*8`) so existing patterns
-  survive. Decide whether to keep reading the old key indefinitely.
+- **Arp & LFO use custom panels**, not the generic FXPanel — each now has its own
+  `_makeSyncKnob` helper. `ArpPanel._makeSyncKnob` takes an accessor bundle so it
+  serves both arp-level params and per-step objects (`steps[].bpmCount32`).
+  `LFOPanel._makeSyncKnob` toggles the whole LFO's `lfo.syncMode` and serves the
+  Simple-mode rate + all four Advanced per-section rates.
+- **LFO BPM rate is continuous** (not integer-rounded like the FX knobs): the knob
+  sweeps fractional 1/32 counts and **shift-drag/scroll snaps** to musical
+  divisions. The Hz-mode **Mult knob was dropped** (count model makes it
+  redundant); `lfo.speedMult`/`lfo.adsr.*.mult` stay in `_params` for load
+  back-compat but are no longer surfaced.
+- **Serialization / back-compat**: every migrated class maps legacy `*.bpmDiv`
+  strings → 32nd count in `fromJSON` (via `divToCount32`) and deletes the legacy
+  key: DelayFX, ReverbFX, LFO (global + per-section), Arpeggiator (chord/random +
+  per manual step). Covered by `tests/tests/sync_knob.js`.

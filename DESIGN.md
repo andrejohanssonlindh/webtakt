@@ -74,7 +74,7 @@ js/
     ChordMachine.js     — 4-voice chord synth: 11 chord types, inversions, p-lockable per step
   signal/
     Filter.js           — BiquadFilterNode wrapper: type, cutoff, resonance, envAmount + base LPF/HPF
-    Envelope.js         — Dual ADSR (amp + filter env), scheduleNote for sequencer, noteOn/noteOff for live
+    Envelope.js         — Dual ADSR (amp + filter env), scheduleNote for sequencer, noteOn/noteOff for live; per-stage MS/BPM tempo-sync on A/D/R (resolved at note-fire via setBpm + count32ToSeconds)
     LFO.js              — LFO: waveform, speed, depth, destination routing (supports multiple AudioParam destinations)
     VoicePool.js        — 8-slot voice pool per track: each slot owns machine + envelope + filter; slot-0 filter is canonical and mirrors params to siblings; all slots share outputGain
     DelayFX.js          — Stereo feedback delay
@@ -120,7 +120,7 @@ js/
   signal/
     Arpeggiator.js      — Per-track arpeggiator: Chord / Manual / Random modes; BPM-sync; variance. Owned by Track, called from Sequencer._fireStep()
   util/
-    BpmSync.js          — Shared BPM-sync utility: DIV_QN map, SYNC_DIVISIONS list, divToSeconds(div, bpm). Used by DelayFX, ReverbFX, Arpeggiator.
+    BpmSync.js          — Shared BPM-sync utility. Unified sync-knob model: 1/32-note integer counts (count32ToSeconds, MUSICAL_SNAP_32, formatCount32, divToCount32). Used by DelayFX, ReverbFX, LFO, Arpeggiator. Legacy DIV_QN/SYNC_DIVISIONS/divToSeconds kept for load back-compat.
   state/
     Track.js            — Owns VoicePool + sequencer + filter + FX chain + LFOs + pannerNode + Arpeggiator
     Project.js          — 8–12 tracks (dynamic), BPM, export/import JSON file

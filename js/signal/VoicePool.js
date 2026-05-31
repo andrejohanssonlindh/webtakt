@@ -111,6 +111,7 @@ export class VoicePool {
     this._makeFilter  = makeFilter;
     this._slots       = [];
     this._robin       = 0;   // round-robin cursor
+    this._bpm         = 120; // current tempo, propagated to new slot envelopes
 
     for (let i = 0; i < count; i++) {
       this._slots.push(this._makeSlot(i === 0));
@@ -120,6 +121,7 @@ export class VoicePool {
   _makeSlot(isCanonical = false) {
     const machine  = this._makeMachine(this._context);
     const envelope = new Envelope(this._context);
+    envelope.setBpm(this._bpm);
     // Slot 0 uses the canonical track filter; other slots get their own filter
     // that mirrors the canonical one's params (set in mirrorTo below).
     const filter = isCanonical ? this._filter : this._makeFilter(this._context);
@@ -140,6 +142,12 @@ export class VoicePool {
 
   /** All per-slot filters — used for direct AudioParam writes (e.g. DJ filter). */
   get filters()  { return this._slots.map(s => s._filter); }
+
+  /** Propagate the current BPM to every slot's envelope (for tempo-synced stages). */
+  setBpm(bpm) {
+    this._bpm = bpm;
+    for (const slot of this._slots) slot.envelope.setBpm(bpm);
+  }
 
   /**
    * Return the next voice slot to use for a note scheduled at `noteTime`.

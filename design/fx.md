@@ -29,7 +29,7 @@ Convolution reverb with a synthesised exponential-decay noise IR.
 - `reverb.decay` (0.1–8s) rebuilds the IR on change — track-level only, not p-lockable.
 - `reverb.syncMode` (`ms` | `bpm`): selects whether pre-delay is set manually or locked to tempo.
   - `ms` mode: `reverb.predelay` knob (0–500ms), rebuilds IR on change — track-level only.
-  - `bpm` mode: `reverb.bpmDiv` division selector (1/32–1/1). Pre-delay recalculates automatically when BPM changes.
+  - `bpm` mode: knob sweeps `reverb.bpmCount32` — an integer count of 1/32 notes (1–32). Same unified click-center sync knob as Delay (`type: 'sync'` via `FXPanel._renderSync`); display shows the nearest division + 1/32 remainder, shift snaps to musical divisions. Track-level in both modes (IR rebuild ⇒ not modulatable). Pre-delay recalculates automatically when BPM changes. Legacy `reverb.bpmDiv` strings auto-convert on load.
 - `reverb.damp` (200–20kHz LP on wet) and `reverb.wet` (0–1) are LFO-assignable and p-lockable.
 
 ---
@@ -46,7 +46,7 @@ The on/off state is reflected in the header at all times regardless of which voi
 |---|---|
 | DLY | Unified Time knob; click center to toggle MS/BPM (mode shown in body). MS: ms time. BPM: sweeps 1/32 grid, shift-snaps to divisions. Both p-lockable. Feedback + Wet knobs always visible. |
 | CRUSH | Bits, Rate, Wet knobs. Rate + Wet p-lockable + LFO-assignable. Bits track-level only. |
-| REV | Decay knob. Sync toggle (ms/bpm). In ms mode: Pre-dly knob. In bpm mode: Pre-div picker (1/32–1/1). Damp + Wet always visible. |
+| REV | Decay knob. Unified Pre-dly knob; click center to toggle MS/BPM (mode shown in body). MS: ms pre-delay. BPM: sweeps 1/32 grid, shift-snaps to divisions. Track-level both modes. Damp + Wet always visible. |
 
 FX tabs use a teal accent (`#7ec8c8`) to distinguish from voice tabs (amber).
 
@@ -55,5 +55,5 @@ FX tabs use a teal accent (`#7ec8c8`) to distinguish from voice tabs (amber).
 ## P-Lock Notes
 
 - All `modulatable: true` FX params are p-lockable and LFO-assignable.
-- `crush.bits`, `reverb.decay`, `reverb.predelay`, `delay.syncMode`, `reverb.syncMode`, `reverb.bpmDiv` are `modulatable: false` — always track-level. (`delay.bpmCount32` is now `modulatable: true` / `plockMode: 'js'` — p-lockable.)
+- `crush.bits`, `reverb.decay`, `reverb.predelay`, `delay.syncMode`, `reverb.syncMode`, `reverb.bpmCount32` are `modulatable: false` — always track-level. (`delay.bpmCount32` is `modulatable: true` / `plockMode: 'js'` — p-lockable; reverb's count is not, because it rebuilds the IR.)
 - The sequencer dispatches FX p-locks the same way as filter p-locks: scheduled `setParam(path, value, time)` + restore at `offTime`.

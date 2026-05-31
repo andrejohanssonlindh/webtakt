@@ -15,8 +15,8 @@ The panel header has two zones in a single row:
 | SYNTH | Machine params — varies by machine type. Detune is hidden here (moved to TRIG). Rendered by a machine-specific panel from `js/ui/panels/`. |
 | ARP | Per-track arpeggiator. ON/OFF toggle + mode selector (Chord / Manual / Random). See Arpeggiator section below. |
 | FILTER | Single row: type dropdown + cutoff/res/gain/env knobs (left) + FilterViz (centre) + right column with compact filter ADSR above base HPF/LPF knobs. All p-lockable. |
-| AMP | Single row: PAN knob (left, p-lockable + LFO-assignable) + compact amp ADSR (right, canvasH=80, 44px knobs). |
-| LFO | LFO sub-selector (LFO 1, LFO 2, …, +) capped at 220px wide, destination dropdown (grouped), speed/depth/waveform knobs |
+| AMP | Single row: PAN knob (left, p-lockable + LFO-assignable) + compact amp ADSR (right, canvasH=80, 44px knobs). Each A/D/R knob has a small MS/BPM tag for per-stage tempo-sync (BPM stage shows e.g. "1/8"; canvas plots resolved seconds). |
+| LFO | LFO sub-selector (LFO 1, LFO 2, …, +) capped at 220px wide, destination dropdown (grouped), waveform/trig, unified RATE knob (click center HZ↔BPM), depth/phase/fade knobs |
 | MIDI | Per-track MIDI In: input port dropdown, channel filter (All / Ch 1–16), CC→param mapping table (CC# + target param dropdown, + Add CC / × remove). |
 | MIXER | All-tracks mixer island: one strip per track showing Level, DLY wet, CRUSH wet, REV wet, and DJ Filter knobs. Clicking a strip selects that track. |
 
@@ -212,9 +212,7 @@ Per-track arpeggiator UI. Lives at `js/ui/panels/ArpPanel.js`.
 |---|---|
 | Chord selector | Drop-down of 11 chord types (same set as ChordMachine) |
 | Pattern | Up / Down / UpDown / Rand buttons |
-| MS/BPM toggle | Switch speed unit |
-| SPEED knob (ms mode) | Gap between notes in ms (1–2000ms) |
-| DIVISION select (bpm mode) | Beat division from SYNC_DIVISIONS |
+| RATE knob (unified) | Note gap. **Click knob center toggles MS↔BPM** (mode shown in body). MS: ms gap (1–2000ms). BPM: sweeps 1/32 grid (`bpmCount32`), shift-drag/scroll snaps to musical divisions. |
 | VARIANCE knob | 0–100%: widens gaps on middle notes by ±50% × variance |
 
 **Manual mode controls:**
@@ -222,8 +220,7 @@ A scrollable list of steps. Each step has:
 | Control | Description |
 |---|---|
 | NOTE / +/− knob | Semitone offset from root (−24 to +24) |
-| MS/BPM toggle | Per-step speed unit |
-| DELAY knob or DIV select | Time before the next note |
+| RATE knob (unified) | Time before the next note. **Click knob center toggles MS↔BPM** for this step. BPM: 1/32-count, shift-snaps. |
 | GATE knob | Note-on length in ms; 0 = "STEP" (inherit base step length) |
 | × button | Remove this step (hidden if only one remains) |
 
@@ -234,11 +231,11 @@ A scrollable list of steps. Each step has:
 |---|---|
 | NOTES knob | Number of notes per arp cycle (2–8) |
 | RANGE ± knob | Semitone spread ±N around root (1–24) |
-| MS/BPM + speed | Same as Chord mode |
+| RATE knob (unified) | Same unified MS/BPM rate knob as Chord mode |
 | VARIANCE knob | Timing jitter applied to all gaps |
 
 **Timing implementation:**
 The arpeggiator intercepts `_fireStep()` in `Sequencer.js`. When `arp.enabled` is true, `arp.buildEvents()` is called with the root note and step timing. It returns a flat array of `{ note, velocity, time, offTime }` events, each scheduled independently using `AudioContext.currentTime` — no `setInterval` or `setTimeout`. Notes can naturally overlap when gate > gap, producing polyphony via the voice pool.
 
 **BPM sync utility:**
-`js/util/BpmSync.js` — shared by `DelayFX`, `ReverbFX`, and `Arpeggiator`. Exports `DIV_QN`, `SYNC_DIVISIONS`, and `divToSeconds(div, bpm)`.
+`js/util/BpmSync.js` — shared by `DelayFX`, `ReverbFX`, `LFO`, and `Arpeggiator`. Unified model: integer 1/32-note counts (`count32ToSeconds`, `MUSICAL_SNAP_32`, `formatCount32`, `divToCount32`). Legacy `DIV_QN`/`SYNC_DIVISIONS`/`divToSeconds` kept for project-load back-compat only.

@@ -359,6 +359,10 @@ export class SynthPanel {
       }
     } else {
       target.setParam(path, value);
+      // Propagate the change to all non-canonical voice slots so every slot in
+      // the round-robin plays the updated params, not just slot 0.
+      const track = this.state.selectedTrack;
+      if (track && target === track.machine) track._pool?.syncParams();
     }
   }
 

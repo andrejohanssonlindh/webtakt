@@ -1,11 +1,18 @@
 /**
  * BpmSync.js
  * ----------
- * Shared BPM-sync utilities used by DelayFX, ReverbFX, and Arpeggiator.
+ * Shared BPM-sync utilities.
  *
- * DIV_QN maps beat-division string → quarter-note multiplier.
- * SYNC_DIVISIONS is the canonical ordered list for UI dropdowns.
- * divToSeconds(div, bpm) converts a division string to wall-clock seconds.
+ * The unified sync-knob model (see design/sync-knob-rollout.md) expresses BPM
+ * mode as an INTEGER COUNT of 1/32 notes. Active API used by DelayFX, ReverbFX,
+ * LFO and Arpeggiator:
+ *   count32ToSeconds(count32, bpm) — 1/32 count → wall-clock seconds
+ *   MUSICAL_SNAP_32                — shift-snap points (1/32 units)
+ *   formatCount32(count32)         — human label ("1/8 + 1/32")
+ *   divToCount32(div)              — legacy division string → 1/32 count (load)
+ *
+ * Legacy (back-compat only, consumed by divToCount32):
+ *   DIV_QN / SYNC_DIVISIONS / divToSeconds(div, bpm)
  */
 
 export const DIV_QN = {

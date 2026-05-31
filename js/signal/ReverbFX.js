@@ -15,7 +15,7 @@
  *   'reverb.decay'       — seconds, 0.1–8.0, default 1.5  (rebuilds IR — track-level only)
  *   'reverb.predelay'    — seconds, 0–0.5,   default 0.02 (rebuilds IR — track-level only)
  *   'reverb.syncMode'    — 'ms' | 'bpm', default 'ms'
- *   'reverb.bpmDiv'      — beat division string, default '1/16' (used when syncMode='bpm')
+ *   'reverb.bpmCount32'  — integer count of 1/32 notes, default 4 (=1/16) (used when syncMode='bpm')
  *   'reverb.damp'        — Hz, 200–20000,    default 8000 (LP on wet signal, LFO/p-lock ok)
  *   'reverb.wet'         — 0–1,              default 0    (LFO/p-lock ok)
  *
@@ -29,8 +29,7 @@
  *   toJSON() / fromJSON()
  */
 
-import { divToSeconds, SYNC_DIVISIONS } from '../util/BpmSync.js';
-export const REVERB_DIVISIONS = SYNC_DIVISIONS.slice(0, 6); // up to '1/1'
+import { count32ToSeconds, divToCount32, MUSICAL_SNAP_32 } from '../util/BpmSync.js';
 
 export class ReverbFX {
   /** @param {AudioContext} context */
@@ -39,12 +38,12 @@ export class ReverbFX {
     this._bpm    = 120;
 
     this._params = {
-      'reverb.decay':    1.5,
-      'reverb.predelay': 0.02,
-      'reverb.syncMode': 'ms',
-      'reverb.bpmDiv':   '1/16',
-      'reverb.damp':     8000,
-      'reverb.wet':      0,
+      'reverb.decay':      1.5,
+      'reverb.predelay':   0.02,
+      'reverb.syncMode':   'ms',
+      'reverb.bpmCount32': 4,        // 4 × 1/32 = 1/16
+      'reverb.damp':       8000,
+      'reverb.wet':        0,
     };
 
     this.enabled = false;
@@ -135,7 +134,7 @@ export class ReverbFX {
   }
 
   _applyBpmPredelay() {
-    const secs = divToSeconds(this._params['reverb.bpmDiv'], this._bpm);
+    const secs = count32ToSeconds(this._params['reverb.bpmCount32'], this._bpm);
     this._params['reverb.predelay'] = Math.min(secs, 0.5);
     this._buildIR();
   }
@@ -160,7 +159,7 @@ export class ReverbFX {
           this._buildIR();
         }
         break;
-      case 'reverb.bpmDiv':
+      case 'reverb.bpmCount32':
         if (this._params['reverb.syncMode'] === 'bpm') {
           this._applyBpmPredelay();
         }
@@ -182,12 +181,22 @@ export class ReverbFX {
   }
 
   getParamList() {
-    const isBpm = this._params['reverb.syncMode'] === 'bpm';
     return [
       { path: 'reverb.decay',    label: 'Decay',    type: 'number', min: 0.1,  max: 8.0,   default: 1.5,  modulatable: false,                           plockMode: 'js'         },
-      { path: 'reverb.syncMode', label: 'Sync',     type: 'enum',   options: ['ms','bpm'],  default: 'ms', modulatable: false,                           plockMode: 'js'         },
-      { path: 'reverb.predelay', label: 'Pre-dly',  type: 'number', min: 0,    max: 0.5,   default: 0.02, modulatable: false,                           plockMode: 'js',         hidden: isBpm },
-      { path: 'reverb.bpmDiv',   label: 'Pre-div',  type: 'enum',   options: REVERB_DIVISIONS, default: '1/16', modulatable: false,                     plockMode: 'js',         hidden: !isBpm },
+      // Unified MS/BPM sync knob for pre-delay. Both underlying params rebuild
+      // the IR, so neither is modulatable — the knob is track-level in both
+      // modes (no p-lock). Underlying params stay listed (hidden) for setParam
+      // dispatch / serialisation. See design/sync-knob-rollout.md.
+      {
+        path: 'reverb.sync', label: 'Pre-dly', type: 'sync',
+        modePath: 'reverb.syncMode',
+        msPath:   'reverb.predelay',
+        bpmPath:  'reverb.bpmCount32',
+        bpmMin: 1, bpmMax: 32, bpmSnap: MUSICAL_SNAP_32,
+      },
+      { path: 'reverb.syncMode',   label: 'Sync',     type: 'enum',   options: ['ms','bpm'], default: 'ms',  modulatable: false, plockMode: 'js', hidden: true },
+      { path: 'reverb.predelay',   label: 'Pre-dly',  type: 'number', min: 0,    max: 0.5,   default: 0.02, modulatable: false, plockMode: 'js', hidden: true },
+      { path: 'reverb.bpmCount32', label: 'Pre-div',  type: 'number', min: 1,    max: 32,    default: 4,    modulatable: false, plockMode: 'js', hidden: true },
       { path: 'reverb.damp',     label: 'Damp',     type: 'number', min: 200,  max: 20000, default: 8000, modulatable: true, lfoMin: 200, lfoMax: 20000, plockMode: 'audioParam'  },
       { path: 'reverb.wet',      label: 'Wet',      type: 'number', min: 0,    max: 1,     default: 0,    modulatable: true, lfoMin: 0,   lfoMax: 1,     plockMode: 'audioParam'  },
     ];
@@ -206,7 +215,13 @@ export class ReverbFX {
   }
 
   fromJSON(obj) {
-    Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v));
+    const params = { ...(obj.params ?? {}) };
+    // Back-compat: legacy projects stored a 'reverb.bpmDiv' division string.
+    if (params['reverb.bpmDiv'] !== undefined && params['reverb.bpmCount32'] === undefined) {
+      params['reverb.bpmCount32'] = divToCount32(params['reverb.bpmDiv']);
+    }
+    delete params['reverb.bpmDiv'];
+    Object.entries(params).forEach(([k, v]) => this.setParam(k, v));
     this.setEnabled(obj.enabled ?? false);
   }
 }

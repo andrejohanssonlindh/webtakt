@@ -16,11 +16,8 @@
  */
 
 import { KnobWidget }  from '../KnobWidget.js';
-import {
-  ARP_CHORD_NAMES,
-  ARP_PATTERNS,
-  SYNC_DIVISIONS,
-} from '../../signal/Arpeggiator.js';
+import { ARP_CHORD_NAMES, ARP_PATTERNS } from '../../signal/Arpeggiator.js';
+import { formatCount32, MUSICAL_SNAP_32 } from '../../util/BpmSync.js';
 
 const PATTERN_LABELS = { up: 'Up', down: 'Down', updown: 'UpDown', random: 'Rand' };
 
@@ -125,8 +122,8 @@ export class ArpPanel {
     row1.appendChild(patWrap);
     body.appendChild(row1);
 
-    // Row 2: speed + gate
-    body.appendChild(this._makeSpeedGateRow(arp, 'speed', 'bpmDiv', 'syncMode', 'gate'));
+    // Row 2: rate + gate
+    body.appendChild(this._makeSpeedGateRow(arp, 'speed', 'bpmCount32', 'syncMode', 'gate'));
 
     // Row 3: variance
     const row3 = document.createElement('div');
@@ -182,38 +179,18 @@ export class ArpPanel {
       this._widgets.push(semKnob);
       row.appendChild(semKnob.el);
 
-      // Speed: ms knob or bpm div selector depending on step.syncMode
+      // Per-step unified MS↔BPM rate knob (click centre toggles this step's mode).
       const speedWrap = document.createElement('div');
       speedWrap.className = 'arp-manual-speed';
 
-      const syncBtn = document.createElement('button');
-      syncBtn.className = 'arp-sync-btn' + (step.syncMode === 'bpm' ? ' active' : '');
-      syncBtn.textContent = step.syncMode === 'bpm' ? 'BPM' : 'MS';
-      syncBtn.addEventListener('click', () => {
-        step.syncMode = step.syncMode === 'bpm' ? 'ms' : 'bpm';
-        this.rebuildArp();
+      const rateKnob = this._makeSyncKnob({
+        label: 'RATE', size: 52,
+        getMode:    () => step.syncMode,
+        toggleMode: () => { step.syncMode = step.syncMode === 'bpm' ? 'ms' : 'bpm'; this.rebuildArp(); },
+        getMs:    () => step.speed,      setMs:    v => { step.speed = v; },
+        getCount: () => step.bpmCount32, setCount: v => { step.bpmCount32 = v; },
       });
-      speedWrap.appendChild(syncBtn);
-
-      if (step.syncMode === 'ms') {
-        const msKnob = new KnobWidget({
-          label:   'DELAY',
-          min:     1,
-          max:     2000,
-          value:   step.speed,
-          size:    52,
-          fmt:     v => Math.round(v) + 'ms',
-          onChange: v => { step.speed = Math.round(v); },
-        });
-        this._widgets.push(msKnob);
-        speedWrap.appendChild(msKnob.el);
-      } else {
-        const divSel = this._makeSelect('DIV', SYNC_DIVISIONS, step.bpmDiv, v => {
-          step.bpmDiv = v;
-        });
-        divSel.classList.add('arp-div-sel');
-        speedWrap.appendChild(divSel);
-      }
+      speedWrap.appendChild(rateKnob.el);
 
       row.appendChild(speedWrap);
 
@@ -296,7 +273,7 @@ export class ArpPanel {
 
     body.appendChild(row1);
 
-    body.appendChild(this._makeSpeedGateRow(arp, 'speed', 'bpmDiv', 'syncMode', 'rGate'));
+    body.appendChild(this._makeSpeedGateRow(arp, 'speed', 'bpmCount32', 'syncMode', 'rGate'));
 
     const row3 = document.createElement('div');
     row3.className = 'arp-row';
@@ -318,40 +295,53 @@ export class ArpPanel {
 
   // ── Shared helpers ──────────────────────────────────────────────────────────
 
-  /** Build a speed + gate row: [MS/BPM toggle] [ms knob OR bpm-div select] [GATE knob] */
-  _makeSpeedGateRow(arp, speedPath, bpmDivPath, syncModePath, gatePath) {
+  /**
+   * Unified MS↔BPM rate knob. Clicking the knob centre toggles the sync mode;
+   * the body shows the current mode ('MS'/'BPM'). In BPM mode the knob sweeps
+   * the 1/32 grid and shift-drag/scroll snaps to musical divisions. Works for
+   * both arp-level params and per-step objects via a small accessor bundle.
+   * See design/sync-knob-rollout.md.
+   *
+   * @param {object} acc
+   * @param {string} acc.label        knob label
+   * @param {number} acc.size         knob px size
+   * @param {() => string} acc.getMode  @param {() => void} acc.toggleMode
+   * @param {() => number} acc.getMs    @param {(v:number)=>void} acc.setMs
+   * @param {() => number} acc.getCount @param {(v:number)=>void} acc.setCount
+   * @returns {KnobWidget}
+   */
+  _makeSyncKnob({ label, size, getMode, toggleMode, getMs, setMs, getCount, setCount }) {
+    const isBpm = getMode() === 'bpm';
+    const knob = new KnobWidget({
+      label,
+      min:   1,
+      max:   isBpm ? 64  : 2000,
+      value: isBpm ? getCount() : getMs(),
+      size,
+      fmt:   isBpm ? (v => formatCount32(v)) : (v => Math.round(v) + 'ms'),
+      // Continuous in BPM mode; shift-drag/scroll snaps to musical divisions.
+      snapPoints:  isBpm ? MUSICAL_SNAP_32 : null,
+      centerLabel: isBpm ? 'BPM' : 'MS',
+      onCenterClick: () => toggleMode(),
+      onChange: v => isBpm ? setCount(Math.round(v)) : setMs(Math.round(v)),
+    });
+    this._widgets.push(knob);
+    return knob;
+  }
+
+  /** Build a rate + gate row: [unified MS/BPM rate knob] [GATE knob] */
+  _makeSpeedGateRow(arp, speedPath, countPath, syncModePath, gatePath) {
     const row = document.createElement('div');
     row.className = 'arp-row';
 
-    const isBpm = arp.getParam(syncModePath) === 'bpm';
-
-    const syncBtn = document.createElement('button');
-    syncBtn.className = 'arp-sync-btn' + (isBpm ? ' active' : '');
-    syncBtn.textContent = isBpm ? 'BPM' : 'MS';
-    syncBtn.addEventListener('click', () => {
-      arp.setParam(syncModePath, isBpm ? 'ms' : 'bpm');
-      this.rebuildArp();
+    const rateKnob = this._makeSyncKnob({
+      label: 'RATE', size: 64,
+      getMode:    () => arp.getParam(syncModePath),
+      toggleMode: () => { arp.setParam(syncModePath, arp.getParam(syncModePath) === 'bpm' ? 'ms' : 'bpm'); this.rebuildArp(); },
+      getMs:    () => arp.getParam(speedPath), setMs:    v => arp.setParam(speedPath, v),
+      getCount: () => arp.getParam(countPath), setCount: v => arp.setParam(countPath, v),
     });
-    row.appendChild(syncBtn);
-
-    if (!isBpm) {
-      const msKnob = new KnobWidget({
-        label:   'SPEED',
-        min:     1,
-        max:     2000,
-        value:   arp.getParam(speedPath),
-        size:    64,
-        fmt:     v => Math.round(v) + 'ms',
-        onChange: v => arp.setParam(speedPath, Math.round(v)),
-      });
-      this._widgets.push(msKnob);
-      row.appendChild(msKnob.el);
-    } else {
-      const divSel = this._makeSelect('DIVISION', SYNC_DIVISIONS, arp.getParam(bpmDivPath), v => {
-        arp.setParam(bpmDivPath, v);
-      });
-      row.appendChild(divSel);
-    }
+    row.appendChild(rateKnob.el);
 
     const gateKnob = new KnobWidget({
       label:   'GATE',

@@ -49,6 +49,7 @@ export class MixerPanel {
         fmt:     v => Math.round(v * 100) + '%',
         onChange: v => {
           track.machine.setParam('output.level', v);
+          track._pool?.syncParams();
           // Keep SynthPanel knob in sync when this track is selected
           if (i === state.selectedTrackIndex) {
             const linked = knobByPath.get('output.level');

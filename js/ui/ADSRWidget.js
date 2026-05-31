@@ -16,7 +16,22 @@
  * opts.accent  — optional CSS color string for the envelope line/knobs.
  *                Defaults to amber '#e8a020'.
  * opts.canvasH — optional canvas height in px (default 140).
+ * opts.getBpm  — optional () => number; current BPM used to render BPM-synced
+ *                stage durations on the canvas (default () => 120).
+ *
+ * Tempo-sync (per stage): A / D / R each show a clickable MS/BPM label in the
+ * knob body — clicking the center (no drag) flips that stage's mode, matching
+ * the FX delay knob. In BPM mode the stage stores a 1/32 count
+ * (`${prefix}.${stage}.bpmCount32`) and its mode (`…​.syncMode`); the knob value
+ * + display switch to the count (shown as "1/8"), while the canvas always plots
+ * the resolved seconds so the shape stays readable. Sustain has no duration and
+ * no mode label. See js/signal/Envelope.js and design/sync-knob-rollout.md.
  */
+
+import { formatCount32, count32ToSeconds, MUSICAL_SNAP_32 } from '../util/BpmSync.js';
+
+// Count bounds for BPM-mode stage knobs (1/32 … 4 bars in 1/32 units).
+const COUNT_LO = 1, COUNT_HI = 128;
 
 const ADSR_ACCENT_DEFAULT = '#e8a020';
 const FENV_ACCENT         = '#4a90d9';   // blue for filter envelope
@@ -48,7 +63,7 @@ function _mkKnobCanvas(w) {
   return { c, ctx };
 }
 
-function _drawKnob(ctx, w, norm, color) {
+function _drawKnob(ctx, w, norm, color, centerLabel) {
   ctx.clearRect(0, 0, w, w);
   const cx = w / 2, cy = w / 2, r = w * 0.35;
   const startA = Math.PI * 0.75, endA = Math.PI * 2.25;
@@ -84,6 +99,17 @@ function _drawKnob(ctx, w, norm, color) {
   ctx.beginPath();
   ctx.arc(dotX, dotY, r * 0.13, 0, Math.PI * 2);
   ctx.fillStyle = color; ctx.fill();
+
+  // Clickable mode label drawn in the body (e.g. "MS"/"BPM").
+  if (centerLabel) {
+    ctx.save();
+    ctx.fillStyle    = color;
+    ctx.font         = `bold ${Math.round(w * 0.16)}px monospace`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(centerLabel, cx, cy);
+    ctx.restore();
+  }
 }
 
 export class ADSRWidget {
@@ -98,6 +124,7 @@ export class ADSRWidget {
     this._prefix  = opts.prefix ?? 'env';
     this._accent  = opts.accent ?? (this._prefix === 'fenv' ? FENV_ACCENT : ADSR_ACCENT_DEFAULT);
     this._envH    = opts.canvasH ?? 140;
+    this._getBpm  = opts.getBpm  ?? (() => 120);
 
     this._cleanups = [];
     this._knobs    = {};
@@ -156,6 +183,33 @@ export class ADSRWidget {
     return Math.round(val * 1000) + 'ms';
   }
 
+  // ── Per-stage sync helpers ────────────────────────────────
+  // A timed stage carries two sibling params: `${key}.syncMode` ('ms'|'bpm')
+  // and `${key}.bpmCount32` (integer 1/32 count). Sustain is never syncable.
+
+  /** Sustain has no duration → not sync-capable. */
+  _isSyncable(key) { return key !== this._keys.sustain; }
+
+  _modeKey(key)  { return `${key}.syncMode`; }
+  _countKey(key) { return `${key}.bpmCount32`; }
+
+  /** Current sync mode for a stage ('ms' default; sustain is always 'ms'). */
+  _stageMode(key) {
+    if (!this._isSyncable(key)) return 'ms';
+    return this._get(this._modeKey(key)) ?? 'ms';
+  }
+
+  /**
+   * Resolve a stage to seconds, mirroring Envelope._stageSeconds: BPM stages
+   * convert their 1/32 count via the current BPM; MS stages return raw seconds.
+   */
+  _stageSeconds(key) {
+    if (this._stageMode(key) === 'bpm') {
+      return count32ToSeconds(this._get(this._countKey(key)), this._getBpm());
+    }
+    return this._get(key);
+  }
+
   // ── Envelope canvas ───────────────────────────────────────
 
   _buildCanvas() {
@@ -195,10 +249,12 @@ export class ADSRWidget {
     const pad = { l: 24, r: 24, t: 16, b: 26 };
     const uw = w - pad.l - pad.r;
     const uh = h - pad.t - pad.b;
-    const A = this._get(this._keys.attack);
-    const D = this._get(this._keys.decay);
+    // Timed stages resolve to seconds (BPM stages → count32ToSeconds) so the
+    // plotted shape always reflects real durations regardless of sync mode.
+    const A = this._stageSeconds(this._keys.attack);
+    const D = this._stageSeconds(this._keys.decay);
     const S = this._get(this._keys.sustain);
-    const R = this._get(this._keys.release);
+    const R = this._stageSeconds(this._keys.release);
     const total = A + D + 0.28 + R;
     const xA  = pad.l + (A / total) * uw;
     const xD  = xA    + (D / total) * uw;
@@ -319,14 +375,14 @@ export class ADSRWidget {
       const total = snap.A + snap.D + 0.28 + snap.R;
       const rawA  = _clamp(((mx - p.pad.l) / p.uw) * total,
                            BOUNDS_TABLE[attack].lo, BOUNDS_TABLE[attack].hi);
-      this._set(attack, rawA);
+      this._setStageFromSeconds(attack, rawA, fine);
 
     } else if (key === 'd') {
       const total = snap.A + snap.D + 0.28 + snap.R;
       const xA    = p.pad.l + (snap.A / total) * p.uw;
       const rawD  = _clamp(((mx - xA) / p.uw) * total,
                            BOUNDS_TABLE[decay].lo, BOUNDS_TABLE[decay].hi);
-      this._set(decay, rawD);
+      this._setStageFromSeconds(decay, rawD, fine);
       const s = _clamp(1 - (my - p.pad.t) / p.uh,
                        BOUNDS_TABLE[sustain].lo, BOUNDS_TABLE[sustain].hi);
       this._set(sustain, s);
@@ -341,8 +397,55 @@ export class ADSRWidget {
       const xS    = p.pad.l + ((snap.A + snap.D + 0.28) / total) * p.uw;
       const rawR  = _clamp(((mx - xS) / p.uw) * total,
                            BOUNDS_TABLE[release].lo, BOUNDS_TABLE[release].hi);
-      this._set(release, rawR);
+      this._setStageFromSeconds(release, rawR, fine);
     }
+  }
+
+  /**
+   * Write a stage from a target-seconds value, honouring its sync mode.
+   * MS stages store raw seconds. BPM stages convert seconds → 1/32 count
+   * (snapped to the nearest musical division when shift/ctrl held) so dragging
+   * a synced handle lands on clean divisions. See design/sync-knob-rollout.md.
+   */
+  _setStageFromSeconds(key, secs, fine) {
+    if (this._stageMode(key) !== 'bpm') { this._set(key, secs); return; }
+    const perCount = count32ToSeconds(1, this._getBpm());   // seconds per 1/32
+    let count = _clamp(Math.round(secs / Math.max(perCount, 1e-6)), COUNT_LO, COUNT_HI);
+    if (fine) {
+      // Snap to the nearest musical division (1/32 units).
+      let best = MUSICAL_SNAP_32[0], bestD = Math.abs(count - best);
+      for (const c of MUSICAL_SNAP_32) {
+        const d = Math.abs(count - c);
+        if (d < bestD) { best = c; bestD = d; }
+      }
+      count = _clamp(best, COUNT_LO, COUNT_HI);
+    }
+    this._setStageCount(key, count);
+  }
+
+  /** Set a BPM stage's 1/32 count (p-lock-aware), then redraw. */
+  _setStageCount(key, count) {
+    const c = _clamp(Math.round(count), COUNT_LO, COUNT_HI);
+    if (this._hasStep() && this._setStepPLock) {
+      this._setStepPLock(this._countKey(key), c);
+    } else {
+      this._setParam(this._countKey(key), c);
+    }
+    this._drawEnv();
+    this._syncKnobs();
+  }
+
+  /** Toggle a stage's MS↔BPM sync mode (p-lock-aware), then rebuild knobs. */
+  _toggleStageMode(key) {
+    const next = this._stageMode(key) === 'bpm' ? 'ms' : 'bpm';
+    if (this._hasStep() && this._setStepPLock) {
+      this._setStepPLock(this._modeKey(key), next);
+    } else {
+      this._setParam(this._modeKey(key), next);
+    }
+    this._refreshKnobMode(key);
+    this._drawEnv();
+    this._syncKnobs();
   }
 
   _buildEnvInteraction() {
@@ -429,28 +532,44 @@ export class ADSRWidget {
 
       this._knobs[key] = { ctx, c, valEl, lblEl, KS };
 
-      let dragging = false, lastY = 0;
-      const { lo, hi } = BOUNDS_TABLE[key];
-      const accent = this._accent;
+      let dragging = false, lastY = 0, downY = 0, downInCenter = false;
+      const accent    = this._accent;
+      const syncable  = this._isSyncable(key);
 
-      const getVal = () => this._get(key);
-      const setVal = (v) => { this._set(key, v); };
+      // A timed stage in BPM mode drives its 1/32 count instead of seconds.
+      const isBpm   = () => this._stageMode(key) === 'bpm';
+      const getVal  = () => isBpm() ? this._get(this._countKey(key)) : this._get(key);
+      const bounds  = () => isBpm()
+        ? { lo: COUNT_LO, hi: COUNT_HI }
+        : BOUNDS_TABLE[key];
+      const toNorm  = (v) => { const { lo, hi } = bounds(); return _clamp((v - lo) / (hi - lo), 0, 1); };
+      const fromNorm = (n) => { const { lo, hi } = bounds(); return lo + _clamp(n, 0, 1) * (hi - lo); };
+      const setVal  = (v) => { isBpm() ? this._setStageCount(key, v) : this._set(key, v); };
+      const fmtVal  = (v) => isBpm() ? formatCount32(v) : this._fmt(key, v);
+      // Mode label drawn in the body; click it (no drag) to toggle MS↔BPM.
+      const centerLabel = () => syncable ? (isBpm() ? 'BPM' : 'MS') : null;
 
       const redraw = () => {
-        const norm = this._toNorm(key, getVal());
-        _drawKnob(ctx, KS, norm, accent);
-        valEl.textContent = this._fmt(key, getVal());
+        _drawKnob(ctx, KS, toNorm(getVal()), accent, centerLabel());
+        valEl.textContent = fmtVal(getVal());
       };
 
       const onWheel = (e) => {
         e.preventDefault();
         const fine = e.shiftKey || e.ctrlKey;
+        const { lo, hi } = bounds();
         const step = (hi - lo) * (fine ? 0.002 : 0.02);
         setVal(getVal() + (e.deltaY > 0 ? -step : step));
       };
       const onDown = (e) => {
         dragging = true;
         lastY    = e.clientY;
+        downY    = e.clientY;
+        // Did the press land on the center hotspot? (body radius ≈ KS*0.35)
+        const rect = c.getBoundingClientRect();
+        const dx = (e.clientX - rect.left) - KS / 2;
+        const dy = (e.clientY - rect.top)  - KS / 2;
+        downInCenter = Math.hypot(dx, dy) <= KS * 0.35;
         e.preventDefault();
       };
       const onMove = (e) => {
@@ -458,12 +577,20 @@ export class ADSRWidget {
         const fine  = e.shiftKey || e.ctrlKey;
         const speed = fine ? 0.0008 : 0.008;
         const dy    = (lastY - e.clientY) * speed;
-        const norm  = _clamp(this._toNorm(key, getVal()) + dy, 0, 1);
-        setVal(this._fromNorm(key, norm));
+        const norm  = _clamp(toNorm(getVal()) + dy, 0, 1);
+        setVal(fromNorm(norm));
         lastY = e.clientY;
       };
-      const onUp = () => {
-        if (dragging && this._onRelease) this._onRelease();
+      const onUp = (e) => {
+        if (!dragging) return;
+        const isClick = Math.abs((e?.clientY ?? downY) - downY) <= 4;
+        if (isClick && downInCenter && syncable) {
+          // Center click (no meaningful drag) → toggle mode, don't fire release.
+          dragging = false;
+          this._toggleStageMode(key);
+          return;
+        }
+        if (this._onRelease) this._onRelease();
         dragging = false;
       };
 
@@ -487,18 +614,30 @@ export class ADSRWidget {
       cell.appendChild(c);
       cell.appendChild(valEl);
       cell.appendChild(lblEl);
-      row.appendChild(cell);
 
+      row.appendChild(cell);
       this._knobs[key].cell = cell;
     });
+  }
+
+  /** Redraw a stage knob (mode label lives in the body) after a mode toggle. */
+  _refreshKnobMode(key) {
+    this._knobs[key]?.redraw?.();
   }
 
   _syncKnobs() {
     for (const [key, kb] of Object.entries(this._knobs)) {
       if (kb.redraw) kb.redraw();
-      const hasPLock = this._hasStep()
-        && this._getStepPLock(key) !== null
-        && this._getStepPLock(key) !== undefined;
+      // P-lock highlight reflects whichever param the active mode targets.
+      const activeKey = (this._isSyncable(key) && this._stageMode(key) === 'bpm')
+        ? this._countKey(key)
+        : key;
+      // Highlight when either the active value param OR the sync-mode param is
+      // p-locked (the mode toggle lives in the knob body, no separate element).
+      const pv     = this._getStepPLock(activeKey);
+      const modePv = this._isSyncable(key) ? this._getStepPLock(this._modeKey(key)) : null;
+      const isSet  = (v) => v !== null && v !== undefined;
+      const hasPLock = this._hasStep() && (isSet(pv) || isSet(modePv));
       kb.lblEl.classList.toggle('has-plock', hasPLock);
     }
   }

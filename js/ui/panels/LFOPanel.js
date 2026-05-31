@@ -9,8 +9,8 @@
  *   { track, container, activeWidgets, state, renderContent, fmtParam }
  */
 
-import { KnobWidget }    from '../KnobWidget.js';
-import { BPM_DIVISIONS } from '../../signal/LFO.js';
+import { KnobWidget }                  from '../KnobWidget.js';
+import { formatCount32, MUSICAL_SNAP_32 } from '../../util/BpmSync.js';
 
 export class LFOPanel {
   render(ctx) {
@@ -215,6 +215,50 @@ export class LFOPanel {
     container.appendChild(destWrap);
   }
 
+  /**
+   * Build a unified MS↔BPM (here Hz↔BPM) rate knob for an LFO. Clicking the
+   * knob centre toggles lfo.syncMode for the whole LFO; the body shows the
+   * current mode ('HZ'/'BPM'). In BPM mode the knob sweeps the 1/32 grid
+   * continuously, and shift-drag/scroll snaps to musical divisions. See
+   * design/sync-knob-rollout.md.
+   *
+   * @param {LFO} lfo
+   * @param {object} cfg
+   * @param {string} cfg.label   knob label
+   * @param {number} cfg.size    knob px size
+   * @param {string} cfg.hzPath  param path holding the Hz value
+   * @param {string} cfg.bpmPath param path holding the 1/32 count
+   * @returns {KnobWidget}
+   */
+  _makeSyncKnob(lfo, { label, size, hzPath, bpmPath }) {
+    const { activeWidgets, renderContent, fmtParam } = this._ctx;
+    const isBpm = lfo.getParam('lfo.syncMode') === 'bpm';
+
+    const activePath = isBpm ? bpmPath : hzPath;
+    const min  = isBpm ? 1   : 0.001;
+    const max  = isBpm ? 128 : 20;
+    const fmt  = isBpm
+      ? (v => formatCount32(v))
+      : (v => fmtParam({ path: hzPath }, v));
+
+    const knob = new KnobWidget({
+      label, min, max,
+      value: lfo.getParam(activePath),
+      size,
+      fmt,
+      // Continuous in BPM mode; shift-drag/scroll snaps to musical divisions.
+      snapPoints: isBpm ? MUSICAL_SNAP_32 : null,
+      centerLabel: isBpm ? 'BPM' : 'HZ',
+      onCenterClick: () => {
+        lfo.setParam('lfo.syncMode', isBpm ? 'hz' : 'bpm');
+        renderContent();   // rebuild so the knob picks up the new range/value
+      },
+      onChange: v => lfo.setParam(activePath, v),
+    });
+    activeWidgets.push(knob);
+    return knob;
+  }
+
   _renderSimple(lfo, container) {
     const { activeWidgets, renderContent, fmtParam } = this._ctx;
 
@@ -268,79 +312,14 @@ export class LFOPanel {
 
     container.appendChild(row1);
 
-    // ── Row 2: Speed knobs + BPM sync toggle ─────────────────
+    // ── Row 2: unified Hz/BPM rate knob (click centre to toggle) ─────────
     const row2 = document.createElement('div');
     row2.className = 'lfo-row';
 
-    const syncMode = lfo.getParam('lfo.syncMode');
-
-    // BPM / Hz toggle
-    const syncGroup = document.createElement('div');
-    syncGroup.className = 'lfo-btn-group';
-    const syncLabel = document.createElement('span');
-    syncLabel.className = 'lfo-group-label';
-    syncLabel.textContent = 'Sync';
-    syncGroup.appendChild(syncLabel);
-    const syncBtns = document.createElement('div');
-    syncBtns.className = 'lfo-btn-row';
-    [['hz','Hz'],['bpm','BPM']].forEach(([val, label]) => {
-      const b = document.createElement('button');
-      b.className = 'btn lfo-sync-btn' + (syncMode === val ? ' active' : '');
-      b.textContent = label;
-      b.addEventListener('click', () => {
-        lfo.setParam('lfo.syncMode', val);
-        renderContent();
-      });
-      syncBtns.appendChild(b);
+    const rateKnob = this._makeSyncKnob(lfo, {
+      label: 'Rate', size: 64, hzPath: 'lfo.speed', bpmPath: 'lfo.bpmCount32',
     });
-    syncGroup.appendChild(syncBtns);
-    row2.appendChild(syncGroup);
-
-    if (syncMode === 'hz') {
-      // Speed Hz knob
-      const speedP = { path: 'lfo.speed', label: 'Speed', min: 0.001, max: 20, default: 0.1 };
-      const speedKnob = new KnobWidget({
-        label: 'Speed', min: 0.001, max: 20,
-        value: lfo.getParam('lfo.speed'),
-        size: 56, fmt: v => fmtParam(speedP, v),
-        onChange: v => lfo.setParam('lfo.speed', v),
-      });
-      row2.appendChild(speedKnob.el);
-      activeWidgets.push(speedKnob);
-
-      // Mult knob
-      const multP = { path: 'lfo.speedMult', label: 'Mult', min: 1, max: 32, default: 1 };
-      const multKnob = new KnobWidget({
-        label: 'Mult', min: 1, max: 32,
-        value: lfo.getParam('lfo.speedMult'),
-        size: 56, fmt: v => fmtParam(multP, v),
-        onChange: v => lfo.setParam('lfo.speedMult', v),
-      });
-      row2.appendChild(multKnob.el);
-      activeWidgets.push(multKnob);
-    } else {
-      // BPM division selector
-      const divGroup = document.createElement('div');
-      divGroup.className = 'lfo-btn-group';
-      const divLabel = document.createElement('span');
-      divLabel.className = 'lfo-group-label';
-      divLabel.textContent = 'Division';
-      divGroup.appendChild(divLabel);
-      const divBtns = document.createElement('div');
-      divBtns.className = 'lfo-btn-row lfo-div-row';
-      BPM_DIVISIONS.forEach(div => {
-        const b = document.createElement('button');
-        b.className = 'btn lfo-div-btn' + (lfo.getParam('lfo.bpmDiv') === div ? ' active' : '');
-        b.textContent = div;
-        b.addEventListener('click', () => {
-          lfo.setParam('lfo.bpmDiv', div);
-          divBtns.querySelectorAll('.lfo-div-btn').forEach(x => x.classList.toggle('active', x === b));
-        });
-        divBtns.appendChild(b);
-      });
-      divGroup.appendChild(divBtns);
-      row2.appendChild(divGroup);
-    }
+    row2.appendChild(rateKnob.el);
 
     container.appendChild(row2);
 
@@ -409,7 +388,6 @@ export class LFOPanel {
 
     // ── Per-section panels: 2×2 grid (A D / S R) ────────────
     const ownMode = lfo.getParam('lfo.adsrSource') === 'own';
-    const syncMode = lfo.getParam('lfo.syncMode');
 
     const grid = document.createElement('div');
     grid.className = 'lfo-adsr-grid';
@@ -451,46 +429,15 @@ export class LFOPanel {
       knobRow.appendChild(depthKnob.el);
       activeWidgets.push(depthKnob);
 
-      // Speed knob (Hz) or div selector (BPM)
-      if (syncMode === 'hz') {
-        const speedP = { path: `lfo.adsr.${sec}.speed` };
-        const speedKnob = new KnobWidget({
-          label: 'Speed', min: 0.001, max: 20,
-          value: lfo.getParam(`lfo.adsr.${sec}.speed`),
-          size: 44, fmt: v => fmtParam(speedP, v),
-          onChange: v => lfo.setParam(`lfo.adsr.${sec}.speed`, v),
-        });
-        knobRow.appendChild(speedKnob.el);
-        activeWidgets.push(speedKnob);
-
-        const multP = { path: `lfo.adsr.${sec}.mult` };
-        const multKnob = new KnobWidget({
-          label: 'Mult', min: 1, max: 32,
-          value: lfo.getParam(`lfo.adsr.${sec}.mult`),
-          size: 44, fmt: v => fmtParam(multP, v),
-          onChange: v => lfo.setParam(`lfo.adsr.${sec}.mult`, v),
-        });
-        knobRow.appendChild(multKnob.el);
-        activeWidgets.push(multKnob);
-      } else {
-        const divSel = document.createElement('select');
-        divSel.className = 'param-select lfo-div-sel';
-        BPM_DIVISIONS.forEach(div => {
-          const o = document.createElement('option');
-          o.value = div; o.textContent = div;
-          if (lfo.getParam(`lfo.adsr.${sec}.speed`) === div) o.selected = true;
-          divSel.appendChild(o);
-        });
-        divSel.addEventListener('change', () => lfo.setParam(`lfo.adsr.${sec}.speed`, divSel.value));
-        const divWrap = document.createElement('div');
-        divWrap.className = 'param-row';
-        const divLbl = document.createElement('span');
-        divLbl.className = 'param-label label';
-        divLbl.textContent = 'Div';
-        divWrap.appendChild(divLbl);
-        divWrap.appendChild(divSel);
-        knobRow.appendChild(divWrap);
-      }
+      // Per-section rate: unified Hz/BPM sync knob (click centre toggles the
+      // whole LFO's sync mode). In Hz mode the Mult knob is gone (rate is the
+      // single Speed value); in BPM mode it sweeps the 1/32 grid.
+      const rateKnob = this._makeSyncKnob(lfo, {
+        label: 'Rate', size: 44,
+        hzPath:  `lfo.adsr.${sec}.speed`,
+        bpmPath: `lfo.adsr.${sec}.bpmCount32`,
+      });
+      knobRow.appendChild(rateKnob.el);
 
       cell.appendChild(knobRow);
       grid.appendChild(cell);

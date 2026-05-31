@@ -299,6 +299,7 @@ export class Track {
     this.delayFX.setBpm(bpm);
     this.reverbFX.setBpm(bpm);
     this.arp.setBpm(bpm);
+    this._pool?.setBpm(bpm);   // tempo-synced envelope stages
   }
 
   /**

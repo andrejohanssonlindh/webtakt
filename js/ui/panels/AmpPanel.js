@@ -74,6 +74,7 @@ export class AmpPanel {
     const adsr = new ADSRWidget({
       prefix:   'env',
       canvasH:  80,
+      getBpm:       () => track.clock?.bpm ?? 120,
       getParam:     path => track.envelope.getParam(path),
       setParam:     (path, value) => {
         const s = getStep();

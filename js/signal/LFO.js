@@ -17,9 +17,10 @@
  *
  * BPM sync
  * ────────
- * When lfo.syncMode === 'bpm', speed is expressed as a beat division string
- * ('1/32' … '4/1'). Hz is derived at noteOn and on BPM change via:
- *   Hz = (bpm / 60) / divisionInQuarterNotes
+ * When lfo.syncMode === 'bpm', the rate is expressed as an INTEGER COUNT of
+ * 1/32 notes (lfo.bpmCount32 / lfo.adsr.<sec>.bpmCount32), matching the unified
+ * sync-knob model (see js/util/BpmSync.js, design/sync-knob-rollout.md). The
+ * 1/32 count is the LFO *period*, so Hz = 1 / count32ToSeconds(count, bpm).
  * In free Hz mode the speed knob sets Hz directly.
  *
  * Audio graph
@@ -37,12 +38,11 @@
  * Used by: Track.js, Sequencer.js (noteOn / noteOff calls)
  */
 
-// Beat division strings → quarter-note units (4 ticks/beat, each tick = 1/16th note)
-export const BPM_DIVISIONS = ['1/32','1/16','1/8','1/4','1/2','1/1','2/1','4/1'];
-const DIV_QN = { '1/32':0.125, '1/16':0.25, '1/8':0.5, '1/4':1, '1/2':2, '1/1':4, '2/1':8, '4/1':16 };
+import { count32ToSeconds, divToCount32 } from '../util/BpmSync.js';
 
-function divToHz(div, bpm) {
-  return (bpm / 60) / (DIV_QN[div] ?? 1);
+/** LFO rate from a 1/32 count: the count is the LFO period. */
+function count32ToHz(count32, bpm) {
+  return 1 / Math.max(count32ToSeconds(count32, bpm), 1e-6);
 }
 
 export class LFO {
@@ -64,7 +64,7 @@ export class LFO {
       'lfo.syncMode':   'hz',         // 'hz' | 'bpm'
       'lfo.speed':      0.1,          // Hz (syncMode=hz) or ignored (syncMode=bpm)
       'lfo.speedMult':  1,            // integer multiplier (hz mode only)
-      'lfo.bpmDiv':     '1/4',        // beat division (syncMode=bpm)
+      'lfo.bpmCount32': 8,            // 1/32 count = LFO period (syncMode=bpm); 8 = 1/4
       'lfo.depth':      30,           // 0–100 % (simple mode global depth)
       'lfo.startPhase': 0,            // 0–127; mapped to 0–2π on reset (trig mode)
       'lfo.fade':       0,            // -100…+100; neg=fade in, pos=fade out, 0=none
@@ -82,10 +82,15 @@ export class LFO {
       'lfo.adsr.s.depth': 40,
       'lfo.adsr.r.depth': 0,
 
-      'lfo.adsr.a.speed': 0.1,        // Hz or div (mirrors global speed type)
+      'lfo.adsr.a.speed': 0.1,        // Hz (syncMode=hz)
       'lfo.adsr.d.speed': 0.1,
       'lfo.adsr.s.speed': 0.1,
       'lfo.adsr.r.speed': 0.1,
+
+      'lfo.adsr.a.bpmCount32': 8,     // 1/32 count = period (syncMode=bpm); 8 = 1/4
+      'lfo.adsr.d.bpmCount32': 8,
+      'lfo.adsr.s.bpmCount32': 8,
+      'lfo.adsr.r.bpmCount32': 8,
 
       'lfo.adsr.a.mult':  1,
       'lfo.adsr.d.mult':  1,
@@ -156,18 +161,18 @@ export class LFO {
 
   _effectiveHz() {
     if (this._params['lfo.syncMode'] === 'bpm') {
-      return divToHz(this._params['lfo.bpmDiv'], this._bpm());
+      return count32ToHz(this._params['lfo.bpmCount32'], this._bpm());
     }
     return Math.max(0.001, this._params['lfo.speed'] * this._params['lfo.speedMult']);
   }
 
   _sectionHz(section) {
-    // Advanced per-section speed. Uses syncMode setting for unit interpretation.
+    // Advanced per-section rate. Uses syncMode setting for unit interpretation.
+    if (this._params['lfo.syncMode'] === 'bpm') {
+      return count32ToHz(this._params[`lfo.adsr.${section}.bpmCount32`], this._bpm());
+    }
     const speed = this._params[`lfo.adsr.${section}.speed`];
     const mult  = this._params[`lfo.adsr.${section}.mult`];
-    if (this._params['lfo.syncMode'] === 'bpm') {
-      return divToHz(speed, this._bpm());
-    }
     return Math.max(0.001, speed * mult);
   }
 
@@ -360,7 +365,7 @@ export class LFO {
         break;
       case 'lfo.speed':
       case 'lfo.speedMult':
-      case 'lfo.bpmDiv':
+      case 'lfo.bpmCount32':
       case 'lfo.syncMode':
         if (path === 'lfo.speedMult') this._params['lfo.speedMult'] = Math.max(1, Math.round(value));
         this._applySpeed();
@@ -379,9 +384,8 @@ export class LFO {
       { path: 'lfo.waveform',   label: 'Waveform',    type: 'enum',   options: ['sine','square','sawtooth','triangle'] },
       { path: 'lfo.trigMode',   label: 'Trig',        type: 'enum',   options: ['free','trig'] },
       { path: 'lfo.syncMode',   label: 'Sync',        type: 'enum',   options: ['hz','bpm'] },
-      { path: 'lfo.speed',      label: 'Speed',       type: 'number', min: 0.001, max: 20,  default: 0.1 },
-      { path: 'lfo.speedMult',  label: 'Mult',        type: 'number', min: 1,     max: 32,  default: 1   },
-      { path: 'lfo.bpmDiv',     label: 'Division',    type: 'enum',   options: BPM_DIVISIONS },
+      { path: 'lfo.speed',      label: 'Rate',        type: 'number', min: 0.001, max: 20,  default: 0.1 },
+      { path: 'lfo.bpmCount32', label: 'Division',    type: 'number', min: 1,     max: 128, default: 8   },
       { path: 'lfo.depth',      label: 'Depth',       type: 'number', min: 0,     max: 100, default: 30  },
       { path: 'lfo.startPhase', label: 'Phase',       type: 'number', min: 0,     max: 127, default: 0   },
       { path: 'lfo.fade',       label: 'Fade',        type: 'number', min: -100,  max: 100, default: 0   },
@@ -390,8 +394,8 @@ export class LFO {
       { path: 'lfo.adsrSource',    label: 'Source',  type: 'enum',   options: ['own','amp'] },
       ...['a','d','s','r'].flatMap(sec => [
         { path: `lfo.adsr.${sec}.depth`, label: `${sec.toUpperCase()} Depth`, type: 'number', min: 0,     max: 100, default: sec === 'r' ? 0 : 40 },
-        { path: `lfo.adsr.${sec}.speed`, label: `${sec.toUpperCase()} Speed`, type: 'number', min: 0.001, max: 20,  default: 0.1 },
-        { path: `lfo.adsr.${sec}.mult`,  label: `${sec.toUpperCase()} Mult`,  type: 'number', min: 1,     max: 32,  default: 1   },
+        { path: `lfo.adsr.${sec}.speed`, label: `${sec.toUpperCase()} Rate`,  type: 'number', min: 0.001, max: 20,  default: 0.1 },
+        { path: `lfo.adsr.${sec}.bpmCount32`, label: `${sec.toUpperCase()} Div`, type: 'number', min: 1, max: 128, default: 8 },
         ...(sec !== 's' && this._params['lfo.adsrSource'] === 'own'
           ? [{ path: `lfo.adsr.${sec}.time`, label: `${sec.toUpperCase()} Time`, type: 'number', min: 0.001, max: 8, default: 0.1 }]
           : []),
@@ -405,6 +409,23 @@ export class LFO {
   }
 
   fromJSON(obj) {
-    Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v));
+    const params = { ...(obj.params ?? {}) };
+    // Back-compat: legacy projects stored a 'lfo.bpmDiv' division string and
+    // reused per-section 'lfo.adsr.<sec>.speed' as a division string in BPM
+    // mode. Map both to the new integer 1/32-count fields on load.
+    if (params['lfo.bpmDiv'] !== undefined && params['lfo.bpmCount32'] === undefined) {
+      params['lfo.bpmCount32'] = divToCount32(params['lfo.bpmDiv']);
+    }
+    delete params['lfo.bpmDiv'];
+    for (const sec of ['a', 'd', 's', 'r']) {
+      const sp = params[`lfo.adsr.${sec}.speed`];
+      if (typeof sp === 'string') {
+        if (params[`lfo.adsr.${sec}.bpmCount32`] === undefined) {
+          params[`lfo.adsr.${sec}.bpmCount32`] = divToCount32(sp);
+        }
+        delete params[`lfo.adsr.${sec}.speed`];   // drop the overloaded string
+      }
+    }
+    Object.entries(params).forEach(([k, v]) => this.setParam(k, v));
   }
 }

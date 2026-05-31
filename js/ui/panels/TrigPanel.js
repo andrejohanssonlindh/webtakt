@@ -138,6 +138,7 @@ export class TrigPanel {
             detuneKnob.setHasPLock(true);
           } else {
             track.machine.setParam('osc.detune', v);
+            track._pool?.syncParams();
           }
         },
         onRelease: () => { if (hasStep) emitStep(); },

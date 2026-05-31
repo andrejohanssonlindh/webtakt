@@ -23,9 +23,10 @@
  *   variance 1 → middle notes stretched by up to ±50% of the base gap
  *   Only middle notes (not first/last) are varied to keep the overall cycle length stable.
  *
- * BPM sync: speed can be expressed as ms (absolute) or a beat-division string.
- *   When syncMode='bpm', the noteGap is derived from divToSeconds(bpmDiv, bpm).
- *   Manual mode: each step has its own syncMode/bpmDiv or ms value.
+ * BPM sync: speed can be expressed as ms (absolute) or an integer count of
+ *   1/32 notes (the unified sync-knob model — see js/util/BpmSync.js).
+ *   When syncMode='bpm', the noteGap is count32ToSeconds(bpmCount32, bpm).
+ *   Manual mode: each step has its own syncMode + bpmCount32 or ms value.
  *
  * Parameters (flat object, serialisable)
  * ───────────────────────────────────────
@@ -37,11 +38,11 @@
  *   pattern        string   'up' | 'down' | 'updown' | 'random'
  *   syncMode       string   'ms' | 'bpm'
  *   speed          number   gap between notes in ms (syncMode='ms')
- *   bpmDiv         string   beat division (syncMode='bpm')
+ *   bpmCount32     number   integer 1/32 count (syncMode='bpm')
  *   variance       number   0–1, timing jitter on middle notes
  *
  *   -- manual mode --
- *   steps          Array<{semitone, syncMode, speed, bpmDiv, gate}>
+ *   steps          Array<{semitone, syncMode, speed, bpmCount32, gate}>
  *                  gate: note-on length in ms (0 = inherit from step length)
  *
  *   -- random mode --
@@ -49,13 +50,11 @@
  *   range          number   semitone range ±N from root (1–24)
  *   syncMode       string   'ms' | 'bpm'
  *   speed          number   base gap ms
- *   bpmDiv         string   beat division
+ *   bpmCount32     number   integer 1/32 count
  *   variance       number   0–1
  */
 
-import { divToSeconds, SYNC_DIVISIONS } from '../util/BpmSync.js';
-
-export { SYNC_DIVISIONS };
+import { count32ToSeconds, divToCount32 } from '../util/BpmSync.js';
 
 export const ARP_CHORD_DEFS = {
   major:  [0,  4,  7, 12],
@@ -74,7 +73,7 @@ export const ARP_CHORD_NAMES = Object.keys(ARP_CHORD_DEFS);
 export const ARP_PATTERNS    = ['up', 'down', 'updown', 'random'];
 
 function _makeDefaultStep() {
-  return { semitone: 0, syncMode: 'ms', speed: 150, bpmDiv: '1/8', gate: 100 };
+  return { semitone: 0, syncMode: 'ms', speed: 150, bpmCount32: 4, gate: 100 };
 }
 
 export class Arpeggiator {
@@ -90,7 +89,7 @@ export class Arpeggiator {
       pattern:   'up',
       syncMode:  'ms',
       speed:     150,
-      bpmDiv:    '1/8',
+      bpmCount32: 4,   // 4 × 1/32 = 1/8
       variance:  0,
       gate:      0,    // 0 = 90% of gap (legato); >0 = explicit ms
       // manual
@@ -160,7 +159,7 @@ export class Arpeggiator {
     const p         = this._params;
     const intervals = [...(ARP_CHORD_DEFS[p.chord] ?? ARP_CHORD_DEFS.major)];
     const notes     = this._applyPattern(intervals);
-    const gapSec    = this._gapSec(p.syncMode, p.speed, p.bpmDiv);
+    const gapSec    = this._gapSec(p.syncMode, p.speed, p.bpmCount32);
     const gateSec   = p.gate > 0 ? p.gate / 1000 : gapSec * 0.9;
 
     return this._spaceNotes(notes, rootNote, velocity, t0, gapSec, gateSec, p.variance);
@@ -200,7 +199,7 @@ export class Arpeggiator {
 
     for (const step of p.steps) {
       const note    = Math.max(0, Math.min(127, rootNote + Math.round(step.semitone)));
-      const gapSec  = this._gapSec(step.syncMode, step.speed, step.bpmDiv);
+      const gapSec  = this._gapSec(step.syncMode, step.speed, step.bpmCount32);
       const gateSec = step.gate > 0 ? step.gate / 1000 : stepLengthSec;
       events.push({ note, velocity, time: cursor, offTime: cursor + gateSec });
       cursor += gapSec;
@@ -215,7 +214,7 @@ export class Arpeggiator {
     const p       = this._params;
     const count   = Math.max(2, Math.min(8, Math.round(p.noteCount)));
     const range   = Math.max(1, Math.round(p.range));
-    const gapSec  = this._gapSec(p.syncMode, p.speed, p.bpmDiv);
+    const gapSec  = this._gapSec(p.syncMode, p.speed, p.bpmCount32);
     const gateSec = p.rGate > 0 ? p.rGate / 1000 : gapSec * 0.9;
 
     const intervals = Array.from({ length: count }, () =>
@@ -250,9 +249,9 @@ export class Arpeggiator {
     return events;
   }
 
-  _gapSec(syncMode, speedMs, bpmDiv) {
+  _gapSec(syncMode, speedMs, bpmCount32) {
     if (syncMode === 'bpm') {
-      return divToSeconds(bpmDiv, this._bpm);
+      return Math.max(0.001, count32ToSeconds(bpmCount32, this._bpm));
     }
     return Math.max(0.001, speedMs / 1000);
   }
@@ -269,8 +268,21 @@ export class Arpeggiator {
   fromJSON(obj) {
     this.enabled = obj.enabled ?? false;
     if (obj.params) {
-      const steps = obj.params.steps ?? [_makeDefaultStep()];
-      Object.assign(this._params, { ...obj.params, steps: steps.map(s => ({ ..._makeDefaultStep(), ...s })) });
+      const src = { ...obj.params };
+      // Back-compat: legacy projects stored beat-division strings.
+      if (src.bpmDiv !== undefined && src.bpmCount32 === undefined) {
+        src.bpmCount32 = divToCount32(src.bpmDiv);
+      }
+      delete src.bpmDiv;
+      const steps = (src.steps ?? [_makeDefaultStep()]).map(s => {
+        const step = { ..._makeDefaultStep(), ...s };
+        if (s.bpmDiv !== undefined && s.bpmCount32 === undefined) {
+          step.bpmCount32 = divToCount32(s.bpmDiv);
+        }
+        delete step.bpmDiv;
+        return step;
+      });
+      Object.assign(this._params, { ...src, steps });
     }
   }
 }

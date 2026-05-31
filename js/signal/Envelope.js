@@ -17,11 +17,22 @@
  * Filter modulation fix: we drive filter.node.frequency AudioParam directly
  * with scheduled ramps rather than via a GainNode (which had no input and
  * therefore always produced silence regardless of its gain value).
+ *
+ * Tempo-sync (per stage): each timed stage (attack/decay/release of both the
+ * amp and filter envelopes) can be locked to tempo. When
+ * `<prefix>.<stage>.syncMode === 'bpm'`, the stage duration is resolved at
+ * note-fire time from `<prefix>.<stage>.bpmCount32` (an integer count of 1/32
+ * notes) via count32ToSeconds(count, bpm). The seconds param stays the source
+ * of truth in 'ms' mode. Sustain has no duration, so it is never synced.
+ * See js/util/BpmSync.js and design/sync-knob-rollout.md.
  */
+
+import { count32ToSeconds } from '../util/BpmSync.js';
 
 export class Envelope {
   constructor(context) {
     this.context = context;
+    this._bpm    = 120;
 
     this._params = {
       'env.attack':   0.01,
@@ -32,12 +43,44 @@ export class Envelope {
       'fenv.decay':   0.2,
       'fenv.sustain': 0.0,
       'fenv.release': 0.3,
+
+      // Per-stage tempo-sync: mode ('ms' | 'bpm') + 1/32 count per timed stage.
+      // Default count 4 = 1/8. Resolved to seconds at note-fire when mode='bpm'.
+      'env.attack.syncMode':   'ms', 'env.attack.bpmCount32':   4,
+      'env.decay.syncMode':    'ms', 'env.decay.bpmCount32':    4,
+      'env.release.syncMode':  'ms', 'env.release.bpmCount32':  4,
+      'fenv.attack.syncMode':  'ms', 'fenv.attack.bpmCount32':  4,
+      'fenv.decay.syncMode':   'ms', 'fenv.decay.bpmCount32':   4,
+      'fenv.release.syncMode': 'ms', 'fenv.release.bpmCount32': 4,
     };
 
     this.ampGain = context.createGain();
     this.ampGain.gain.value = 0;
 
     this._filter = null;
+  }
+
+  /** Update BPM used to resolve tempo-synced stage durations. */
+  setBpm(bpm) {
+    this._bpm = bpm;
+  }
+
+  /**
+   * Resolve a stage duration to seconds, honouring its sync mode. `prefix` is
+   * 'env' or 'fenv'; `stage` is 'attack' | 'decay' | 'release'. When the stage
+   * is BPM-synced the duration comes from its 1/32 count at the current BPM;
+   * otherwise the plain seconds param (with optional p-lock override) is used.
+   */
+  _stageSeconds(prefix, stage, overrides = {}) {
+    const secKey  = `${prefix}.${stage}`;
+    const modeKey = `${secKey}.syncMode`;
+    const cntKey  = `${secKey}.bpmCount32`;
+    const mode = overrides[modeKey] ?? this._params[modeKey];
+    if (mode === 'bpm') {
+      const count = overrides[cntKey] ?? this._params[cntKey];
+      return count32ToSeconds(count, this._bpm);
+    }
+    return overrides[secKey] ?? this._params[secKey];
   }
 
   connectToFilter(filter) {
@@ -87,11 +130,11 @@ export class Envelope {
    * tail runs until `time` when the new attack overwrites it.
    */
   scheduleNote(time, offTime, overrides = {}) {
-    // ── Amp envelope ──
-    const a = overrides['env.attack']  ?? this._params['env.attack'];
-    const d = overrides['env.decay']   ?? this._params['env.decay'];
+    // ── Amp envelope ── (timed stages resolve sync mode → seconds)
+    const a = this._stageSeconds('env', 'attack',  overrides);
+    const d = this._stageSeconds('env', 'decay',   overrides);
     const s = overrides['env.sustain'] ?? this._params['env.sustain'];
-    const r = overrides['env.release'] ?? this._params['env.release'];
+    const r = this._stageSeconds('env', 'release', overrides);
 
     const g = this.ampGain.gain;
     this._scheduleADS(g, time, a, d, 1.0, s);
@@ -99,10 +142,10 @@ export class Envelope {
 
     // ── Filter envelope ──
     if (this._filter) {
-      const fa = overrides['fenv.attack']  ?? this._params['fenv.attack'];
-      const fd = overrides['fenv.decay']   ?? this._params['fenv.decay'];
+      const fa = this._stageSeconds('fenv', 'attack',  overrides);
+      const fd = this._stageSeconds('fenv', 'decay',   overrides);
       const fs = overrides['fenv.sustain'] ?? this._params['fenv.sustain'];
-      const fr = overrides['fenv.release'] ?? this._params['fenv.release'];
+      const fr = this._stageSeconds('fenv', 'release', overrides);
 
       const envAmt    = overrides['filter.envAmount'] ?? this._filter.getParam('filter.envAmount');
       // trueCut: the persistent cutoff that the filter returns to after the note.
@@ -129,8 +172,8 @@ export class Envelope {
    */
   noteOn(time) {
     // Amp
-    const a = this._params['env.attack'];
-    const d = this._params['env.decay'];
+    const a = this._stageSeconds('env', 'attack');
+    const d = this._stageSeconds('env', 'decay');
     const s = this._params['env.sustain'];
 
     const g = this.ampGain.gain;
@@ -141,8 +184,8 @@ export class Envelope {
 
     // Filter
     if (this._filter) {
-      const fa = this._params['fenv.attack'];
-      const fd = this._params['fenv.decay'];
+      const fa = this._stageSeconds('fenv', 'attack');
+      const fd = this._stageSeconds('fenv', 'decay');
       const fs = this._params['fenv.sustain'];
 
       const envAmt  = this._filter.getParam('filter.envAmount');
@@ -164,7 +207,7 @@ export class Envelope {
    * Live noteOff (keyboard).
    */
   noteOff(time) {
-    const r = this._params['env.release'];
+    const r = this._stageSeconds('env', 'release');
     const g = this.ampGain.gain;
 
     if (typeof g.cancelAndHoldAtTime === 'function') {
@@ -176,7 +219,7 @@ export class Envelope {
     g.linearRampToValueAtTime(0, time + r);
 
     if (this._filter) {
-      const fr      = this._params['fenv.release'];
+      const fr      = this._stageSeconds('fenv', 'release');
       const baseCut = this._filter.getParam('filter.cutoff');
       const freq    = this._filter.node.frequency;
 

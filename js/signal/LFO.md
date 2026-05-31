@@ -14,7 +14,15 @@ OscillatorNode (_lfoOsc)
     → destination AudioParam
 ```
 
-The LFO oscillator runs at `lfo.speed × lfo.speedMult` Hz. The depth gain scales the ±1 oscillator output into the destination's unit space before it reaches the AudioParam.
+In Hz mode the LFO oscillator runs at `lfo.speed` Hz. In BPM mode the rate comes
+from `lfo.bpmCount32` — an integer count of 1/32 notes treated as the LFO
+*period* — so `Hz = 1 / count32ToSeconds(lfo.bpmCount32, bpm)` (see
+`js/util/BpmSync.js`). The depth gain scales the ±1 oscillator output into the
+destination's unit space before it reaches the AudioParam.
+
+> The legacy Hz **Mult** knob (`lfo.speedMult`, and per-section `.mult`) was
+> dropped when the unified sync knob landed; the keys remain in `_params` for
+> project-load back-compat but are no longer surfaced or used by BPM mode.
 
 ---
 
@@ -23,11 +31,11 @@ The LFO oscillator runs at `lfo.speed × lfo.speedMult` Hz. The depth gain scale
 | Path | Type | Range | Default | Notes |
 |---|---|---|---|---|
 | `lfo.waveform` | enum | `sine` `square` `sawtooth` `triangle` | `sine` | Native `OscillatorNode` types only — no random/S&H |
-| `lfo.speed` | number | 0.001–2 Hz | 0.1 | Base rate before multiplier |
-| `lfo.speedMult` | number | 1–32 | 1 | Integer multiplier; snapped to nearest int on set |
+| `lfo.speed` | number | 0.001–20 Hz | 0.1 | Hz-mode rate (`lfo.syncMode === 'hz'`) |
+| `lfo.bpmCount32` | number | 1–128 | 8 | BPM-mode rate: 1/32 count = LFO period (`lfo.syncMode === 'bpm'`); 8 = 1/4 |
 | `lfo.depth` | number | 0–100 % | 30 | Percentage of half the destination range |
 
-Effective frequency = `lfo.speed × lfo.speedMult`.
+Effective frequency: Hz mode → `lfo.speed`; BPM mode → `1 / count32ToSeconds(lfo.bpmCount32, bpm)`.
 
 ---
 
