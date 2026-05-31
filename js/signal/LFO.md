@@ -54,9 +54,16 @@ Effective frequency: Hz mode → `lfo.speed`; BPM mode → `1 / count32ToSeconds
 
 ## depthScale — how depth maps to destination units
 
-`depthScale = (lfoMax − lfoMin) / 2` for the assigned destination.
+`depthScale` is computed by `lfoDepthScale(descriptor)` in `Track.js`. There are two cases:
 
-At 100% depth the LFO swings ±`depthScale` around the base value, which equals ±half the destination's full range. This is set once at assignment time in `Track.setLFODestination()`.
+- **Linear (default):** `depthScale = (lfoMax − lfoMin) / 2`. At 100% depth the LFO swings ±`depthScale` around the base value = ±half the destination's full range.
+- **Octave-based (`lfoUnit: 'cents'`):** `depthScale = 1200·log2(lfoMax / lfoMin) / 2`, a cents value = half the param's *log* range, independent of the base. Used for exponential AudioParams where linear modulation would feel one-sided. At 100% depth the LFO swings ± half the full octave range — enough to reach either rail from any base.
+
+This is set once at assignment time in `Track.setLFODestination()`.
+
+**Why filter frequencies are octave-based:** `filter.cutoff`, `base.lpf` and `base.hpf` are declared `lfoUnit: 'cents'`. Hearing (and filter cutoff) is logarithmic, but `BiquadFilterNode.frequency` is linear in Hz — adding ±N Hz darkens far more than it brightens and can pin a lowpass at 0 Hz (silence). So these LFOs target `.detune` (cents) instead of `.frequency`: `computedFreq = frequency·2^(detune/1200)`, which is exponential, so a constant cents swing = a constant octave swing regardless of base. The intrinsic value (knob + envelope) keeps living on `.frequency`; the LFO rides on `.detune` and the two compose. See `Filter.resolveLFOTargets()`.
+
+The depthScale spans the **full log range** (e.g. cutoff: `1200·log2(20000/20)/2 ≈ 5977` cents ≈ 5 octaves each way), not a fixed octave count. That is deliberate: at 100% depth the sweep reaches `lfoMax` from a low base (the big detune pushes the computed frequency past Nyquist, which the node clamps) and reaches `lfoMin` from a high base. A fixed ±N octaves could *not* reach the ceiling from a low cutoff (`base·2^N` stays low) — that was the "darker at the bottom, can't cap to the roof" bug. Bias inherits this for free — `+100` = only-up toward `lfoMax`, `−100` = only-down toward `lfoMin`, symmetric in octaves. Filter `resonance`/`gain` (Q, dB) are *not* octave quantities and stay linear.
 
 **Critical constraint for FM modulators**: FM operator level/feedback AudioParams are in frequency-scaled space (`level × freq × MAX_MOD_RATIO`), which changes pitch-to-pitch. To keep `depthScale` pitch-independent, FMMachine uses a split-gain topology for OP2/3/4:
 
@@ -75,6 +82,8 @@ The LFO connects to `opNLevelGain.gain` — a 0–1 AudioParam — so `depthScal
 `Track._resolveAudioParam(path)` returns `{ audioParam, depthScale }`. The LFO's `_depthGain` is connected directly to the AudioParam. The connection is permanent until `clearDestination()` is called (e.g. on track reset or destination change).
 
 All params with `modulatable: true` and a non-null `resolveAudioParam` result fall here.
+
+**Multi-target filter params:** filter params route per voice slot via `VoicePool.connectLFOToAllFilters`, which calls `Filter.resolveLFOTargets(path)` — this returns an *array* of AudioParams, so one path can drive several nodes. `filter.cutoff` returns the primary node's `.detune` plus every slope stage's `.detune` (all poles track the same modulation). Other filter params return a single param. The same `depthScale` applies to all targets of one LFO.
 
 ### JS-only destinations
 

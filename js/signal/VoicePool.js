@@ -310,16 +310,18 @@ export class VoicePool {
    */
   connectLFOToAllFilters(lfo, path, depthScale) {
     for (const slot of this._slots) {
-      const ap = slot._filter.resolveAudioParam?.(path);
-      if (ap) lfo.addDestination(ap, depthScale);
+      // A single filter path may resolve to several AudioParams (e.g. cutoff
+      // fans to every slope stage's .detune) — connect to all of them.
+      const targets = slot._filter.resolveLFOTargets?.(path) ?? [];
+      for (const ap of targets) lfo.addDestination(ap, depthScale);
     }
   }
 
   /** Disconnect an LFO from a filter AudioParam path on every slot's filter. */
   disconnectLFOFromAllFilters(lfo, path) {
     for (const slot of this._slots) {
-      const ap = slot._filter.resolveAudioParam?.(path);
-      if (ap) lfo.removeDestination(ap);
+      const targets = slot._filter.resolveLFOTargets?.(path) ?? [];
+      for (const ap of targets) lfo.removeDestination(ap);
     }
   }
 

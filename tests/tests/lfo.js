@@ -2,7 +2,7 @@
  * lfo.js — LFO tests
  */
 
-import { suite, test, assert, makeOfflineTrack, renderSteps, rms } from '../runner.js';
+import { suite, test, assert, makeOfflineTrack, renderSteps, rms, spectralCentroid } from '../runner.js';
 
 const STEP_SEC = 0.25;
 const STEP_LEN = 3;
@@ -82,6 +82,56 @@ suite('LFO', () => {
       `+bias should raise mean level above symmetric (up=${up.toFixed(4)}, mid=${mid.toFixed(4)})`);
     assert.gt(mid, down * 1.05,
       `-bias should lower mean level below symmetric (mid=${mid.toFixed(4)}, down=${down.toFixed(4)})`);
+  });
+
+  test('LFO on filter.cutoff at full depth reaches the ceiling from a LOW base (bias +100 opens, -100 stays dark)', async () => {
+    // Regression for two cutoff bugs:
+    //   1) Linear-Hz LFO: down darkened far harder than up brightened, and could
+    //      slam a lowpass to 0 Hz.
+    //   2) Detune with a FIXED ±N octaves: from a low base, base·2^N stays low, so
+    //      full depth still couldn't reach 20 kHz ("darker at the bottom, never
+    //      caps to the roof"). Fixed by scaling depth to the full log range.
+    // Setup: base cutoff pinned LOW (60 Hz). With a square LFO at 100% depth and
+    // bias +100, the bright half must open the filter all the way up — a high
+    // spectral centroid — even though the base is near the floor. Bias -100 keeps
+    // the same note dark. We read the settled first half-cycle of each.
+    const SR_DUR = 1.0;
+
+    async function brightnessForBias(bias) {
+      const { track, ctx, sampleRate } = await makeOfflineTrack('synth', SR_DUR);
+      track.filter.setParam('filter.type', 'lowpass');
+      track.filter.setParam('filter.cutoff', 60);    // base near the floor
+      track.filter.setParam('filter.envAmount', 0);   // isolate the LFO from the filter env
+      track.lfos[0].setParam('lfo.waveform', 'square');
+      track.lfos[0].setParam('lfo.syncMode', 'hz');
+      track.lfos[0].setParam('lfo.speed', 2);          // half-cycle = 0.25s
+      track.lfos[0].setParam('lfo.depth', 100);
+      track.lfos[0].setParam('lfo.bias', bias);
+      track.lfos[0].setParam('lfo.trigMode', 'trig');
+      track.lfos[0].setParam('lfo.startPhase', 0);
+      track.setLFODestination(0, 'filter.cutoff');
+
+      const [full] = await renderSteps(track, ctx, sampleRate, 1, SR_DUR - 0.1,
+        () => ({ note: 48, length: 64 }), 0.05);
+      // Square +bias holds the bright plateau for the first half-cycle; read its
+      // settled middle (0.12–0.28s after note-on), skipping the detune ramp.
+      const a = Math.floor(0.12 * sampleRate);
+      const b = Math.floor(0.28 * sampleRate);
+      const win = full.slice(a, b);
+      return { centroid: spectralCentroid(win, sampleRate), rms: rms(win) };
+    }
+
+    const up   = await brightnessForBias(100);   // only-up: must reach bright
+    const down = await brightnessForBias(-100);  // only-down: must stay dark
+
+    // From a 60 Hz base, the up-sweep must open well past a few kHz — proof the
+    // sweep reaches toward the ceiling rather than topping out near the base.
+    assert.gt(up.centroid, 3000,
+      `bias +100 from low base did not open the filter (centroid=${up.centroid.toFixed(0)}Hz) — sweep not reaching the ceiling`);
+
+    // Only-up must be dramatically brighter than only-down at the same base.
+    assert.gt(up.centroid / Math.max(down.centroid, 1), 3,
+      `bias should be directional (up=${up.centroid.toFixed(0)}Hz, down=${down.centroid.toFixed(0)}Hz)`);
   });
 
   test('LFO TRG mode resets phase — identical renders produce matching RMS per step', async () => {

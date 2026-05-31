@@ -101,6 +101,35 @@ const MACHINES = {
   midi:             MidiMachine,
 };
 
+/**
+ * LFO depth scale for a param descriptor: the amount added at 100% depth.
+ *
+ * Two unit models, both defined so that 100% depth (bias 0) spans the param's
+ * full range peak-to-peak around the base value:
+ *
+ *  • Linear (default): half the linear range, (lfoMax − lfoMin) / 2.
+ *  • Octave/`cents` (`lfoUnit: 'cents'`): half the *log* range in cents,
+ *    1200·log2(lfoMax / lfoMin) / 2. The LFO drives an exponential AudioParam
+ *    (e.g. a filter's .detune, see Filter.resolveLFOTargets), so a constant cents
+ *    swing is a constant octave swing — symmetric to the ear and base-independent.
+ *
+ * Anchoring to the full log range (rather than a fixed octave count) is what
+ * makes the sweep reach the rails from anywhere: from a low cutoff, 100% depth
+ * still opens all the way to lfoMax (the detune drives the computed frequency
+ * past Nyquist, which the BiquadFilterNode clamps), and from a high cutoff it
+ * closes all the way down. A fixed ±N octaves could not reach the ceiling from a
+ * low base (base·2^N stays low) — that was the "darker at the bottom" bug.
+ *
+ * @param {object} descriptor — a getParamList() entry with modulatable: true
+ * @returns {number}
+ */
+function lfoDepthScale(descriptor) {
+  if (descriptor.lfoUnit === 'cents') {
+    return 1200 * Math.log2(descriptor.lfoMax / descriptor.lfoMin) / 2;
+  }
+  return (descriptor.lfoMax - descriptor.lfoMin) / 2;
+}
+
 export class Track {
   /**
    * @param {number} index
@@ -455,7 +484,8 @@ export class Track {
   /**
    * Resolve a parameter path string to a Web Audio AudioParam + depthScale.
    * For machine params, returns the slot-0 AudioParam (caller handles multi-slot).
-   * depthScale = (lfoMax - lfoMin) / 2 so that 100% depth = full half-range swing.
+   * depthScale comes from lfoDepthScale() — half the linear range, or a cents
+   * value for octave-based params (see filter.cutoff).
    * @param {string} path
    * @returns {{ audioParam: AudioParam, depthScale: number, jsOnly?: boolean }|null}
    */
@@ -470,7 +500,7 @@ export class Track {
       // Arp timing is JS-only (read at build time, not an AudioParam) — sampled
       // by the Sequencer / LiveArp per fire. depthScale = half the param range.
       const d = this.arp.modParamDescriptors().find(p => p.path === path);
-      const depthScale = d ? (d.lfoMax - d.lfoMin) / 2 : 1;
+      const depthScale = d ? lfoDepthScale(d) : 1;
       return { audioParam: null, depthScale, jsOnly: true };
     }
 
@@ -493,8 +523,7 @@ export class Track {
     if (!audioParam) audioParam = this.reverbFX.resolveAudioParam?.(path) ?? null;
     if (!audioParam) return null;
 
-    const depthScale = (descriptor.lfoMax - descriptor.lfoMin) / 2;
-    return { audioParam, depthScale };
+    return { audioParam, depthScale: lfoDepthScale(descriptor) };
   }
 
   /** No envelope params are safely LFO-modulatable: ADSR times are JS-only,

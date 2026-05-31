@@ -1,8 +1,20 @@
 # Handover: LFO modulation of `filter.cutoff` feels one-sided (linear vs log Hz)
 
-**Status:** open / not started. Separate from the LFO **Bias** feature (that one
-shipped and works — verified on `output.level`). This document is the handover
-for the cutoff-specific issue surfaced while testing Bias.
+**Status:** FIXED (Option 1, `detune`, log-range depth). The cutoff LFO now rides
+on `.detune` (cents → octave-based) instead of `.frequency`, so up/down swings are
+musically symmetric and Bias is symmetric for free. `base.lpf`/`base.hpf` got the
+same treatment. The mechanism is generic: descriptors flag `lfoUnit: 'cents'`,
+`Track.lfoDepthScale()` returns `1200·log2(lfoMax/lfoMin)/2` cents (half the full
+log range), and `Filter.resolveLFOTargets()` returns the `.detune` AudioParam(s) —
+fanning to every slope stage for cutoff.
+
+**Why log-range and not a fixed ±N octaves:** a fixed octave count is anchored to
+the base (`base·2^N`), so from a low cutoff full depth still can't reach 20 kHz —
+the user reported exactly this ("darker at the bottom, never caps to the roof").
+Scaling depth to the full log range means 100% depth reaches `lfoMax` from any
+base (the large detune drives the computed freq past Nyquist; the node clamps) and
+reaches `lfoMin` from a high base. See the "Implementation notes" at the bottom.
+Separate from the LFO **Bias** feature (shipped, verified on `output.level`).
 
 ## Symptom
 
@@ -101,9 +113,37 @@ distinct from the envelope/UI target (`node.frequency`), and changing
 
 ## Key files
 
-- `js/signal/LFO.js` — `_depthGain`/`_biasGain`, `addDestination`.
-- `js/signal/Filter.js` — `resolveAudioParam`, `scheduleFrequency`, slope stages.
-- `js/signal/Envelope.js` — `scheduleFrequency` caller (shares the freq param).
-- `js/state/Track.js` — `_resolveAudioParam` (`depthScale`), `_rewireLFOToPool`.
-- `js/signal/VoicePool.js` — `connectLFOToAllFilters` / `disconnectLFOFromAllFilters`.
-- `js/signal/LFO.md` — depthScale + destination docs to update.
+- `js/signal/LFO.js` — `_depthGain`/`_biasGain`, `addDestination`. (unchanged)
+- `js/signal/Filter.js` — added `resolveLFOTargets()`; `filter.cutoff`/`base.lpf`/
+  `base.hpf` descriptors flagged `lfoUnit: 'cents'`.
+- `js/signal/Envelope.js` — `scheduleFrequency` caller; still writes `.frequency`
+  (intrinsic), composes with the LFO's `.detune`. (unchanged)
+- `js/state/Track.js` — new `lfoDepthScale()` helper (cents-aware); `_resolveAudioParam`
+  uses it.
+- `js/signal/VoicePool.js` — `connectLFOToAllFilters`/`disconnectLFOFromAllFilters`
+  now iterate `resolveLFOTargets()` (multi-param fan-out).
+- `js/signal/LFO.md` — depthScale + destination docs updated.
+- `tests/tests/lfo.js` — added octave-symmetry / no-silence regression test.
+
+## Implementation notes (the actual fix)
+
+- **Two resolution paths, deliberately separate.** `Filter.resolveAudioParam()`
+  (single `.frequency`/`.Q`) still serves the envelope + UI, which write the
+  *intrinsic* value. `Filter.resolveLFOTargets()` (new) serves the LFO and returns
+  an *array* of `.detune` params for frequency-type targets. The two never alias.
+- **Why `detune`:** `computedFreq = frequency·2^(detune/1200)`, so it's exponential
+  on the audio thread — a constant cents swing = a constant octave swing regardless
+  of base, and the downswing can never reach 0 Hz. No JS per-frame work, no pitch
+  dependence.
+- **Why full log-range depth (not fixed octaves):** see the status note above —
+  fixed octaves can't reach the rail from a far base. `lfoDepthScale()` returns
+  `1200·log2(lfoMax/lfoMin)/2` cents for `lfoUnit:'cents'` params, mirroring the
+  linear default's `(max−min)/2` half-range semantic in log space. Base-independent,
+  set once at assignment — no live recompute needed (clamping handles the rails).
+- **Generic, not a cutoff special-case:** the cents/octave behaviour is driven by
+  descriptor metadata (`lfoUnit`) consumed by `lfoDepthScale()`, and
+  `resolveLFOTargets()` keys off the path. Adding another octave-based filter
+  param later is a one-line descriptor flag.
+- **Q/gain stay linear** (not octave quantities). **Mod wheel unchanged** — it
+  reads only `lfoMin`/`lfoMax` and writes absolute Hz via `setParam`, ignoring
+  `lfoUnit`.

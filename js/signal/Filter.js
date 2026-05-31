@@ -12,8 +12,9 @@
  * Intermediate values blend continuously via per-stage dry/wet GainNodes.
  *
  * All extra stages track the same type/cutoff/Q/gain as node.
- * LFO and envelope modulation connect only to node.frequency — the extra stages
- * are matched via setParam calls.
+ * The envelope writes node.frequency (+ every stage's .frequency, see
+ * scheduleFrequency). LFO modulation of cutoff rides on .detune (cents →
+ * exponential/octave-based, see resolveLFOTargets) and also fans to every stage.
  *
  * Signal chain:
  *   [input] → _baseHPF → _baseLPF → node → _extra[0..2] (wet-blended) → [output]
@@ -215,13 +216,13 @@ export class Filter {
   getParamList() {
     return [
       { path: 'filter.type',      label: 'Type',      type: 'enum',   options: ['lowpass','highpass','bandpass','notch','peaking','allpass'], plockMode: 'js'        },
-      { path: 'filter.cutoff',    label: 'Cutoff',    type: 'number', min: 20,  max: 20000, default: 8000,  modulatable: true, lfoMin: 20,   lfoMax: 20000, plockMode: 'envelope' },
+      { path: 'filter.cutoff',    label: 'Cutoff',    type: 'number', min: 20,  max: 20000, default: 8000,  modulatable: true, lfoMin: 20,   lfoMax: 20000, lfoUnit: 'cents', plockMode: 'envelope' },
       { path: 'filter.resonance', label: 'Resonance', type: 'number', min: 0.1, max: 20,    default: 1.0,   modulatable: true, lfoMin: 0.1,  lfoMax: 20,    plockMode: 'filter'   },
       { path: 'filter.gain',      label: 'Gain',      type: 'number', min: -30, max: 30,    default: 0,     modulatable: true, lfoMin: -30,  lfoMax: 30,    plockMode: 'filter'   },
       { path: 'filter.envAmount', label: 'Env Amt',   type: 'number', min: -1,  max: 1,     default: 0.3,                                                   plockMode: 'envelope' },
       { path: 'filter.slope',     label: 'Slope',     type: 'number', min: 0,   max: 1,     default: 0,     modulatable: true, lfoMin: 0,    lfoMax: 1,     plockMode: 'filter'   },
-      { path: 'base.lpf',         label: 'Base LPF',  type: 'number', min: 200, max: 20000, default: 20000, modulatable: true, lfoMin: 200,  lfoMax: 20000, plockMode: 'filter'   },
-      { path: 'base.hpf',         label: 'Base HPF',  type: 'number', min: 20,  max: 8000,  default: 20,    modulatable: true, lfoMin: 20,   lfoMax: 8000,  plockMode: 'filter'   },
+      { path: 'base.lpf',         label: 'Base LPF',  type: 'number', min: 200, max: 20000, default: 20000, modulatable: true, lfoMin: 200,  lfoMax: 20000, lfoUnit: 'cents', plockMode: 'filter'   },
+      { path: 'base.hpf',         label: 'Base HPF',  type: 'number', min: 20,  max: 8000,  default: 20,    modulatable: true, lfoMin: 20,   lfoMax: 8000,  lfoUnit: 'cents', plockMode: 'filter'   },
     ];
   }
 
@@ -262,6 +263,44 @@ export class Filter {
       case 'base.lpf':         return this._baseLPF.frequency;
       case 'base.hpf':         return this._baseHPF.frequency;
       default: return null;
+    }
+  }
+
+  /**
+   * Resolve a param path to the AudioParam(s) an LFO should modulate.
+   *
+   * This is intentionally distinct from `resolveAudioParam` (used by the
+   * envelope and UI, which write the *intrinsic* value). Two reasons it differs:
+   *
+   *  1. **Frequency params modulate `detune`, not `frequency`.** `detune` is in
+   *     cents and combines exponentially (`computedFreq = frequency·2^(detune/1200)`),
+   *     so a constant cents swing = a constant octave swing — symmetric to the ear
+   *     and pitch-independent. Adding linear Hz to `frequency` instead darkens far
+   *     harder than it brightens and can slam a lowpass to 0 Hz (silence). The
+   *     intrinsic value (knob + envelope) keeps living on `frequency`; the LFO
+   *     rides on top via `detune`, so the two compose cleanly. Params flagged
+   *     `lfoUnit: 'cents'` in getParamList() (cutoff, base LPF/HPF) route this way;
+   *     `depthScale` is then a cents value spanning the param's full log range
+   *     (see Track.lfoDepthScale), so full depth reaches both rails from any base.
+   *     Q/gain stay linear, since they are not octave quantities.
+   *  2. **Cutoff fans out to every slope stage.** All poles must track the same
+   *     modulation (cf. `scheduleFrequency`), so we return each stage's `detune`
+   *     as well as the primary node's.
+   *
+   * @param {string} path
+   * @returns {AudioParam[]} zero or more params to drive (empty = not modulatable)
+   */
+  resolveLFOTargets(path) {
+    switch (path) {
+      case 'filter.cutoff':
+        // Primary node + every slope stage, so all active poles track the LFO.
+        return [this.node.detune, ...this._stages.map(s => s.biquad.detune)];
+      case 'base.lpf': return [this._baseLPF.detune];
+      case 'base.hpf': return [this._baseHPF.detune];
+      default: {
+        const ap = this.resolveAudioParam(path);  // linear params (Q, gain)
+        return ap ? [ap] : [];
+      }
     }
   }
 
