@@ -141,6 +141,11 @@ Wavetable oscillator with continuous morphing. 8-entry wavetable bank built from
 Sub oscillator (sine, one octave below) mixed independently.
 Parameters: `osc.detune` (hidden, trig tab), `pos` (JS-only plock, not LFO-assignable — PeriodicWave swap has no AudioParam), `sub.level`, `output.level`.
 
+### StringsMachine (`type: 'strings'`)
+Bowed / plucked string-section synthesizer. A persistent unison stack of detuned sawtooth oscillators (the "section") is summed → body bandpass (wooden resonance) → tone lowpass (brightness), with looped band-limited bow noise mixed in and a shared internal vibrato LFO modulating every osc's `detune`. Sustained/pad-style — amplitude is gated by the track Envelope (like Synth/Chord); `noteOn` retunes the section, `noteOff` is a no-op.
+`mode` (enum) selects instrument character — `violin` (+12 st, tight), `viola` (mid), `cello` (−12 st, with an added octave-down voice), `ensemble` (wide, extra octave-up + octave-down voices). Each mode sets an octave shift, its unison voice offsets, and a relative ensemble-spread scaler. `MAX_VOICES` oscillators are allocated up front; voices unused by the active mode are silenced via per-voice gains (persistent-oscillator architecture).
+Parameters: `mode` (enum, JS), `osc.detune` (hidden, trig tab — manualTarget, applied via `_applyTuning` to preserve per-voice spread), `ensemble` (JS, LFO-assignable — recomputes section detune), `tone`, `body`, `resonance`, `bow`, `vibrato` (depth ¢, drives `_vibratoGain.gain`), `vibrato.rate` (drives `_vibratoOsc.frequency`), `output.level`. Everything except `mode` is LFO/p-lock assignable.
+
 ---
 
 ## Sampler Machines

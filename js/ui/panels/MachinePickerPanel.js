@@ -41,6 +41,7 @@ export const MACHINE_GROUPS = [
       { type: 'karplus',   label: 'Karplus',   desc: 'Plucked string' },
       { type: 'marimba',   label: 'Marimba',   desc: 'Inharmonic bar percussion' },
       { type: 'comb',      label: 'Comb',      desc: 'Resonator / comb filter' },
+      { type: 'strings',   label: 'Strings',   desc: 'Bowed string section' },
     ],
   },
   {

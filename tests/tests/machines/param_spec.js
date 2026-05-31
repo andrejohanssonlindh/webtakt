@@ -177,6 +177,18 @@ const EXPECTED = {
     { path: 'noise.color',  label: 'Noise Rate', type: 'number', min: 0,    max: 1,   default: 0.15, modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'js'        },
     { path: 'output.level', label: 'Level',      type: 'number', min: 0,    max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'audioParam' },
   ],
+  strings: [
+    { path: 'mode',         label: 'Mode',     type: 'enum',   options: ['violin','viola','cello','ensemble'], plockMode: 'js' },
+    { path: 'osc.detune',   label: 'Detune',   type: 'number', min: -100, max: 100, default: 0,    modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
+    { path: 'ensemble',     label: 'Ensemble', type: 'number', min: 0,    max: 60,  default: 14,   modulatable: true, lfoMin: 0,    lfoMax: 60,   plockMode: 'js'        },
+    { path: 'tone',         label: 'Tone',     type: 'number', min: 300,  max: 12000, default: 4000, modulatable: true, lfoMin: 300,  lfoMax: 12000, plockMode: 'audioParam' },
+    { path: 'body',         label: 'Body',     type: 'number', min: 150,  max: 3000, default: 800,  modulatable: true, lfoMin: 150,  lfoMax: 3000, plockMode: 'audioParam' },
+    { path: 'resonance',    label: 'Resonance',type: 'number', min: 0.3,  max: 10,   default: 1.2,  modulatable: true, lfoMin: 0.3,  lfoMax: 10,   plockMode: 'audioParam' },
+    { path: 'bow',          label: 'Bow',      type: 'number', min: 0,    max: 1,    default: 0.15, modulatable: true, lfoMin: 0,    lfoMax: 1,    plockMode: 'audioParam' },
+    { path: 'vibrato',      label: 'Vibrato',  type: 'number', min: 0,    max: 50,   default: 6,    modulatable: true, lfoMin: 0,    lfoMax: 50,   plockMode: 'audioParam' },
+    { path: 'vibrato.rate', label: 'Vib Rate', type: 'number', min: 0.5,  max: 12,   default: 5.0,  modulatable: true, lfoMin: 0.5,  lfoMax: 12,   plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',    type: 'number', min: 0,    max: 1,    default: 0.7,  modulatable: true, lfoMin: 0,    lfoMax: 1,    plockMode: 'audioParam' },
+  ],
   sampler: [
     { path: 'sample.start',     label: 'Start',    type: 'number',  min: 0,   max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
     { path: 'sample.end',       label: 'End',      type: 'number',  min: 0,   max: 1,   default: 1,    modulatable: false, plockMode: 'js' },
@@ -209,6 +221,7 @@ const RESOLVES = {
   wood: ['freq1', 'freq2', 'ring', 'click.freq', 'output.level'],
   bass: ['osc.detune', 'sub.level', 'output.level'],
   swarm: ['osc.detune', 'height', 'output.level'],
+  strings: ['osc.detune', 'tone', 'body', 'resonance', 'bow', 'vibrato', 'vibrato.rate', 'output.level'],
   sampler: ['output.level'],
 };
 
@@ -218,7 +231,7 @@ suite('Param spec (declarative machines)', () => {
     'synth', 'snare', 'chord',
     'kick.silk', 'kick.hard', 'hihat', 'clapp', 'cymbal',
     'noise', 'karplus', 'comb', 'marimba', 'transient', 'wood',
-    'bass', 'swarm', 'sampler',
+    'bass', 'swarm', 'strings', 'sampler',
   ]) {
 
     test(`${type}: getParamList matches original descriptors`, async () => {

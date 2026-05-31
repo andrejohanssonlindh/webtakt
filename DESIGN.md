@@ -72,6 +72,7 @@ js/
     BassMachine.js      — Bassline voice: saw/sq + sub + drive + portamento + accent
     CombMachine.js      — Pitched resonator: two decaying sinusoidal partials (bell/marimba/gamelan)
     ChordMachine.js     — 4-voice chord synth: 11 chord types, inversions, p-lockable per step
+    StringsMachine.js   — Bowed string section: detuned saw unison + body/tone filters + bow noise + vibrato; violin/viola/cello/ensemble modes
   signal/
     Filter.js           — BiquadFilterNode wrapper: type, cutoff, resonance, envAmount + base LPF/HPF
     Envelope.js         — Dual ADSR (amp + filter env), scheduleNote for sequencer, noteOn/noteOff for live; per-stage MS/BPM tempo-sync on A/D/R (resolved at note-fire via setBpm + count32ToSeconds)

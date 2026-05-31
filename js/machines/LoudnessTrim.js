@@ -48,6 +48,7 @@ export const LOUDNESS_TRIM = {
   'swarm':        1.55,
   'karplus':      1.74,
   'transient':    2.43,
+  'strings':      3.54,
 
   // ── spiky percussion: capped so peak ≤ 0.90 (sit below median RMS) ──
   'clapp':        1.34,

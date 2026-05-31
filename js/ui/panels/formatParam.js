@@ -108,6 +108,11 @@ export function formatParam(p, v) {
   if (p.path === 'excite.level')     return Math.round(v * 100) + '%';
   // ChordMachine
   if (p.path === 'inversion')        return Math.round(v);
+  // StringsMachine
+  if (p.path === 'ensemble')         return Math.round(v) + '¢';
+  if (p.path === 'bow')              return Math.round(v * 100) + '%';
+  if (p.path === 'vibrato')          return Math.round(v) + '¢';
+  if (p.path === 'vibrato.rate')     return v.toFixed(2) + 'Hz';
   // FMMachine
   if (p.path.endsWith('.ratio'))     return 'x' + v.toFixed(2);
   if (p.path.endsWith('.feedback'))  return Math.round(v * 100) + '%';
