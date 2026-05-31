@@ -15,6 +15,7 @@
       <span class="transport-title">WEBTAKT</span>
       <div class="sep"></div>
       <button id="btn-play" class="btn">▶ PLAY</button>
+      <button id="btn-stop-all" class="btn" title="Stop transport, kill all sound, exit record">■ STOP ALL</button>
       <button id="btn-rec" class="btn">⏺ REC</button>
       <button id="btn-tape" class="btn">⏺ TAPE</button>
       <button id="btn-drum" class="btn">DRUM</button>
@@ -229,6 +230,7 @@
 
     // ── Transport ─────────────────────────────────────────────
     const btnPlay    = document.getElementById('btn-play');
+    const btnStopAll = document.getElementById('btn-stop-all');
     const btnRec     = document.getElementById('btn-rec');
     const bpmSlider  = document.getElementById('bpm-slider');
     const bpmDisplay = document.getElementById('bpm-display');
@@ -250,6 +252,22 @@
         _lastHighlight = -1;
         state.selectStep(-1);
       }
+    });
+
+    // ── STOP ALL (panic) ──────────────────────────────────────
+    // Stops the transport, kills every ringing/looping/stuck voice, and exits
+    // record mode. A hard reset of the audible state.
+    btnStopAll.addEventListener('click', () => {
+      audio.resume();
+      project.silence();
+      if (state.recording) state.setRecording(false);
+      state.emit('panic', {});
+      playing = false;
+      btnPlay.textContent = '▶ PLAY';
+      btnPlay.classList.remove('playing');
+      stepGrid.highlightStep(-1);
+      _lastHighlight = -1;
+      state.selectStep(-1);
     });
 
     btnRec.addEventListener('click', () => {

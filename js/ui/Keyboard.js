@@ -69,12 +69,21 @@ export class Keyboard {
     this._buildOctaveControls();
     this._build();
     this._bindKeyboard();
+    this._attachLiveArpHooks();
 
     // Ensure state has the folding flag (may not exist on first load)
     if (state.keyFolding === undefined) state.keyFolding = false;
 
     state.on('scaleChanged',     () => { this._applyScale(); this._updateKeyLabels(); });
-    state.on('trackSelected',    () => { this._applyScale(); this._updateKeyLabels(); });
+    state.on('trackSelected',    () => {
+      // Release any held live-input arp on every track so a track switch mid-hold
+      // can't leave an arp free-running with no key to stop it.
+      this.state.project.tracks.forEach(t => t.liveArp?.releaseAll());
+      this._heldKeys.clear();
+      this.keyboardEl.querySelectorAll('.key.held').forEach(k => k.classList.remove('held'));
+      this._attachLiveArpHooks();  // cover any tracks added at runtime
+      this._applyScale(); this._updateKeyLabels();
+    });
     state.on('keyFoldingChanged',({ on }) => { this.keyFolding = on; this._applyScale(); this._updateKeyLabels(); });
     state.on('recordingChanged', ({ recording }) => {
       if (!recording) {
@@ -83,6 +92,16 @@ export class Keyboard {
         this._heldSlots.clear();
         this._heldKeys.clear();
       }
+    });
+
+    // Global STOP-ALL / panic — drop all held-key state + visual highlights.
+    state.on('panic', () => {
+      this.state.project.tracks.forEach(t => t.liveArp?.releaseAll());
+      this._recordNoteOnTime.clear();
+      this._recordNoteOnStep.clear();
+      this._heldSlots.clear();
+      this._heldKeys.clear();
+      this.keyboardEl.querySelectorAll('.key.held').forEach(k => k.classList.remove('held'));
     });
   }
 
@@ -289,21 +308,34 @@ export class Keyboard {
     const track = this.state.selectedTrack;
     const time  = ctx.currentTime + 0.015;
 
-    const voice    = track._pool?.nextVoice() ?? null;
-    const machine  = voice?.machine  ?? track.machine;
-    const envelope = voice?.envelope ?? track.envelope;
-    if (voice) voice.claim(time + 30);
-    this._heldSlots.set(midiNote, voice);
+    // ── Live-input arp: keys drive the arp directly (no direct note trigger) ──
+    // The held key set IS the chord; LiveArp fans it out and (when recording)
+    // prints each fired note into the step it lands on via captureArpNote().
+    // Key-down does NOT write to a step here — the arp output is what's captured.
+    const liveArp = track.arp?.enabled && track.arp.getParam('mode') === 'input';
+    if (liveArp) {
+      track.liveArp.noteOn(midiNote, 100);
+    } else {
+      const voice    = track._pool?.nextVoice() ?? null;
+      const machine  = voice?.machine  ?? track.machine;
+      const envelope = voice?.envelope ?? track.envelope;
+      if (voice) voice.claim(time + 30);
+      this._heldSlots.set(midiNote, voice);
 
-    machine?.noteOn(midiNote, 100, time);
-    envelope.noteOn(time);
+      machine?.noteOn(midiNote, 100, time);
+      envelope.noteOn(time);
+    }
 
     // ── Fire followers (live keyboard note) ────────────────
     this._fireFollowers(track, midiNote, 100, time);
 
-    const stepIndex = this.state.recording
-      ? (this.state.recordStepIndex ?? -1)
-      : this.state.selectedStepIndex;
+    // In input-arp mode the step write happens per arp-fired note (captureArpNote),
+    // not on key-down — so skip the normal record/edit step write here.
+    const stepIndex = liveArp
+      ? -1
+      : (this.state.recording
+          ? (this.state.recordStepIndex ?? -1)
+          : this.state.selectedStepIndex);
     if (stepIndex >= 0) {
       const step = track.sequencer.getVisibleSteps()[stepIndex];
       if (step) {
@@ -362,18 +394,23 @@ export class Keyboard {
     const track = this.state.selectedTrack;
     const time  = ctx.currentTime + 0.015;
 
-    const voice    = this._heldSlots.get(midiNote) ?? null;
-    const machine  = voice?.machine  ?? track.machine;
-    const envelope = voice?.envelope ?? track.envelope;
-    this._heldSlots.delete(midiNote);
+    const liveArp = track.arp?.enabled && track.arp.getParam('mode') === 'input';
+    if (liveArp) {
+      track.liveArp.noteOff(midiNote);
+    } else {
+      const voice    = this._heldSlots.get(midiNote) ?? null;
+      const machine  = voice?.machine  ?? track.machine;
+      const envelope = voice?.envelope ?? track.envelope;
+      this._heldSlots.delete(midiNote);
 
-    if (voice) {
-      const release = envelope.getParam('env.release') ?? 0.3;
-      voice.claim(time + release);
+      if (voice) {
+        const release = envelope.getParam('env.release') ?? 0.3;
+        voice.claim(time + release);
+      }
+
+      machine?.noteOff(time);
+      envelope.noteOff(time);
     }
-
-    machine?.noteOff(time);
-    envelope.noteOff(time);
 
     if (this.state.recording && this._recordNoteOnTime.has(midiNote)) {
       const onTime    = this._recordNoteOnTime.get(midiNote);
@@ -568,6 +605,71 @@ export class Keyboard {
       const release = follower.envelope?.getParam('env.release') ?? 0.3;
       const offTime = audioTime + 0.5;  // hold gate 0.5s for live notes
       follower.fireFollowNote(note, velocity, audioTime, offTime);
+    });
+  }
+
+  /**
+   * Wire each track's LiveArp to capture its fired notes into that track's
+   * pattern via captureArpNote(). Idempotent — re-run when tracks are added.
+   */
+  _attachLiveArpHooks() {
+    this.state.project.tracks.forEach(track => {
+      track.liveArp?.setRecordHook(
+        (note, velocity, lengthTicks, scheduledTime) =>
+          this.captureArpNote(track, note, velocity, lengthTicks, scheduledTime)
+      );
+    });
+  }
+
+  /**
+   * Capture a single live-input-arp note into the step it lands on. Called by
+   * LiveArp for each note it fires while recording, so the running arp gets
+   * "printed" across the pattern as real notes (no re-arping on playback). Only
+   * writes when the transport is recording and playing.
+   *
+   * Crucially, capture maps the note to the step playing at its SCHEDULED audio
+   * time, not "now": LiveArp schedules a whole cycle (often several) in one
+   * synchronous burst, so every note shares the same `currentTime`/`_stepIndex`.
+   * Capturing against those would pile the whole chord onto a single step. We
+   * instead project forward from the last scheduled tick:
+   *   stepAtSchedule = lastFiredStep + round((schedTime - lastScheduledTime)/tick)
+   * and take the fractional remainder as the nudge.
+   *
+   * @param {import('../state/Track.js').Track} track
+   * @param {number} note          absolute MIDI note the arp emitted
+   * @param {number} velocity
+   * @param {number} lengthTicks    note length in ticks (from the arp gate)
+   * @param {number} scheduledTime  AudioContext time the note is scheduled to play
+   */
+  captureArpNote(track, note, velocity, lengthTicks, scheduledTime) {
+    if (!this.state.recording || !this.state.project.clock.isPlaying) return;
+
+    const seq = track.sequencer;
+    const at  = seq.stepIndexAtTime(scheduledTime);
+    if (!at) return;
+    const { absStep, nudge } = at;
+
+    // Write directly by absolute index — notes may land on a page other than the
+    // visible one. The steps array always covers [0, stepCount) (grown by the
+    // stepCount setter), and absStep is taken mod stepCount, so this is in range.
+    const step = seq.steps[absStep];
+    if (!step) return;
+
+    const length = Math.max(1 / 16, lengthTicks);
+    if (!step.active) {
+      step.voices[0] = { note, velocity, length, nudge };
+      step.active = true;
+    } else {
+      step.addVoice(note, velocity, length, nudge);
+    }
+
+    // Emit with a visible-page-relative index when this step is on the current
+    // page, so StepGrid/SynthPanel refresh; otherwise the absolute index is fine.
+    const visIdx = absStep - seq.pageOffset * 16;
+    this.state.emit('stepChanged', {
+      trackIndex: track.index,
+      stepIndex:  visIdx >= 0 && visIdx < 16 ? visIdx : absStep,
+      step,
     });
   }
 

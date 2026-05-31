@@ -70,6 +70,7 @@ import { DelayFX }       from '../signal/DelayFX.js';
 import { BitcrushFX }    from '../signal/BitcrushFX.js';
 import { ReverbFX }      from '../signal/ReverbFX.js';
 import { Arpeggiator }   from '../signal/Arpeggiator.js';
+import { LiveArp }       from '../signal/LiveArp.js';
 import { Condition }     from '../sequencer/Condition.js';
 
 const MACHINES = {
@@ -126,6 +127,10 @@ export class Track {
 
     // Arpeggiator — schedules note fans from Sequencer triggers
     this.arp = new Arpeggiator();
+
+    // Live (keyboard-driven) arp runner for arp mode 'input'. Fed key on/off by
+    // Keyboard.js; free-running so it works with the transport stopped.
+    this.liveArp = new LiveArp(this);
 
     this.outputGain.connect(this.pannerNode);
     this.pannerNode.connect(this.delayFX.inputNode);
@@ -303,6 +308,19 @@ export class Track {
   }
 
   /**
+   * Hard kill all sound on this track: silence every voice slot (cancels pending
+   * gain automation, stops machine sources) and stop the live-input arp. Used by
+   * the global STOP/panic button to cut notes that ring out, loop, or get stuck.
+   * @param {number} [time] — AudioContext time (defaults to now)
+   */
+  silence(time) {
+    const t = time ?? this.audio.context.currentTime;
+    this.liveArp?.releaseAll();
+    if (this._pool) this._pool.silence(t);
+    else this.envelope?.silence(t);
+  }
+
+  /**
    * Fire a note on this track immediately (for note-follow triggering).
    * @param {number} note     — MIDI note 0-127
    * @param {number} velocity
@@ -446,6 +464,13 @@ export class Track {
     if (path === 'trig.tone') {
       return { audioParam: null, depthScale: 24, jsOnly: true };
     }
+    if (path === 'arp.rate' || path === 'arp.gate' || path === 'arp.variance') {
+      // Arp timing is JS-only (read at build time, not an AudioParam) — sampled
+      // by the Sequencer / LiveArp per fire. depthScale = half the param range.
+      const d = this.arp.modParamDescriptors().find(p => p.path === path);
+      const depthScale = d ? (d.lfoMax - d.lfoMin) / 2 : 1;
+      return { audioParam: null, depthScale, jsOnly: true };
+    }
 
     const allParams = [
       ...this.machine.getParamList(),
@@ -582,6 +607,10 @@ export class Track {
     const trigItems = [{ path: 'trig.tone', label: 'Tone' }];
     if (detuneParam) trigItems.push({ path: 'osc.detune', label: 'Detune' });
 
+    // Arp rate/gate/variance — JS-only sample-and-hold LFO targets (see LiveArp /
+    // Sequencer). Only useful when the arp is enabled.
+    const arpItems = this.arp.modParamDescriptors().map(p => ({ path: p.path, label: p.label }));
+
     const groups = [];
     groups.push({ group: 'Trig', items: trigItems });
     if (machineParams.length) groups.push({ group: this.machine.label ?? 'Machine', items: machineParams });
@@ -590,6 +619,7 @@ export class Track {
     if (delayParams.length)  groups.push({ group: 'Delay', items: delayParams });
     if (crushParams.length)  groups.push({ group: 'Crush', items: crushParams });
     if (reverbParams.length) groups.push({ group: 'Reverb', items: reverbParams });
+    if (this.arp.enabled)    groups.push({ group: 'Arp', items: arpItems });
     return groups;
   }
 

@@ -13,7 +13,7 @@ The panel header has two zones in a single row:
 | SCALES | Scale dropdown + root note picker (12 buttons) + chromatic preview strip |
 | TRIG | Note display, REMOVE NOTE, RESET TRIG, condition/chance/length/nudge/detune/tone knobs. NUDGE is only shown when a step is selected. QUANTIZE knob (0–100%), **NOTE FOLLOW** dropdown, and **FLW DLY** knob (0–500ms) are shown when no step is selected. |
 | SYNTH | Machine params — varies by machine type. Detune is hidden here (moved to TRIG). Rendered by a machine-specific panel from `js/ui/panels/`. |
-| ARP | Per-track arpeggiator. ON/OFF toggle + mode selector (Chord / Manual / Random). See Arpeggiator section below. |
+| ARP | Per-track arpeggiator. ON/OFF toggle + mode selector (Chord / Manual / Random / Input). Input mode is keyboard-driven + recordable. See Arpeggiator section below. |
 | FILTER | Single row: type dropdown + cutoff/res/gain/env knobs (left) + FilterViz (centre) + right column with compact filter ADSR above base HPF/LPF knobs. All p-lockable. |
 | AMP | Single row: PAN knob (left, p-lockable + LFO-assignable) + compact amp ADSR (right, canvasH=80, 44px knobs). Each A/D/R knob has a small MS/BPM tag for per-stage tempo-sync (BPM stage shows e.g. "1/8"; canvas plots resolved seconds). |
 | LFO | LFO sub-selector (LFO 1, LFO 2, …, +) capped at 220px wide, destination dropdown (grouped), waveform/trig, unified RATE knob (click center HZ↔BPM), depth/phase/fade knobs |
@@ -55,6 +55,14 @@ Knobs show a p-lock indicator (blue label) when a step override is active.
 `onChange` writes value silently (no emit) — prevents panel rebuild mid-drag killing the interaction.
 `onRelease` emits `stepChanged` — updates the step grid dot after drag ends.
 
+**Tab p-lock indicators**: when the selected step has any p-lock, the tabs that own those
+params light up with a blue dot (`.tab-btn.has-plock` / `.fx-toggle-wrap.has-plock`), so you can
+see at a glance which tabs hold per-step overrides. `SynthPanel._tabForPLockPath(path)` maps a
+p-lock path → tab key (`filter.*`/`fenv.*`/base → FILTER; `env.*`/`amp.pan` → AMP; `arp.*` → ARP;
+`lfo.*` → LFO; `delay.`/`crush.`/`reverb.` → the FX toggles; `trig.tone`/`osc.detune` → TRIG;
+everything else → SYNTH). `_renderPLockTabIndicators()` refreshes on render + `stepSelected` +
+`stepChanged`.
+
 **FilterViz refresh pattern**: all knobs in the FILTER tab call `mainViz.refresh()` in both
 `onChange` (live animation while dragging) and `onRelease`.
 
@@ -77,6 +85,19 @@ The LEVEL, DLY, CRUSH, and REV knobs write directly to the live AudioParam — n
 ---
 
 ## Transport Controls
+
+### PLAY / STOP ALL / REC
+
+**PLAY** toggles the transport (`Project.start()` / `stop()`).
+
+**STOP ALL** (panic, sits between PLAY and REC) is a hard reset of the *audible* state:
+`Project.silence()` stops the transport and then hard-kills every voice on every track —
+`Track.silence()` → `VoicePool.silence()` → each `VoiceSlot.silence()` calls the machine's
+`noteOff` (stops oscillators / sample sources where supported) and `Envelope.silence()`
+(cancels all scheduled gain automation and slams the amp gate to 0 over a 5 ms anti-click
+ramp). It also releases any live-input arp and exits record mode, and emits a `panic` event so
+the Keyboard drops held-key state + highlights. Use it when a sound rings out, loops, or sticks.
+Silencing is non-destructive to future notes — the next `noteOn`/`scheduleNote` reopens the gate.
 
 ### Track Count Control
 
@@ -196,6 +217,7 @@ exposes a `render()` method called explicitly when its data changes.
 | `stepSelected` | `{ index, step }` | StepGrid, SynthPanel |
 | `stepChanged` | `{ trackIndex, stepIndex, step }` | StepGrid, SynthPanel (trig tab only) |
 | `recordingChanged` | `{ recording }` | index.html transport (REC button) |
+| `panic` | `{}` | Keyboard (drop held-key state). Emitted by the STOP ALL button. |
 
 ---
 
@@ -205,15 +227,18 @@ Per-track arpeggiator UI. Lives at `js/ui/panels/ArpPanel.js`.
 
 **Header row** — always visible:
 - **ARP ON / ARP OFF** toggle button (amber when on)
-- **Mode selector** — CHORD / MANUAL / RANDOM buttons
+- **Mode selector** — CHORD / MANUAL / RANDOM / INPUT buttons
 
 **Chord mode controls:**
 | Control | Description |
 |---|---|
 | Chord selector | Drop-down of 11 chord types (same set as ChordMachine) |
 | Pattern | Up / Down / UpDown / Rand buttons |
-| RATE knob (unified) | Note gap. **Click knob center toggles MS↔BPM** (mode shown in body). MS: ms gap (1–2000ms). BPM: sweeps 1/32 grid (`bpmCount32`), shift-drag/scroll snaps to musical divisions. |
-| VARIANCE knob | 0–100%: widens gaps on middle notes by ±50% × variance |
+| RATE knob (unified) | Note gap. **Click knob center toggles MS↔BPM** (mode shown in body). MS: ms gap (1–2000ms). BPM: sweeps 1/32 grid (`bpmCount32`), shift-drag/scroll snaps to musical divisions. P-lockable + LFO-able (see below). |
+| VARIANCE knob | 0–100%: widens gaps on middle notes by ±50% × variance. P-lockable + LFO-able. |
+
+**P-lock + LFO on arp RATE / GATE / VARIANCE:**
+The RATE, GATE and VARIANCE knobs are p-lockable per step and assignable as LFO destinations, via three virtual params: `arp.rate`, `arp.gate`, `arp.variance` (see `Arpeggiator.modParamDescriptors()`). `arp.rate` modulates **in the current sync mode** — the count32 in BPM mode, the ms gap in MS mode (toggling MS↔BPM clears a rate p-lock on the selected step, since the unit changes). These are **JS-only** params (arp timing is read once at build time, not a Web Audio `AudioParam`): p-locks apply exactly (set before `buildEvents`, restored after, via the Sequencer's `js`-mode dispatch on `track.arp`); LFOs are **sample-and-hold** — sampled once per step-fire in `Sequencer._fireStep` (step modes) or once per cycle in `LiveArp` (input mode), like `trig.tone`. A fast LFO therefore steps the value per trigger rather than sweeping it continuously. The `Arp` group only appears in the LFO destination dropdown while the arp is enabled. GATE p-lock applies to chord/input modes (random mode's separate `rGate` stays live-only).
 
 **Manual mode controls:**
 A scrollable list of steps. Each step has:
@@ -234,8 +259,19 @@ A scrollable list of steps. Each step has:
 | RATE knob (unified) | Same unified MS/BPM rate knob as Chord mode |
 | VARIANCE knob | Timing jitter applied to all gaps |
 
+**Input mode controls (live keyboard-driven):**
+| Control | Description |
+|---|---|
+| Hint text | Explains the live model: hold keys to arp them; RECORD captures the output |
+| Pattern | Up / Down / UpDown / Rand buttons (same as Chord) |
+| RATE knob (unified) | Same unified MS/BPM rate knob as Chord mode |
+| GATE knob | Note-on length; LEGATO (0) = 90% of gap |
+| VARIANCE knob | Timing jitter on middle notes |
+
+There is **no chord selector** — the keys you hold on the keyboard *are* the chord, played at their absolute pitches. The arp does **not** fan steps in input mode: `buildEvents()` returns `[]`, and `Sequencer._fireStep()` detects input mode (`arpFiresSteps = arp.enabled && mode !== 'input'`) and fires each step's voices through the **normal** (non-arp) path. Instead `Keyboard._noteOn/_noteOff` route held keys to `track.liveArp` (`js/signal/LiveArp.js`), a free-running scheduler that cycles the held set on the BPM grid (works with the transport stopped). When **RECORD** is on and the transport is playing, each fired arp note is printed into the step it lands on via `Keyboard.captureArpNote()`. The whole cycle is scheduled in one synchronous burst, so capture maps each note by its **scheduled time** (`Sequencer.stepIndexAtTime()`) — projecting forward from the last scheduled tick to the absolute step + sub-step nudge — rather than by "now" (which would pile the whole chord onto a single step). Because input mode fires steps normally, those recorded notes play back as plain notes on the next pass (no re-arping — `random`/`variance` are baked in, not re-rolled). Track switching releases all held live arps.
+
 **Timing implementation:**
-The arpeggiator intercepts `_fireStep()` in `Sequencer.js`. When `arp.enabled` is true, `arp.buildEvents()` is called with the root note and step timing. It returns a flat array of `{ note, velocity, time, offTime }` events, each scheduled independently using `AudioContext.currentTime` — no `setInterval` or `setTimeout`. Notes can naturally overlap when gate > gap, producing polyphony via the voice pool.
+The arpeggiator intercepts `_fireStep()` in `Sequencer.js`. When `arp.enabled` is true (and mode ≠ input), `arp.buildEvents()` is called with the root note and step timing. It returns a flat array of `{ note, velocity, time, offTime }` events, each scheduled independently using `AudioContext.currentTime` — no `setInterval` or `setTimeout`. Notes can naturally overlap when gate > gap, producing polyphony via the voice pool. Input mode uses the same `_spaceNotes`/`_applyPattern` logic via `arp.buildInputCycle()`, scheduled by `LiveArp` instead of the sequencer.
 
 **BPM sync utility:**
 `js/util/BpmSync.js` — shared by `DelayFX`, `ReverbFX`, `LFO`, and `Arpeggiator`. Unified model: integer 1/32-note counts (`count32ToSeconds`, `MUSICAL_SNAP_32`, `formatCount32`, `divToCount32`). Legacy `DIV_QN`/`SYNC_DIVISIONS`/`divToSeconds` kept for project-load back-compat only.

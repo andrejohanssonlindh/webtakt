@@ -233,6 +233,28 @@ export class Envelope {
     }
   }
 
+  /**
+   * Hard kill — immediately cancel all scheduled gain automation and force the
+   * amp gate to 0 (and the filter back to its base cutoff). Used by the global
+   * STOP/panic button to cut sounds that are ringing out, looping, or stuck. A
+   * tiny ramp avoids a click.
+   */
+  silence(time) {
+    const g = this.ampGain.gain;
+    if (typeof g.cancelAndHoldAtTime === 'function') g.cancelAndHoldAtTime(time);
+    else                                             g.cancelScheduledValues(time);
+    g.setValueAtTime(g.value, time);
+    g.linearRampToValueAtTime(0, time + 0.005);
+
+    if (this._filter) {
+      const baseCut = this._filter.getParam('filter.cutoff');
+      const freq    = this._filter.node.frequency;
+      if (typeof freq.cancelAndHoldAtTime === 'function') freq.cancelAndHoldAtTime(time);
+      else                                                freq.cancelScheduledValues(time);
+      freq.setValueAtTime(baseCut, time);
+    }
+  }
+
   setParam(path, value) { this._params[path] = value; }
   getParam(path)        { return this._params[path]; }
 

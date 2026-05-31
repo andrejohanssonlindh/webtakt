@@ -384,6 +384,44 @@ body {
   background: var(--surface);
 }
 
+/* P-lock indicator: tab owns a p-locked param on the selected step.
+   Blue dot + tint, visible whether or not the tab is active. */
+.tab-btn.has-plock {
+  position: relative;
+  color: var(--step-plock);
+}
+.tab-btn.has-plock.active {
+  /* keep the active accent text, just add the dot */
+  color: var(--accent);
+}
+.tab-btn.has-plock::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--step-plock);
+  box-shadow: 0 0 4px var(--step-plock);
+}
+
+.fx-toggle-wrap.has-plock {
+  position: relative;
+}
+.fx-toggle-wrap.has-plock::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--step-plock);
+  box-shadow: 0 0 4px var(--step-plock);
+  z-index: 1;
+}
+
 /* MIXER tab island — sits between LFO and the FX block with border separators */
 .tab-btn[data-tab="mixer"] {
   margin-left: 10px;
@@ -2994,6 +3032,17 @@ body {
   align-items: flex-end;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.arp-input-hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-dim, #8a8a8a);
+  background: rgba(255, 255, 255, 0.04);
+  border-left: 2px solid var(--accent, #d8a657);
+  padding: 6px 8px;
+  border-radius: 2px;
 }
 
 .arp-small-label {

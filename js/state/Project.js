@@ -121,6 +121,16 @@ export class Project {
     this.tracks.forEach(t => t.sequencer.stop());
   }
 
+  /**
+   * Global panic: stop the transport and hard-kill all sound on every track
+   * (notes ringing out, loops, stuck voices). Wired to the STOP-ALL button.
+   */
+  silence() {
+    this.stop();
+    const t = this.audio.context.currentTime;
+    this.tracks.forEach(track => track.silence(t));
+  }
+
   toJSON() {
     return {
       version:    1,

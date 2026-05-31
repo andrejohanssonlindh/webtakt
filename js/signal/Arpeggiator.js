@@ -13,6 +13,14 @@
  *   'chord'  — arp the notes of a chord type (Up / Down / UpDown / Random order)
  *   'manual' — user-defined list of semitone offsets + per-note delay + gate
  *   'random' — random note selection from ±range around root, fully randomised timing
+ *   'input'  — LIVE keyboard-driven arp. The notes are whatever keys are currently
+ *              held on the keyboard (absolute pitches, not relative to a step). Held
+ *              keys drive the arp directly via LiveArp.js (free-running, BPM-synced);
+ *              the sequencer does NOT trigger input mode. Reuses the chord-mode
+ *              controls (pattern / rate / gate / variance) — there is no chord type,
+ *              the held key set IS the chord. When RECORD is on, the held notes are
+ *              captured into the sequencer steps (handled by Keyboard.js) so playback
+ *              re-fires them through the arp without holding keys.
  *
  * Chord mode: trig length comes from the step voice length (same as a normal note).
  * Manual mode: per-step gate override in ms; 0 = use base step length.
@@ -52,6 +60,10 @@
  *   speed          number   base gap ms
  *   bpmCount32     number   integer 1/32 count
  *   variance       number   0–1
+ *
+ *   -- input mode --
+ *   (reuses pattern / syncMode / speed / bpmCount32 / variance / gate; notes come
+ *    from live-held keys, supplied at runtime — nothing extra is serialised)
  */
 
 import { count32ToSeconds, divToCount32 } from '../util/BpmSync.js';
@@ -106,16 +118,57 @@ export class Arpeggiator {
 
   // ── Public API ──────────────────────────────────────────────────────────────
 
+  /**
+   * Virtual modulation params (p-lock + LFO targets). These alias the real
+   * fields so a single number can be p-locked/LFO'd:
+   *   arp.rate     → speed (ms mode) OR bpmCount32 (bpm mode), per current syncMode
+   *   arp.gate     → gate
+   *   arp.variance → variance
+   * Rate modulates "in the current sync mode" (see design/ui.md) — the value the
+   * RATE knob shows is exactly what gets p-locked/modulated.
+   */
+  static MOD_PARAMS = ['arp.rate', 'arp.gate', 'arp.variance'];
+
+  /** Resolve which underlying field 'arp.rate' currently maps to. */
+  _rateField() {
+    return this._params.syncMode === 'bpm' ? 'bpmCount32' : 'speed';
+  }
+
   getParam(path) {
-    return this._params[path];
+    switch (path) {
+      case 'arp.rate':     return this._params[this._rateField()];
+      case 'arp.gate':     return this._params.gate;
+      case 'arp.variance': return this._params.variance;
+      default:             return this._params[path];
+    }
   }
 
   setParam(path, value) {
-    if (path === 'steps') {
-      this._params.steps = value;
-    } else {
-      this._params[path] = value;
+    switch (path) {
+      case 'arp.rate':     this._params[this._rateField()] = value; return;
+      case 'arp.gate':     this._params.gate = value;               return;
+      case 'arp.variance': this._params.variance = value;           return;
+      case 'steps':        this._params.steps = value;              return;
+      default:             this._params[path] = value;
     }
+  }
+
+  /**
+   * Descriptors for the virtual mod params — bounds depend on current sync mode
+   * for rate. Used by Track to expose them to the p-lock UI and LFO routing, and
+   * by the LFO depthScale calc (half-range). gate/variance are mode-independent.
+   * @returns {Array<{path,label,min,max,modulatable,jsOnly,lfoMin,lfoMax}>}
+   */
+  modParamDescriptors() {
+    const isBpm = this._params.syncMode === 'bpm';
+    const rate = isBpm
+      ? { path: 'arp.rate', label: 'Rate', min: 1, max: 64,   lfoMin: 1, lfoMax: 64 }
+      : { path: 'arp.rate', label: 'Rate', min: 1, max: 2000, lfoMin: 1, lfoMax: 2000 };
+    return [
+      { ...rate,                                                  modulatable: true, jsOnly: true },
+      { path: 'arp.gate',     label: 'Gate', min: 0, max: 2000,  lfoMin: 0, lfoMax: 2000, modulatable: true, jsOnly: true },
+      { path: 'arp.variance', label: 'Variance', min: 0, max: 1, lfoMin: 0, lfoMax: 1,    modulatable: true, jsOnly: true },
+    ];
   }
 
   setBpm(bpm) {
@@ -149,6 +202,9 @@ export class Arpeggiator {
       case 'chord':  return this._buildChordEvents(rootNote, velocity, triggerTime, stepLengthSec);
       case 'manual': return this._buildManualEvents(rootNote, velocity, triggerTime, stepLengthSec);
       case 'random': return this._buildRandomEvents(rootNote, velocity, triggerTime, stepLengthSec);
+      // 'input' is keyboard-driven (LiveArp) — steps do not trigger it. A step
+      // recorded while in input mode plays its captured notes as a normal multi-
+      // voice step (the arp does not re-fan it).
       default:       return [];
     }
   }
@@ -188,6 +244,36 @@ export class Arpeggiator {
       }
       default: return [...intervals]; // 'up'
     }
+  }
+
+  // ── Input mode (live keyboard-driven) ───────────────────────────────────────
+
+  /**
+   * Build one arp cycle from a set of live-held ABSOLUTE notes. Used by LiveArp
+   * (keyboard-driven scheduling) — the sequencer never calls this. Reuses the
+   * chord-mode controls: pattern ordering, rate (gap), gate, variance.
+   *
+   * Unlike chord/random/manual the input notes are already absolute MIDI values,
+   * so they are laid out directly (no rootNote offset).
+   *
+   * @param {number[]} heldNotes  absolute MIDI notes, ascending
+   * @param {number}   velocity
+   * @param {number}   t0         AudioContext time of the first note
+   * @returns {{events: Array<{note,velocity,time,offTime}>, cycleSec: number}}
+   *   cycleSec — total duration of the cycle (sum of gaps), so the caller can
+   *   schedule the next cycle back-to-back.
+   */
+  buildInputCycle(heldNotes, velocity, t0) {
+    const p       = this._params;
+    const ordered = this._applyPattern(heldNotes);
+    const gapSec  = this._gapSec(p.syncMode, p.speed, p.bpmCount32);
+    const gateSec = p.gate > 0 ? p.gate / 1000 : gapSec * 0.9;
+
+    // _spaceNotes treats its `intervals` arg as offsets added to rootNote; passing
+    // rootNote=0 with absolute notes lays them out at their true pitches.
+    const events   = this._spaceNotes(ordered, 0, velocity, t0, gapSec, gateSec, p.variance);
+    const cycleSec = ordered.length * gapSec;
+    return { events, cycleSec };
   }
 
   // ── Manual mode ─────────────────────────────────────────────────────────────

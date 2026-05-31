@@ -86,6 +86,18 @@ export class VoiceSlot {
     return this._freeAt > now;
   }
 
+  /**
+   * Hard kill this slot: release the machine (stops oscillators / sample sources
+   * where the machine supports it) and slam the amp gate to silence, cancelling
+   * any pending automation. Frees the slot for immediate reuse. Used by the
+   * global STOP/panic button.
+   */
+  silence(time) {
+    try { this.machine.noteOff?.(time); } catch (_) {}
+    this.envelope.silence(time);
+    this._freeAt = 0;
+  }
+
   /** Disconnect this slot from the audio graph cleanly. */
   dispose() {
     this.machine.disconnect();
@@ -147,6 +159,12 @@ export class VoicePool {
   setBpm(bpm) {
     this._bpm = bpm;
     for (const slot of this._slots) slot.envelope.setBpm(bpm);
+  }
+
+  /** Hard kill every voice slot (global STOP/panic). */
+  silence(time) {
+    for (const slot of this._slots) slot.silence(time);
+    this._robin = 0;
   }
 
   /**

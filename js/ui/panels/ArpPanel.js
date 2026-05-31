@@ -3,10 +3,12 @@
  * -----------
  * ARP tab UI. Renders controls for the track's Arpeggiator instance.
  *
- * Three sub-layouts toggled by an ARP MODE selector:
+ * Four sub-layouts toggled by an ARP MODE selector:
  *   Chord  — chord type, pattern (Up/Down/UpDown/Random), speed/BPM-sync, variance
  *   Manual — scrollable list of steps: semitone, speed/sync, gate. + Add / × Remove.
  *   Random — note count, range, speed/sync, variance
+ *   Input  — LIVE keyboard-driven: hold keys to arp them (pattern/rate/gate/variance).
+ *            No chord type — the held keys are the chord. RECORD captures them to steps.
  *
  * An ON/OFF toggle at the top enables/disables the arp without clearing its settings.
  *
@@ -26,13 +28,54 @@ export class ArpPanel {
    * @param {HTMLElement} container
    * @param {import('../../state/Track.js').Track} track
    * @param {Function} rebuildArp  — call to re-render this panel in place
+   * @param {object} [ctx]  — SynthPanel tab context; enables p-locking the
+   *                          rate/gate/variance knobs (arp.rate/gate/variance).
    */
-  constructor(container, track, rebuildArp) {
+  constructor(container, track, rebuildArp, ctx = null) {
     this.container  = container;
     this.track      = track;
     this.rebuildArp = rebuildArp;
+    this.ctx        = ctx;
     this._widgets   = [];
     this._render();
+  }
+
+  /** Currently-selected step (for p-locking), or null. */
+  get _step() {
+    return this.ctx?.getStep?.() ?? null;
+  }
+
+  /**
+   * Make a knob's onChange/onRelease p-lock-aware for an arp mod param. When a
+   * step is selected the value is written as a p-lock on that step; otherwise it
+   * sets the arp param live. Returns { value, hasPLock } for the knob's initial
+   * state. Mirrors the trig.tone knob pattern in TrigPanel.
+   *
+   * @param {string} path  one of 'arp.rate' | 'arp.gate' | 'arp.variance'
+   * @param {() => void} [setLive]  custom live setter (defaults to arp.setParam)
+   */
+  _plockState(path) {
+    const step    = this._step;
+    const hasPLock = !!(step && step.plocks.has(path));
+    const value    = hasPLock ? step.plocks.get(path) : this.track.arp.getParam(path);
+    return { value, hasPLock };
+  }
+
+  _writeMod(path, value, knob, setLive) {
+    const step = this._step;
+    if (step) {
+      step.setPLock(path, value);
+      knob.setHasPLock(true);
+    } else if (setLive) {
+      setLive(value);
+    } else {
+      this.track.arp.setParam(path, value);
+    }
+  }
+
+  _emitMod() {
+    const step = this._step;
+    if (step) this.ctx?.emitStep?.();
   }
 
   destroy() {
@@ -55,6 +98,7 @@ export class ArpPanel {
     onBtn.textContent = arp.enabled ? 'ARP ON' : 'ARP OFF';
     onBtn.addEventListener('click', () => {
       arp.enabled = !arp.enabled;
+      if (!arp.enabled) this.track.liveArp?.releaseAll();
       this.rebuildArp();
     });
     headerRow.appendChild(onBtn);
@@ -62,12 +106,14 @@ export class ArpPanel {
     const modeWrap = document.createElement('div');
     modeWrap.className = 'arp-mode-wrap';
 
-    ['chord', 'manual', 'random'].forEach(m => {
+    ['chord', 'manual', 'random', 'input'].forEach(m => {
       const btn = document.createElement('button');
       btn.className = 'arp-mode-btn' + (arp.getParam('mode') === m ? ' active' : '');
       btn.textContent = m.toUpperCase();
       btn.addEventListener('click', () => {
         arp.setParam('mode', m);
+        // Stop any free-running live arp when leaving input mode mid-hold.
+        if (m !== 'input') this.track.liveArp?.releaseAll();
         this.rebuildArp();
       });
       modeWrap.appendChild(btn);
@@ -81,6 +127,7 @@ export class ArpPanel {
     if (mode === 'chord')  this._renderChord();
     if (mode === 'manual') this._renderManual();
     if (mode === 'random') this._renderRandom();
+    if (mode === 'input')  this._renderInput();
   }
 
   // ── Chord mode ─────────────────────────────────────────────────────────────
@@ -126,20 +173,52 @@ export class ArpPanel {
     body.appendChild(this._makeSpeedGateRow(arp, 'speed', 'bpmCount32', 'syncMode', 'gate'));
 
     // Row 3: variance
-    const row3 = document.createElement('div');
-    row3.className = 'arp-row';
-    const varKnob = new KnobWidget({
-      label:   'VARIANCE',
-      min:     0,
-      max:     1,
-      value:   arp.getParam('variance'),
-      size:    64,
-      fmt:     v => Math.round(v * 100) + '%',
-      onChange: v => arp.setParam('variance', v),
+    body.appendChild(this._makeVarianceRow());
+
+    this.container.appendChild(body);
+  }
+
+  // ── Input mode (live keyboard-driven) ───────────────────────────────────────
+
+  _renderInput() {
+    const arp  = this.track.arp;
+    const body = document.createElement('div');
+    body.className = 'arp-body';
+
+    // Hint: explains the live model + recording capture.
+    const hint = document.createElement('div');
+    hint.className = 'arp-input-hint';
+    hint.textContent =
+      'Hold keys to arp them live. The held keys are the chord — ' +
+      'no step needed. Turn on RECORD to capture what you play into the pattern.';
+    body.appendChild(hint);
+
+    // Pattern buttons (same as chord mode, minus the chord selector).
+    const patWrap = document.createElement('div');
+    patWrap.className = 'arp-pattern-wrap';
+    const patLabel = document.createElement('div');
+    patLabel.className = 'arp-small-label';
+    patLabel.textContent = 'PATTERN';
+    patWrap.appendChild(patLabel);
+    const patBtns = document.createElement('div');
+    patBtns.className = 'arp-pattern-btns';
+    ARP_PATTERNS.forEach(p => {
+      const btn = document.createElement('button');
+      btn.className = 'arp-pat-btn' + (arp.getParam('pattern') === p ? ' active' : '');
+      btn.textContent = PATTERN_LABELS[p] ?? p;
+      btn.addEventListener('click', () => {
+        arp.setParam('pattern', p);
+        patBtns.querySelectorAll('.arp-pat-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+      patBtns.appendChild(btn);
     });
-    this._widgets.push(varKnob);
-    row3.appendChild(varKnob.el);
-    body.appendChild(row3);
+    patWrap.appendChild(patBtns);
+    body.appendChild(patWrap);
+
+    // Rate + gate, then variance — identical controls to chord mode.
+    body.appendChild(this._makeSpeedGateRow(arp, 'speed', 'bpmCount32', 'syncMode', 'gate'));
+    body.appendChild(this._makeVarianceRow());
 
     this.container.appendChild(body);
   }
@@ -274,21 +353,7 @@ export class ArpPanel {
     body.appendChild(row1);
 
     body.appendChild(this._makeSpeedGateRow(arp, 'speed', 'bpmCount32', 'syncMode', 'rGate'));
-
-    const row3 = document.createElement('div');
-    row3.className = 'arp-row';
-    const varKnob = new KnobWidget({
-      label:   'VARIANCE',
-      min:     0,
-      max:     1,
-      value:   arp.getParam('variance'),
-      size:    64,
-      fmt:     v => Math.round(v * 100) + '%',
-      onChange: v => arp.setParam('variance', v),
-    });
-    this._widgets.push(varKnob);
-    row3.appendChild(varKnob.el);
-    body.appendChild(row3);
+    body.appendChild(this._makeVarianceRow());
 
     this.container.appendChild(body);
   }
@@ -310,7 +375,7 @@ export class ArpPanel {
    * @param {() => number} acc.getCount @param {(v:number)=>void} acc.setCount
    * @returns {KnobWidget}
    */
-  _makeSyncKnob({ label, size, getMode, toggleMode, getMs, setMs, getCount, setCount }) {
+  _makeSyncKnob({ label, size, getMode, toggleMode, getMs, setMs, getCount, setCount, hasPLock = false, onRelease = null }) {
     const isBpm = getMode() === 'bpm';
     const knob = new KnobWidget({
       label,
@@ -323,38 +388,92 @@ export class ArpPanel {
       snapPoints:  isBpm ? MUSICAL_SNAP_32 : null,
       centerLabel: isBpm ? 'BPM' : 'MS',
       onCenterClick: () => toggleMode(),
-      onChange: v => isBpm ? setCount(Math.round(v)) : setMs(Math.round(v)),
+      // setMs/setCount receive (value, knob) so p-lock-aware callers can flag the
+      // knob's p-lock highlight on write.
+      onChange: v => isBpm ? setCount(Math.round(v), knob) : setMs(Math.round(v), knob),
+      onRelease: onRelease ?? undefined,
     });
+    knob.setHasPLock?.(hasPLock);
     this._widgets.push(knob);
     return knob;
   }
 
-  /** Build a rate + gate row: [unified MS/BPM rate knob] [GATE knob] */
+  /**
+   * Build a rate + gate row: [unified MS/BPM rate knob] [GATE knob].
+   *
+   * Rate is always p-lockable/LFO-able via the virtual `arp.rate` (maps to
+   * speed/bpmCount32 in the current sync mode). Gate is p-lockable via `arp.gate`
+   * only when gatePath === 'gate' (chord/input). Random mode's separate `rGate`
+   * is live-only (the virtual gate param aliases `gate`, not `rGate`).
+   */
   _makeSpeedGateRow(arp, speedPath, countPath, syncModePath, gatePath) {
     const row = document.createElement('div');
     row.className = 'arp-row';
 
+    // ── Rate (p-lock-aware via arp.rate) ──
+    // When the selected step p-locks arp.rate, show the p-locked value (it's
+    // stored in the current sync mode's unit); otherwise show the live value.
+    const rateState = this._plockState('arp.rate');
     const rateKnob = this._makeSyncKnob({
-      label: 'RATE', size: 64,
+      label: 'RATE', size: 64, hasPLock: rateState.hasPLock,
       getMode:    () => arp.getParam(syncModePath),
-      toggleMode: () => { arp.setParam(syncModePath, arp.getParam(syncModePath) === 'bpm' ? 'ms' : 'bpm'); this.rebuildArp(); },
-      getMs:    () => arp.getParam(speedPath), setMs:    v => arp.setParam(speedPath, v),
-      getCount: () => arp.getParam(countPath), setCount: v => arp.setParam(countPath, v),
+      toggleMode: () => {
+        // Switching sync mode changes what arp.rate means — clear any rate p-lock
+        // on the selected step so a stale ms/count value can't apply in the wrong unit.
+        this._step?.plocks.delete('arp.rate');
+        arp.setParam(syncModePath, arp.getParam(syncModePath) === 'bpm' ? 'ms' : 'bpm');
+        this.rebuildArp();
+      },
+      getMs:    () => rateState.hasPLock ? rateState.value : arp.getParam(speedPath),
+      setMs:    (v, knob) => this._writeMod('arp.rate', v, knob, x => arp.setParam(speedPath, x)),
+      getCount: () => rateState.hasPLock ? rateState.value : arp.getParam(countPath),
+      setCount: (v, knob) => this._writeMod('arp.rate', v, knob, x => arp.setParam(countPath, x)),
+      onRelease: () => this._emitMod(),
     });
     row.appendChild(rateKnob.el);
 
+    // ── Gate ──
+    const gatePLockable = gatePath === 'gate';
+    const gateState = gatePLockable ? this._plockState('arp.gate') : { value: arp.getParam(gatePath), hasPLock: false };
     const gateKnob = new KnobWidget({
       label:   'GATE',
       min:     0,
       max:     2000,
-      value:   arp.getParam(gatePath),
+      value:   gateState.value,
       size:    64,
       fmt:     v => v < 1 ? 'LEGATO' : Math.round(v) + 'ms',
-      onChange: v => arp.setParam(gatePath, Math.max(0, Math.round(v))),
+      onChange: v => {
+        const val = Math.max(0, Math.round(v));
+        if (gatePLockable) this._writeMod('arp.gate', val, gateKnob);
+        else arp.setParam(gatePath, val);
+      },
+      onRelease: () => { if (gatePLockable) this._emitMod(); },
     });
+    gateKnob.setHasPLock(gateState.hasPLock);
     this._widgets.push(gateKnob);
     row.appendChild(gateKnob.el);
 
+    return row;
+  }
+
+  /** Build a variance row (p-lock-aware via arp.variance). */
+  _makeVarianceRow() {
+    const row = document.createElement('div');
+    row.className = 'arp-row';
+    const st = this._plockState('arp.variance');
+    const varKnob = new KnobWidget({
+      label:   'VARIANCE',
+      min:     0,
+      max:     1,
+      value:   st.value,
+      size:    64,
+      fmt:     v => Math.round(v * 100) + '%',
+      onChange: v => this._writeMod('arp.variance', v, varKnob),
+      onRelease: () => this._emitMod(),
+    });
+    varKnob.setHasPLock(st.hasPLock);
+    this._widgets.push(varKnob);
+    row.appendChild(varKnob.el);
     return row;
   }
 

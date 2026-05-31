@@ -116,9 +116,10 @@ js/
       MachinePickerPanel.js   — MACHINE tab: searchable grouped machine card grid. Owns canonical MACHINE_GROUPS / MACHINE_DEFS (re-exported by SynthPanel for back-compat).
       SoundsPanel.js          — SOUNDS tab: wraps SoundLibraryPanel + preview/restore logic
       SoundLibraryPanel.js    — SOUNDS tab content: tag filter chips + scrollable sound card list
-      ArpPanel.js             — ARP tab: arpeggiator mode/rate/variance controls
+      ArpPanel.js             — ARP tab: arpeggiator mode/rate/variance controls (Chord/Manual/Random/Input)
   signal/
-    Arpeggiator.js      — Per-track arpeggiator: Chord / Manual / Random modes; BPM-sync; variance. Owned by Track, called from Sequencer._fireStep()
+    Arpeggiator.js      — Per-track arpeggiator: Chord / Manual / Random / Input modes; BPM-sync; variance. Chord/Manual/Random are step-triggered (Sequencer._fireStep). Input is keyboard-driven (see LiveArp.js): the held keys ARE the chord, played at absolute pitch; steps do not trigger it. RATE/GATE/VARIANCE are p-lockable + LFO-able via virtual params arp.rate/arp.gate/arp.variance (JS-only: p-lock exact, LFO sample-and-hold per fire — arp timing isn't an AudioParam).
+    LiveArp.js          — Free-running scheduler for Arpeggiator 'input' mode. Fed key on/off by Keyboard.js; cycles the held notes ahead-of-time on the BPM grid (own setTimeout loop so it works with transport stopped). When recording, prints each fired note into the playing step via Keyboard.captureArpNote() — no re-arping on playback. Owned by Track.
   util/
     BpmSync.js          — Shared BPM-sync utility. Unified sync-knob model: 1/32-note integer counts (count32ToSeconds, MUSICAL_SNAP_32, formatCount32, divToCount32). Used by DelayFX, ReverbFX, LFO, Arpeggiator. Legacy DIV_QN/SYNC_DIVISIONS/divToSeconds kept for load back-compat.
   state/
@@ -152,7 +153,8 @@ AppState
               │                       canonical & mirrors params to siblings)
               ├── Filter (Track.filter === pool slot-0 filter; canonical for UI/sequencer)
               ├── StereoPannerNode (pannerNode — owned directly by Track)
-              ├── Arpeggiator (intercepts Sequencer triggers when enabled)
+              ├── Arpeggiator (intercepts Sequencer triggers when enabled; Input mode is keyboard-driven instead)
+              ├── LiveArp (drives Arpeggiator 'input' mode from held keyboard keys; free-running)
               └── LFO (×N, at least 1; machine-param LFOs connect to all 4 slot machines)
 
 AudioEngine
@@ -222,6 +224,7 @@ UI (reads AppState, calls Track/Sequencer/Machine methods)
 | Filter env amount | Changed from `baseCut * envAmt` (% of current cutoff) to `19980 * envAmt` (% of full 20–20000 Hz range) so depth is consistent at any cutoff position. |
 | WavetableSamplerMachine reliability | VoicePool polyphony introduced 8 slots; non-canonical slots (1–7) never received buffer data since `fromJSON` is JSON-only. Fixed via `syncFrom(slot0)` called in `nextVoice()` — copies `_bufferA/B` references to any slot before it fires. Trigger timing race also fixed: `startTime` embedded in trigger message; worklet holds `_pendingTrigger` and arms in `process()` when `currentTime >= startTime`. |
 | Trig RESET TRIG | Now sets `step.active = false` in addition to resetting voices to one, so the step is fully deactivated. Individual `×` buttons remain on all voices when multiple exist; only the last voice has no `×` (deactivating is done via RESET TRIG). |
+| Arp rate/gate LFO | Arp timing is plain JS read once per build, not a Web Audio `AudioParam`, so it cannot be continuously LFO-modulated. LFO on `arp.rate`/`arp.gate`/`arp.variance` is **sample-and-hold** (per step-fire / per arp cycle, like `trig.tone`). P-locks on these apply exactly. Documented as a Web Audio limitation rather than worked around. |
 
 ---
 

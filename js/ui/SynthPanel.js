@@ -64,10 +64,14 @@ export class SynthPanel {
     state.on('trackSelected', () => this.render());
     state.on('tabChanged',    () => this.render());
     state.on('lfoChanged',    () => { if (state.activeTab === 'lfo') this._renderContent(); });
-    state.on('stepSelected',  () => this._renderContent());
+    state.on('stepSelected',  () => { this._renderPLockTabIndicators(); this._renderContent(); });
     // stepChanged: re-render only on trig tab (note display + button state must update).
-    // On other tabs we skip — must not rebuild knobs mid-drag.
-    state.on('stepChanged',   () => { if (state.activeTab === 'trig') this._renderContent(); });
+    // On other tabs we skip — must not rebuild knobs mid-drag. Always refresh the
+    // p-lock tab indicators (a p-lock may have been added/removed on this step).
+    state.on('stepChanged',   () => {
+      this._renderPLockTabIndicators();
+      if (state.activeTab === 'trig') this._renderContent();
+    });
     // paramChanged: mod wheel (or any external source) changed a param — update knob + viz
     state.on('paramChanged',  ({ path, value }) => {
       const knob = this._knobByPath.get(path);
@@ -194,7 +198,47 @@ export class SynthPanel {
       wrap._updateState?.();
     });
     this._updateClipButtons();
+    this._renderPLockTabIndicators();
     this._renderContent();
+  }
+
+  /**
+   * Map a p-locked param path to the tab/FX-toggle that edits it. Returns a
+   * `data-tab` / `data-fxtab` key, or null if the path has no home tab.
+   */
+  _tabForPLockPath(path) {
+    if (path.startsWith('filter.') || path.startsWith('fenv.') ||
+        path === 'base.lpf' || path === 'base.hpf')          return 'filter';
+    if (path.startsWith('env.') || path === 'amp.pan')        return 'amp';
+    if (path.startsWith('arp.'))                              return 'arp';
+    if (path.startsWith('lfo.'))                              return 'lfo';
+    if (path.startsWith('delay.'))                            return 'delay';
+    if (path.startsWith('crush.'))                            return 'crush';
+    if (path.startsWith('reverb.'))                           return 'reverb';
+    if (path === 'trig.tone' || path === 'osc.detune')        return 'trig';
+    // Everything else is a machine param → SYNTH tab.
+    return 'synth';
+  }
+
+  /**
+   * Light up the tabs (and FX toggles) that own a p-locked param on the
+   * currently-selected step. Refreshed on render + step (de)selection/change.
+   */
+  _renderPLockTabIndicators() {
+    const step = this._step();
+    const tabs = new Set();
+    if (step) {
+      for (const path of step.plocks.keys()) {
+        const tab = this._tabForPLockPath(path);
+        if (tab) tabs.add(tab);
+      }
+    }
+    this._tabBar.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.classList.toggle('has-plock', tabs.has(btn.dataset.tab));
+    });
+    this._fxBar.querySelectorAll('.fx-toggle-wrap').forEach(wrap => {
+      wrap.classList.toggle('has-plock', tabs.has(wrap.dataset.fxtab));
+    });
   }
 
   _updateClipButtons() {
@@ -484,6 +528,7 @@ export class SynthPanel {
       this._content,
       track,
       () => this._renderContent(),   // rebuildArp — re-renders the whole content area
+      this._makeTabContext(track),   // p-lock-aware write path for arp mod params
     );
     this._activeWidgets.push(panel);
   }

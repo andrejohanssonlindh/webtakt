@@ -7,7 +7,7 @@
  * and legacy `*.bpmDiv` → `*.bpmCount32` back-compat on load.
  */
 
-import { suite, test, assert, makeOfflineTrack } from '../runner.js';
+import { suite, test, assert, makeOfflineTrack, fireStep, rms } from '../runner.js';
 import { count32ToSeconds, divToCount32 } from '../../js/util/BpmSync.js';
 
 suite('Sync knob (MS/BPM unified)', () => {
@@ -89,6 +89,126 @@ suite('Sync knob (MS/BPM unified)', () => {
     assert.ok(t2.arp.getParam('bpmDiv') === undefined, 'arp legacy key dropped');
     assert.ok(t2.arp.getParam('steps')[0].bpmCount32 === 2, 'step bpmDiv → count 2');
     assert.ok(t2.arp.getParam('steps')[0].bpmDiv === undefined, 'step legacy key dropped');
+  });
+
+  test('Arpeggiator: input mode buildInputCycle (absolute notes + pattern + cycle len)', async () => {
+    const { track } = await makeOfflineTrack('synth', 0.1);
+    const arp = track.arp;
+    arp.setBpm(120);
+    arp.setParam('mode', 'input');
+    arp.setParam('pattern', 'up');
+    arp.setParam('syncMode', 'bpm');
+    arp.setParam('bpmCount32', 4);   // 1/8 = 0.25s gap @120
+    arp.setParam('variance', 0);
+    arp.setParam('gate', 0);
+
+    const held = [60, 64, 67];       // C E G, absolute
+    const { events, cycleSec } = arp.buildInputCycle(held, 100, 0);
+
+    assert.ok(events.length === 3, 'one event per held note');
+    // Absolute pitches, laid out at their true values (no root offset).
+    assert.ok(events[0].note === 60 && events[1].note === 64 && events[2].note === 67,
+      'up pattern keeps absolute notes ascending');
+    // Gap of 0.25s between successive note starts.
+    assert.near(events[1].time - events[0].time, 0.25, 1e-9, 'gap from bpm count');
+    assert.near(cycleSec, 0.75, 1e-9, 'cycle length = noteCount * gap');
+
+    // 'down' reverses the order.
+    arp.setParam('pattern', 'down');
+    const down = arp.buildInputCycle(held, 100, 0).events;
+    assert.ok(down[0].note === 67 && down[2].note === 60, 'down pattern reverses');
+
+    // Steps must NOT trigger input mode — buildEvents returns nothing.
+    const stepEvents = arp.buildEvents(60, 100, 0, 0.5, 0.5);
+    assert.ok(stepEvents.length === 0, 'input mode is not step-triggered');
+  });
+
+  test('Arpeggiator: input mode fires steps normally (recorded notes play back)', async () => {
+    // Regression: a step recorded by the live-input arp must still play on
+    // playback. Input mode's buildEvents() returns [], so _fireStep must route
+    // the step through the NORMAL path (arpFiresSteps=false) — not the arp branch
+    // (which would swallow the step into zero events → silence).
+    const { track, ctx } = await makeOfflineTrack('synth', 0.4);
+    const arp = track.arp;
+    arp.enabled = true;
+    arp.setParam('mode', 'input');
+
+    // Fire a normal note step while the arp sits in input mode.
+    fireStep(track, 0.0, { note: 60, velocity: 110, length: 2 });
+
+    const buf  = await ctx.startRendering();
+    const data = buf.getChannelData(0);
+    assert.ok(rms(data) > 0.001, 'input-mode step produces audio (not swallowed by arp)');
+  });
+
+  test('Sequencer: stepIndexAtTime spreads arp-cycle notes across steps (capture)', async () => {
+    // Regression: a live-input-arp cycle is scheduled in one synchronous burst.
+    // Capture must place each note by its scheduled time, not "now", or the whole
+    // chord piles onto one step. stepIndexAtTime is the mapping that prevents that.
+    const { track } = await makeOfflineTrack('synth', 0.1);  // 120 BPM
+    const seq = track.sequencer;
+    seq.stepCount = 16;
+
+    // Simulate the clock state: step 4 was the last one fired, at t=0.0.
+    // secondsPerTick @120/4 = 0.125s; an 1/8 arp gap = 0.25s = 2 ticks.
+    seq._stepIndex = 5;            // tick handler already advanced past step 4
+    seq.lastScheduledTime = 0.0;
+
+    const c = seq.stepIndexAtTime(0.30);   // 2.4 ticks past step 4
+    const e = seq.stepIndexAtTime(0.55);   // 4.4 ticks
+    const g = seq.stepIndexAtTime(0.80);   // 6.4 ticks
+    assert.ok(c.absStep === 6,  'first note → step 6');
+    assert.ok(e.absStep === 8,  'second note → step 8 (one 1/8 later)');
+    assert.ok(g.absStep === 10, 'third note → step 10');
+    assert.ok(c.absStep !== e.absStep && e.absStep !== g.absStep, 'notes land on distinct steps');
+    assert.near(c.nudge, 0.4, 1e-9, 'sub-step nudge preserved');
+
+    // Wraps around the pattern length.
+    const wrap = seq.stepIndexAtTime(0.0 + 13 * 0.125);  // step 4 + 13 = 17 → 1
+    assert.ok(wrap.absStep === 1, 'absStep wraps mod stepCount');
+
+    // No clock tick yet → null (capture is skipped).
+    seq.lastScheduledTime = 0;
+    assert.ok(seq.stepIndexAtTime(1.0) === null, 'null before first tick');
+  });
+
+  test('Arpeggiator: arp.rate/gate/variance virtual mod params (p-lock + LFO targets)', async () => {
+    const { track } = await makeOfflineTrack('synth', 0.1);
+    const arp = track.arp;
+
+    // arp.gate / arp.variance alias the real fields directly.
+    arp.setParam('arp.gate', 250);
+    assert.ok(arp.getParam('gate') === 250, 'arp.gate aliases gate');
+    arp.setParam('arp.variance', 0.4);
+    assert.near(arp.getParam('variance'), 0.4, 1e-9, 'arp.variance aliases variance');
+
+    // arp.rate maps to speed in ms mode, bpmCount32 in bpm mode.
+    arp.setParam('syncMode', 'ms');
+    arp.setParam('arp.rate', 180);
+    assert.ok(arp.getParam('speed') === 180, 'arp.rate → speed in ms mode');
+    assert.ok(arp.getParam('arp.rate') === 180, 'arp.rate reads speed in ms mode');
+
+    arp.setParam('syncMode', 'bpm');
+    arp.setParam('arp.rate', 8);
+    assert.ok(arp.getParam('bpmCount32') === 8, 'arp.rate → bpmCount32 in bpm mode');
+    assert.ok(arp.getParam('arp.rate') === 8, 'arp.rate reads bpmCount32 in bpm mode');
+
+    // Descriptor bounds follow the active sync mode for rate.
+    const bpmRate = arp.modParamDescriptors().find(p => p.path === 'arp.rate');
+    assert.ok(bpmRate.max === 64, 'rate descriptor max=64 in bpm mode');
+    arp.setParam('syncMode', 'ms');
+    const msRate = arp.modParamDescriptors().find(p => p.path === 'arp.rate');
+    assert.ok(msRate.max === 2000, 'rate descriptor max=2000 in ms mode');
+
+    // Track exposes them as jsOnly LFO destinations + in the assignable list.
+    const resolved = track._resolveAudioParam('arp.rate');
+    assert.ok(resolved && resolved.jsOnly === true && resolved.audioParam === null,
+      'arp.rate resolves as jsOnly LFO destination');
+    arp.enabled = true;
+    const groups = track.getAssignableParams();
+    const arpGroup = groups.find(g => g.group === 'Arp');
+    assert.ok(arpGroup && arpGroup.items.some(i => i.path === 'arp.variance'),
+      'Arp group present in assignable params when enabled');
   });
 
   test('Envelope: per-stage tempo-sync resolves seconds + round-trips', async () => {

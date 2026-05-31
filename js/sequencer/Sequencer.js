@@ -83,6 +83,31 @@ export class Sequencer {
     return this._stepIndex;
   }
 
+  /**
+   * Map an AudioContext time to the absolute step index playing at that time,
+   * plus the sub-step nudge (fractional tick offset, clamped ±0.99). Projects
+   * forward from the last scheduled tick — the step scheduled at
+   * `lastScheduledTime` is `(_stepIndex - 1)` (the tick handler records the time,
+   * fires that step, then increments). Returns null if the clock hasn't ticked.
+   *
+   * Used by live-input-arp recording (Keyboard.captureArpNote): a whole arp cycle
+   * is scheduled in one synchronous burst, so each note must be placed by its own
+   * scheduled time rather than "now" (else they pile onto one step as a chord).
+   *
+   * @param {number} time — AudioContext scheduled time
+   * @returns {{ absStep: number, nudge: number } | null}
+   */
+  stepIndexAtTime(time) {
+    if (!this.lastScheduledTime || this.stepCount <= 0) return null;
+    const secondsPerTick = this.clock._secondsPerTick;
+    const lastFired  = (this._stepIndex - 1 + this.stepCount) % this.stepCount;
+    const deltaTicks = (time - this.lastScheduledTime) / secondsPerTick;
+    const wholeTicks = Math.round(deltaTicks);
+    const absStep    = ((lastFired + wholeTicks) % this.stepCount + this.stepCount) % this.stepCount;
+    const nudge      = Math.max(-0.99, Math.min(0.99, deltaTicks - wholeTicks));
+    return { absStep, nudge };
+  }
+
 getVisibleSteps() {
     const start = this.pageOffset * STEPS_PER_PAGE;
     // Ensure steps array covers this page
@@ -138,6 +163,7 @@ getVisibleSteps() {
     if (path.startsWith('delay.'))  return this.track.delayFX;
     if (path.startsWith('crush.'))  return this.track.bitcrushFX;
     if (path.startsWith('reverb.')) return this.track.reverbFX;
+    if (path.startsWith('arp.'))    return this.track.arp;
     return this.track.machine;
   }
 
@@ -181,6 +207,11 @@ getVisibleSteps() {
     // Virtual params not in any getParamList
     map.set('amp.pan',  'pan');
     map.set('trig.tone', 'trig');
+    // Arp rate/gate/variance — js-mode: set on the arp before buildEvents() reads
+    // it, restored after the voice loop via jsRestores (see _fireStep).
+    map.set('arp.rate',     'js');
+    map.set('arp.gate',     'js');
+    map.set('arp.variance', 'js');
     return map;
   }
 
@@ -309,6 +340,41 @@ getVisibleSteps() {
     });
 
     const arp = this.track.arp;
+    // Input mode is keyboard-driven (LiveArp), NOT step-triggered — its
+    // buildEvents() returns []. So steps must fire NORMALLY in input mode
+    // (this is also how recorded input-arp notes play back). Only chord/manual/
+    // random fan a step through the arp.
+    const arpFiresSteps = !!(arp?.enabled && arp.getParam('mode') !== 'input');
+
+    // ── Arp rate/gate/variance LFO (sample-and-hold) ────────────────────────
+    // Arp timing is plain JS read once at build time, not an AudioParam, so an
+    // LFO can only sample-and-hold per step-fire (like trig.tone). We collect the
+    // per-path offset here and apply it transiently around buildEvents() below,
+    // on top of any p-lock already set. Restored immediately so jsRestores (the
+    // p-lock baseline) stays correct. (Input mode is keyboard-driven — LiveArp
+    // does its own per-cycle sampling; this only covers step-triggered modes.)
+    const arpLfoOffset = {};
+    if (arpFiresSteps) {
+      this.track.lfos.forEach((lfo, i) => {
+        const p = this.track._lfoDestPaths[i];
+        if (p === 'arp.rate' || p === 'arp.gate' || p === 'arp.variance') {
+          arpLfoOffset[p] = (arpLfoOffset[p] ?? 0) + lfo.getCurrentValue();
+        }
+      });
+    }
+    const hasArpLfo = Object.keys(arpLfoOffset).length > 0;
+
+    /** Run fn with arp params offset by the sampled LFO values, then restore. */
+    const withArpLfo = (fn) => {
+      if (!hasArpLfo) return fn();
+      const saved = {};
+      for (const path of Object.keys(arpLfoOffset)) {
+        saved[path] = arp.getParam(path);
+        arp.setParam(path, saved[path] + arpLfoOffset[path]);
+      }
+      try { return fn(); }
+      finally { for (const path of Object.keys(saved)) arp.setParam(path, saved[path]); }
+    };
 
     // ── Fire each voice ────────────────────────────────────────
     step.voices.forEach((sv, vi) => {
@@ -333,9 +399,10 @@ getVisibleSteps() {
 
       const finalNote = Math.max(0, Math.min(127, sv.note + Math.round(tone)));
 
-      if (arp?.enabled) {
-        // Arpeggiator: fan the root note into a sequence of scheduled events
-        const events = arp.buildEvents(finalNote, sv.velocity, time, offTime, stepLenSec);
+      if (arpFiresSteps) {
+        // Arpeggiator: fan the root note into a sequence of scheduled events.
+        // Build under any sampled arp-LFO offset (p-lock is already applied).
+        const events = withArpLfo(() => arp.buildEvents(finalNote, sv.velocity, time, offTime, stepLenSec));
         events.forEach(ev => {
           const oscOff = ev.offTime + release;
           const voice  = this.track._pool?.nextVoice(ev.time);
