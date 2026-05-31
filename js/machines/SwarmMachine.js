@@ -10,8 +10,8 @@
  * any AudioParam permanently.
  *
  * Audio graph:
- *   _root (osc)        ────────────────────────────────┐
- *   _swarm[0..5] (osc) → _swarmGain (shared gain) ─────┴→ _mix → outputGain → [Filter]
+ *   _root (osc)        ──────────────────────────────────────────────────┐
+ *   _swarm[0..5] (osc) → _voiceGain[i] (slope) → _swarmGain (height) ───┴→ _mix → outputGain → [Filter]
  *
  * Noise modulation:
  *   A setInterval timer fires periodically and writes random detune targets to
@@ -23,6 +23,7 @@
  *   'osc.detune'    — root detune in cents (-100–+100), hidden (trig tab)
  *   'spread'        — cent gap between adjacent swarm voices (0–100¢)
  *   'height'        — swarm voice level relative to root (0–1)
+ *   'slope'         — per-slot gain taper: 0=flat, -1=outer voices→0, +1=outer voices→2×
  *   'noise.amount'  — drift depth in cents applied to swarm voices (0–50¢)
  *   'noise.color'   — drift rate: 0–1 (slow→fast, interval 800→50 ms)
  *   'output.level'  — master output level (0–1)
@@ -43,6 +44,8 @@ export class SwarmMachine extends Machine {
     'height':       { label: 'Height', type: 'number', min: 0, max: 1, default: 0.7,
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m._swarmGain.gain, schedule: 'setTarget', tc: 0.005 },
+    'slope':        { label: 'Slope',  type: 'number', min: -1, max: 1, default: 0, plockMode: 'js',
+                      apply: (v, t, m) => { m._applySlope(); } },
     'noise.amount': { label: 'Noise Amt', type: 'number', min: 0, max: 50, default: 8,
                       modulatable: true, lfoMin: 0, lfoMax: 50, plockMode: 'js' },
     'noise.color':  { label: 'Noise Rate', type: 'number', min: 0, max: 1, default: 0.15,
@@ -91,16 +94,25 @@ export class SwarmMachine extends Machine {
     // ── Six swarm oscillators ──
     // Voices paired: +1/-1, +2/-2, +3/-3 semitone slots
     // Actual cent offsets set in _applySpread()
+    // Each voice routes through its own gain node (_voiceGain) so slope can
+    // taper per-slot amplitude independently of the shared _swarmGain.
+    this._voiceGain = Array.from({ length: NUM_SWARM }, () => {
+      const g = context.createGain();
+      g.gain.value = 1;
+      g.connect(this._swarmGain);
+      return g;
+    });
     this._swarm = Array.from({ length: NUM_SWARM }, (_, i) => {
       const osc = context.createOscillator();
       osc.type            = 'sawtooth';
       osc.frequency.value = 440;
-      osc.connect(this._swarmGain);
+      osc.connect(this._voiceGain[i]);
       osc.start();
       return osc;
     });
 
     this._applySpread();
+    this._applySlope();
 
     // ── Noise drift modulation ──
     // Timer fires at _driftInterval ms and writes a fresh random detune target
@@ -145,6 +157,20 @@ export class SwarmMachine extends Machine {
       const cents = sign * slot * s;
       this._spreadBase[i] = cents;
       osc.detune.setValueAtTime(cents, t);
+    });
+  }
+
+  // Scale each voice's gain node by: max(0, 1 + slope * (slot / maxSlot)).
+  // At slope=0 all voices are at 1; at slope=-1 the outermost pair is at 0;
+  // at slope=+1 the outermost pair is at 2× (inner voices scale proportionally).
+  _applySlope() {
+    const slope    = this._params['slope'] ?? 0;
+    const maxSlot  = Math.floor((NUM_SWARM - 1) / 2) + 1; // 3
+    const t        = this.context.currentTime;
+    this._voiceGain.forEach((g, i) => {
+      const slot = Math.floor(i / 2) + 1;
+      const gain = Math.max(0, 1 + slope * (slot / maxSlot));
+      g.gain.setValueAtTime(gain, t);
     });
   }
 

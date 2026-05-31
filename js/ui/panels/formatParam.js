@@ -70,6 +70,7 @@ export function formatParam(p, v) {
   // SwarmMachine / SampleSwarmMachine
   if (p.path === 'spread')           return Math.round(v) + '¢';
   if (p.path === 'swarm.detune')     return Math.round(v) + '¢';
+  if (p.path === 'slope')            return (v >= 0 ? '+' : '') + Math.round(v * 100) + '%';
   if (p.path === 'noise.amount')     return Math.round(v) + '¢';
   if (p.path === 'noise.color')      return Math.round(v * 100) + '%';
   // CymbalMachine

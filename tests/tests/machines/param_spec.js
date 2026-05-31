@@ -172,6 +172,7 @@ const EXPECTED = {
     { path: 'osc.detune',   label: 'Detune',     type: 'number', min: -100, max: 100, default: 0,    modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
     { path: 'spread',       label: 'Spread',     type: 'number', min: 0,    max: 100, default: 15,                                                  plockMode: 'js'        },
     { path: 'height',       label: 'Height',     type: 'number', min: 0,    max: 1,   default: 0.7,  modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'audioParam' },
+    { path: 'slope',        label: 'Slope',      type: 'number', min: -1,   max: 1,   default: 0,                                                   plockMode: 'js'        },
     { path: 'noise.amount', label: 'Noise Amt',  type: 'number', min: 0,    max: 50,  default: 8,    modulatable: true, lfoMin: 0,    lfoMax: 50,  plockMode: 'js'        },
     { path: 'noise.color',  label: 'Noise Rate', type: 'number', min: 0,    max: 1,   default: 0.15, modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'js'        },
     { path: 'output.level', label: 'Level',      type: 'number', min: 0,    max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'audioParam' },

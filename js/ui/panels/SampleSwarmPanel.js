@@ -35,11 +35,12 @@ export class SampleSwarmPanel {
     swarmRow.className = 'sampler-param-row';
 
     const swarmDefs = [
-      { path: 'spread',       label: 'SPREAD', min: 0,   max: 100,  fmt: v => Math.round(v) + '¢'         },
-      { path: 'swarm.detune', label: 'DETUNE', min: 0,   max: 50,   fmt: v => Math.round(v) + '¢'         },
-      { path: 'height',       label: 'HEIGHT', min: 0,   max: 1,    fmt: v => Math.round(v * 100) + '%'   },
-      { path: 'noise.amount', label: 'NOISE',  min: 0,   max: 50,   fmt: v => Math.round(v) + '¢'         },
-      { path: 'noise.color',  label: 'N.RATE', min: 0,   max: 1,    fmt: v => Math.round(v * 100) + '%'   },
+      { path: 'spread',       label: 'SPREAD', min: 0,   max: 100,  fmt: v => Math.round(v) + '¢'                            },
+      { path: 'swarm.detune', label: 'DETUNE', min: 0,   max: 50,   fmt: v => Math.round(v) + '¢'                            },
+      { path: 'height',       label: 'HEIGHT', min: 0,   max: 1,    fmt: v => Math.round(v * 100) + '%'                      },
+      { path: 'slope',        label: 'SLOPE',  min: -1,  max: 1,    fmt: v => (v >= 0 ? '+' : '') + Math.round(v * 100) + '%' },
+      { path: 'noise.amount', label: 'NOISE',  min: 0,   max: 50,   fmt: v => Math.round(v) + '¢'                            },
+      { path: 'noise.color',  label: 'N.RATE', min: 0,   max: 1,    fmt: v => Math.round(v * 100) + '%'                      },
     ];
 
     swarmDefs.forEach(({ path, label, min, max, fmt }) => {

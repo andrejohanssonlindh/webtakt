@@ -30,6 +30,7 @@
  *   'spread'         — cent gap between adjacent swarm voices (0–100¢)
  *   'swarm.detune'   — random start-detune jitter per voice per noteOn (0–50¢)
  *   'height'         — swarm voice level relative to root (0–1)
+ *   'slope'          — per-slot gain taper: 0=flat, -1=outer→0, +1=outer→2×
  *   'noise.amount'   — drift depth in cents (0–50¢)
  *   'noise.color'    — drift rate: 0–1 (slow→fast)
  *   'output.level'   — master output level (0–1)
@@ -59,6 +60,7 @@ export class SampleSwarmMachine extends Machine {
       'spread':         15,
       'swarm.detune':   5,
       'height':         0.7,
+      'slope':          0,
       'noise.amount':   8,
       'noise.color':    0.15,
       'output.level':   0.8,
@@ -92,12 +94,21 @@ export class SampleSwarmMachine extends Machine {
     this._swarmGain.gain.value = this._params['height'];
     this._swarmGain.connect(this._mix);
 
+    // Per-voice gain nodes for slope taper — sit between each source and _swarmGain
+    this._voiceGain = Array.from({ length: NUM_SWARM }, () => {
+      const g = context.createGain();
+      g.gain.value = 1;
+      g.connect(this._swarmGain);
+      return g;
+    });
+
     // Drift timer — same pattern as SwarmMachine
     this._driftInterval = this._colorToMs(this._params['noise.color']);
     this._driftTimer    = null;
     this._startDriftTimer();
 
     this._applySpread();
+    this._applySlope();
   }
 
   // ── Sample buffer management ────────────────────────────────────────────────
@@ -153,6 +164,16 @@ export class SampleSwarmMachine extends Machine {
     }
   }
 
+  _applySlope() {
+    const slope   = this._params['slope'] ?? 0;
+    const maxSlot = Math.floor((NUM_SWARM - 1) / 2) + 1; // 3
+    const t       = this.context.currentTime;
+    this._voiceGain.forEach((g, i) => {
+      const slot = Math.floor(i / 2) + 1;
+      g.gain.setValueAtTime(Math.max(0, 1 + slope * (slot / maxSlot)), t);
+    });
+  }
+
   // ── Machine protocol ────────────────────────────────────────────────────────
 
   noteOn(midiNote, velocity, time) {
@@ -206,7 +227,7 @@ export class SampleSwarmMachine extends Machine {
       const src = this._makeSource(playBuf, totalRate, isLoop,
         isReverse ? 0 : startSec, isReverse ? undefined : lengthSec, time,
         isReverse ? revLoopStart : loopStartSec, isReverse ? playBuf.duration : endSec);
-      src.connect(this._swarmGain);
+      src.connect(this._voiceGain[i]);
       src.detune.value = this._spreadBase[i] + (Math.random() * 2 - 1) * jitter;
       this._swarmSrc.push(src);
     }
@@ -277,6 +298,9 @@ export class SampleSwarmMachine extends Machine {
       case 'height':
         this._swarmGain.gain.setTargetAtTime(value, t, 0.005);
         break;
+      case 'slope':
+        this._applySlope();
+        break;
       case 'noise.color':
         this._driftInterval = this._colorToMs(value);
         this._startDriftTimer();
@@ -316,6 +340,7 @@ export class SampleSwarmMachine extends Machine {
       { path: 'spread',         label: 'Spread',     type: 'number',  min: 0,     max: 100,  default: 15,   modulatable: false, plockMode: 'js' },
       { path: 'swarm.detune',   label: 'Detune',     type: 'number',  min: 0,     max: 50,   default: 5,    modulatable: false, plockMode: 'js' },
       { path: 'height',         label: 'Height',     type: 'number',  min: 0,     max: 1,    default: 0.7,  modulatable: true,  lfoMin: 0, lfoMax: 1,  plockMode: 'audioParam' },
+      { path: 'slope',          label: 'Slope',      type: 'number',  min: -1,    max: 1,    default: 0,    modulatable: false, plockMode: 'js' },
       { path: 'noise.amount',   label: 'Noise Amt',  type: 'number',  min: 0,     max: 50,   default: 8,    modulatable: false, plockMode: 'js' },
       { path: 'noise.color',    label: 'Noise Rate', type: 'number',  min: 0,     max: 1,    default: 0.15, modulatable: false, plockMode: 'js' },
       { path: 'output.level',   label: 'Level',      type: 'number',  min: 0,     max: 1,    default: 0.8,  modulatable: true,  lfoMin: 0, lfoMax: 1,  plockMode: 'audioParam' },

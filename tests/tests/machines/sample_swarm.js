@@ -138,6 +138,7 @@ suite('SampleSwarmMachine', () => {
     m.setParam('spread',       42);
     m.setParam('swarm.detune', 12);
     m.setParam('height',       0.4);
+    m.setParam('slope',        0.6);
     m.setParam('noise.amount', 20);
     m.setParam('noise.color',  0.8);
     m.setParam('output.level', 0.6);
@@ -146,6 +147,7 @@ suite('SampleSwarmMachine', () => {
     assert.near(json.params['spread'],       42,  0.001, 'spread in JSON');
     assert.near(json.params['swarm.detune'], 12,  0.001, 'swarm.detune in JSON');
     assert.near(json.params['height'],       0.4, 0.001, 'height in JSON');
+    assert.near(json.params['slope'],        0.6, 0.001, 'slope in JSON');
     assert.near(json.params['noise.amount'], 20,  0.001, 'noise.amount in JSON');
     assert.near(json.params['noise.color'],  0.8, 0.001, 'noise.color in JSON');
     assert.near(json.params['output.level'], 0.6, 0.001, 'output.level in JSON');
