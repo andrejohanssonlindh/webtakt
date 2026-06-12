@@ -261,10 +261,23 @@ export class Filter {
   /**
    * Register a sibling filter that should mirror every param change made here.
    * Used by VoicePool so all voice-slot filters track the canonical slot-0 filter.
+   *
+   * Replays the canonical's CURRENT param state onto the new mirror immediately —
+   * mirroring only fans out FUTURE setParam calls, so without this replay a mirror
+   * registered after the canonical was already configured (e.g. engine switched to
+   * 'analogue', or any non-default param) would silently stay on the defaults. That
+   * left voice slot 0 (the canonical) on a different filter than the others — heard
+   * as "every Nth note (slot 0) sounds different", and only on analogue voices
+   * because the digital biquad defaults happen to match.
    * @param {Filter} filter
    */
   mirrorTo(filter) {
-    if (filter && filter !== this) this._mirrors.push(filter);
+    if (!filter || filter === this) return;
+    this._mirrors.push(filter);
+    // Bring the new mirror up to the canonical's current state.
+    for (const [path, value] of Object.entries(this._params)) {
+      filter.setParam(path, value);
+    }
   }
 
   /** @param {string} path @param {number|string} value @param {number} [time] */

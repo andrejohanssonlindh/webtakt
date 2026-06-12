@@ -9,6 +9,35 @@
  * the sample rate changes.
  */
 
+// ── Noise random source ──────────────────────────────────────────────────────
+// The random source used to FILL noise buffers (white here, pink in
+// AnalogueParts). Defaults to Math.random so the app keeps full per-load and
+// per-voice variation — analogue voices must not be carbon copies, and the
+// moogish/patina hiss must differ across the 8-voice pool. The test harness calls
+// seedNoiseRandom() ONCE before rendering so noise-buffer content is deterministic
+// (peak/RMS reproducible → no flaky audio tests); restoreNoiseRandom() reverts.
+// Determinism is therefore a test-only concern; production audio is unchanged.
+let _noiseRandom = Math.random;
+
+/** Current noise random value in [0, 1). Used by getNoiseBuffer + makePinkBuffer. */
+export function noiseRandomValue() { return _noiseRandom(); }
+
+/** Install a seeded PRNG for noise buffers (test harness only). */
+export function seedNoiseRandom(seed = 0x1234abcd) {
+  let a = seed >>> 0;
+  _noiseRandom = function () {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Restore Math.random as the noise source. */
+export function restoreNoiseRandom() {
+  _noiseRandom = Math.random;
+}
+
 /**
  * Return a mono white-noise AudioBuffer of the requested duration.
  * The returned buffer is cached by the calling module (pass the cache
@@ -24,7 +53,7 @@ export function getNoiseBuffer(context, cache, durationSeconds) {
   const length = Math.ceil(context.sampleRate * durationSeconds);
   const buf    = context.createBuffer(1, length, context.sampleRate);
   const data   = buf.getChannelData(0);
-  for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+  for (let i = 0; i < length; i++) data[i] = noiseRandomValue() * 2 - 1;
   cache.buf = buf;
   return buf;
 }

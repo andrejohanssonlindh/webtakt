@@ -227,6 +227,7 @@ const EXPECTED = {
     { path: 'output.level', label: 'Level',     type: 'number', min: 0,    max: 1,    default: 0.85, modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'audioParam' },
   ],
   swarm: [
+    { path: 'osc.wave',     label: 'Wave',       type: 'enum',   options: ['sawtooth','square','triangle','sine'], plockMode: 'js' },
     { path: 'osc.detune',   label: 'Detune',     type: 'number', min: -100, max: 100, default: 0,    modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
     { path: 'spread',       label: 'Spread',     type: 'number', min: 0,    max: 100, default: 15,                                                  plockMode: 'js'        },
     { path: 'height',       label: 'Height',     type: 'number', min: 0,    max: 1,   default: 0.7,  modulatable: true, lfoMin: 0,    lfoMax: 1,   plockMode: 'audioParam' },

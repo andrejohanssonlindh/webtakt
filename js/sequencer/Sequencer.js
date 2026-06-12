@@ -366,12 +366,20 @@ getVisibleSteps() {
       if (this.track._lfoDestPaths[i] === 'trig.tone') tone += lfo.getCurrentValue();
     });
 
-    // trig.velocity (shared across voices on this step)
-    let trigVel = step.plocks.has('trig.velocity') ? step.plocks.get('trig.velocity') : (this.track.trigVelocity ?? 100);
+    // Velocity resolution (per voice). Precedence:
+    //   1. trig.velocity p-lock — explicit per-step override, wins for all voices
+    //   2. the voice's own stored velocity — recorded/MIDI velocity sounds here
+    //   3. track.trigVelocity — base default for steps with no recorded velocity
+    // An LFO on trig.velocity adds a shared offset on top, sampled once per step.
+    const velPLock = step.plocks.has('trig.velocity') ? step.plocks.get('trig.velocity') : null;
+    let velLfoOffset = 0;
     this.track.lfos.forEach((lfo, i) => {
-      if (this.track._lfoDestPaths[i] === 'trig.velocity') trigVel += lfo.getCurrentValue();
+      if (this.track._lfoDestPaths[i] === 'trig.velocity') velLfoOffset += lfo.getCurrentValue();
     });
-    trigVel = Math.max(1, Math.min(127, Math.round(trigVel)));
+    const resolveVelocity = (sv) => {
+      const base = velPLock ?? sv.velocity ?? (this.track.trigVelocity ?? 100);
+      return Math.max(1, Math.min(127, Math.round(base + velLfoOffset)));
+    };
 
     const arp = this.track.arp;
     // Input mode is keyboard-driven (LiveArp), NOT step-triggered — its
@@ -442,6 +450,7 @@ getVisibleSteps() {
       }
 
       const finalNote = Math.max(0, Math.min(127, sv.note + Math.round(tone)));
+      const trigVel   = resolveVelocity(sv);
 
       if (arpFiresSteps) {
         // Arpeggiator: fan the root note into a sequence of scheduled events.
@@ -503,7 +512,7 @@ getVisibleSteps() {
           const time      = scheduledTime + (effectiveNudge * this.clock._secondsPerTick);
           const offTime   = time + (sv.length * this.clock._secondsPerTick);
           const finalNote = Math.max(0, Math.min(127, sv.note + Math.round(tone)));
-          follower.fireFollowNote(finalNote, trigVel, time, offTime);
+          follower.fireFollowNote(finalNote, resolveVelocity(sv), time, offTime);
         });
       });
     }

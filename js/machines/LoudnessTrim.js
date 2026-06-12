@@ -49,21 +49,24 @@ export const LOUDNESS_TRIM = {
   // ── coming UP (quieter than median) ──
   'sample-swarm': 1.31,
   'swarm':        1.55,
-  'karplus':      1.74,
+  'karplus':      1.49,     // was 1.74; the K-S resonance can peak ~1.05 — pulled down for headroom
   'transient':    2.43,
   'strings':      3.54,
 
-  // ── spiky percussion: capped so peak ≤ 0.90 (sit below median RMS) ──
-  'clapp':        1.34,
-  'snare':        1.70,
+  // ── spiky percussion: capped so peak ≤ ~0.90 (sit below median RMS) ──
+  // Noise buffers are now seeded (deterministic) so these peaks are reproducible.
+  // Five machines genuinely clipped at full velocity (peak > 0 dBFS) and were
+  // pulled down with headroom; the others kept their calibrated values.
+  'clapp':        1.21,     // was 1.34; sat exactly at peak 1.000 (bench) — pulled to ~0.90 for headroom
+  'snare':        1.42,     // was 1.70; peaks ~1.05 at full vel — scaled to peak ≤0.90
   'snare.analogue': 3.67,   // measured: pink snares quiet (RMS 0.054); capped to peak ≤0.90 (peak 0.78)
   'clapp.analogue': 4.14,   // measured: pink clap very quiet (RMS 0.017) but huge headroom (peak 0.29); capped to peak ≤0.90
-  'cymbal':       4.89,
+  'cymbal':       4.26,     // was 4.89; peak crept to 1.033 at full vel — scaled to peak ≤0.90
   'cymbal.analogue': 4.42,  // measured: at peak ceiling (peak 1.00); held to peak ≤0.90, sits just below cymbal
-  'noise':        6.87,
-  'hihat.analogue': 11.46,  // measured: tracks hihat (RMS 0.033); held to peak ≤0.90 (peak 1.00)
-  'wood':        12.68,
-  'hihat':       12.68,
+  'noise':        4.80,     // was 6.87; peak crept over 0 dBFS at full vel — scaled to peak ≤0.90
+  'hihat.analogue': 8.17,   // was 11.46; peak crept over 0 dBFS at full vel — scaled to peak ≤0.90
+  'wood':         7.14,     // was 12.68; peak crept to 1.599 at full vel — scaled to peak ≤0.90
+  'hihat':       10.26,     // was 12.68; peak crept to 1.112 at full vel — scaled to peak ≤0.90
 };
 
 /**

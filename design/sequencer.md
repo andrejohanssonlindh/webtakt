@@ -88,6 +88,22 @@ paths matching those prefixes as `'envelope'` automatically.
 
 ---
 
+## Velocity Resolution
+
+Velocity is resolved **per voice** in `_fireStep()` (`resolveVelocity(sv)`) with this precedence:
+
+1. **`trig.velocity` p-lock** — explicit per-step override; wins for every voice on the step.
+2. **The voice's own `velocity`** — so MIDI/live-recorded velocities (stored per voice by
+   `LiveRecorder`) actually sound on playback.
+3. **`track.trigVelocity`** — the track-wide base default (the FILTER/TRIG VELOCITY knob).
+   Grid-programmed steps are created carrying this value (see `StepGrid`), so the knob stays
+   meaningful for hand-programmed patterns.
+
+An LFO assigned to `trig.velocity` adds a step-shared offset (sampled once per step) on top of
+the resolved base. The result is clamped to 1–127.
+
+---
+
 ## Note Follow
 
 A track can mirror notes from another track via `track.followSource` (an integer track index, or `null`).

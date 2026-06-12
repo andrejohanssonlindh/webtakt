@@ -110,8 +110,9 @@ suite('Sync knob (MS/BPM unified)', () => {
     arp.setParam('variance', 0);
     arp.setParam('gate', 0);
 
-    const held = [60, 64, 67];       // C E G, absolute
-    const { events, cycleSec } = arp.buildInputCycle(held, 100, 0);
+    // held notes are {note, velocity} objects, ascending; t0 is the second arg.
+    const held = [{ note: 60, velocity: 100 }, { note: 64, velocity: 100 }, { note: 67, velocity: 100 }]; // C E G
+    const { events, cycleSec } = arp.buildInputCycle(held, 0);
 
     assert.ok(events.length === 3, 'one event per held note');
     // Absolute pitches, laid out at their true values (no root offset).
@@ -123,7 +124,7 @@ suite('Sync knob (MS/BPM unified)', () => {
 
     // 'down' reverses the order.
     arp.setParam('pattern', 'down');
-    const down = arp.buildInputCycle(held, 100, 0).events;
+    const down = arp.buildInputCycle(held, 0).events;
     assert.ok(down[0].note === 67 && down[2].note === 60, 'down pattern reverses');
 
     // Steps must NOT trigger input mode — buildEvents returns nothing.
@@ -175,8 +176,9 @@ suite('Sync knob (MS/BPM unified)', () => {
     const wrap = seq.stepIndexAtTime(0.0 + 13 * 0.125);  // step 4 + 13 = 17 → 1
     assert.ok(wrap.absStep === 1, 'absStep wraps mod stepCount');
 
-    // No clock tick yet → null (capture is skipped).
-    seq.lastScheduledTime = 0;
+    // No clock tick yet → null (capture is skipped). The sentinel is `null`;
+    // 0 is a valid AudioContext tick time (used as the fired time above).
+    seq.lastScheduledTime = null;
     assert.ok(seq.stepIndexAtTime(1.0) === null, 'null before first tick');
   });
 

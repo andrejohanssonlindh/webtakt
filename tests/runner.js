@@ -234,12 +234,13 @@ export async function makeOfflineTrack(machineType, durationSec, opts = {}) {
 // ─── Step builder ──────────────────────────────────────────────────────────────
 
 import { Step } from '../js/sequencer/Step.js';
+import { seedNoiseRandom } from '../js/util/AudioBuffers.js';
 
 /**
  * Build a Step object ready for _fireStep.
  * @param {object} opts
  * @param {number}  [opts.note=60]
- * @param {number}  [opts.velocity=100]
+ * @param {number}  [opts.velocity=127]
  * @param {number}  [opts.length=2]   — in ticks
  * @param {Map}     [opts.plocks]     — Map of path→value
  */
@@ -247,7 +248,12 @@ export function makeStep(opts = {}) {
   const s        = new Step(0);
   s.active       = true;
   s.note         = opts.note     ?? 60;
-  s.velocity     = opts.velocity ?? 100;
+  // Default to FULL velocity. _fireStep now honours per-voice velocity (the
+  // Envelope always scales amp by velocity/127), so an unspecified velocity must
+  // be 127 to match the prior behaviour (notes used to fire at track.trigVelocity,
+  // whose default is 127). Defaulting to 100 here would attenuate every test that
+  // doesn't set velocity by ~0.79× and shift RMS thresholds across the suite.
+  s.velocity     = opts.velocity ?? 127;
   s.length       = opts.length   ?? 2;
   if (opts.plocks) {
     for (const [k, v] of opts.plocks) s.plocks.set(k, v);
@@ -304,6 +310,12 @@ export async function renderSteps(track, ctx, sampleRate, stepCount, stepSec, st
 // ─── Runner ────────────────────────────────────────────────────────────────────
 
 export async function runAll() {
+  // Deterministic noise for the whole suite: swap Math.random for a seeded PRNG in
+  // the noise-buffer fillers (white + pink) BEFORE any machine renders, so
+  // peak/RMS-based audio tests don't flake on an unlucky draw. Production keeps
+  // Math.random (analogue voices must vary). See js/util/AudioBuffers.js.
+  seedNoiseRandom();
+
   const results = { timestamp: new Date().toISOString(), suites: [] };
 
   for (const s of _suites) {

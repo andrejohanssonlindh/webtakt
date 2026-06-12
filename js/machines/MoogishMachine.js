@@ -150,13 +150,16 @@ export class MoogishMachine extends Machine {
     this._mixGain.connect(this.outputGain);
 
     // Three persistent main oscillators, each with its own imperfect spectrum.
+    // _waveType[i] tracks the current waveform string so _setWave only rebuilds
+    // the (randomised) PeriodicWave when the type actually changes — see _setWave.
     this._oscs       = [];
     this._gains      = [];
+    this._waveType   = [];
     for (let i = 0; i < 3; i++) {
       const osc = context.createOscillator();
-      osc.setPeriodicWave(makeImperfectWave(context, this._params[`osc${i + 1}.waveform`], {
-        tolerance: 0.04,
-      }));
+      const wf  = this._params[`osc${i + 1}.waveform`];
+      osc.setPeriodicWave(makeImperfectWave(context, wf, { tolerance: 0.04 }));
+      this._waveType[i] = wf;
       osc.frequency.value = 261.63;
       osc.detune.value    = this._params[`osc${i + 1}.detune`] + this._tolTune;
 
@@ -230,8 +233,18 @@ export class MoogishMachine extends Machine {
     return this._tolSub;
   }
 
-  /** Swap one oscillator's waveform (regenerates its imperfect spectrum). */
+  /**
+   * Swap one oscillator's waveform (regenerates its imperfect spectrum).
+   * No-op if the type is unchanged: makeImperfectWave bakes a *fresh random*
+   * tolerance each call, so rebuilding on an identical type would re-randomise the
+   * voice's character. VoicePool.nextVoice() re-applies every JS param (incl.
+   * waveform) to non-canonical slots on every note via fromJSONSafe — without this
+   * guard slots 1..N got a new spectrum per hit while the canonical slot 0 kept its
+   * construction-time wave, so every Nth note (slot 0) audibly stood out.
+   */
   _setWave(idx, type) {
+    if (this._waveType[idx] === type) return;
+    this._waveType[idx] = type;
     this._oscs[idx].setPeriodicWave(makeImperfectWave(this.context, type, { tolerance: 0.04 }));
   }
 

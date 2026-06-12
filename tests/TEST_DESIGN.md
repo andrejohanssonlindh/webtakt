@@ -194,6 +194,17 @@ turning its measurement into a regression test. Each machine renders through the
   only to a **peak ceiling** (< 1.0 linear) + audibility, not the band.
 - Catches: a new machine added without a tuned trim (defaults to 1.0 → usually fails the band), or a
   synthesis change that shifts a machine's level. Each machine is rendered once (cached) across its tests.
+- **Reference velocity is 127 (full).** The bench and the guard fire at velocity 127 because the trims
+  are calibrated against full-scale note output. `_fireStep` now honours per-voice velocity (the Envelope
+  always scales amp by `velocity/127`), so firing at a lower velocity would scale every measurement and
+  invalidate the calibration. `makeStep`'s default velocity is likewise 127.
+- **Noise is deterministic IN TESTS.** The runner calls `seedNoiseRandom()` once at the top of `runAll()`,
+  swapping the `Math.random` source inside `getNoiseBuffer` (white) and `makePinkBuffer` (analogue/pink) for
+  a seeded mulberry32 PRNG. White/pink noise is statistically identical regardless of seed, but fixed content
+  makes peak/RMS reproducible — without it the peak-ceiling and noise-variance tests flaked on an unlucky
+  draw (results differed run-to-run and Chrome vs Firefox). **Production keeps `Math.random`** — analogue
+  voices must vary (seeding it made the 8 moogish pool voices share one buffer → audible "every-8th-note"
+  artifact). Per-voice tolerance/drift (`AnalogueParts.rand` / `DriftClock`) stays random in both.
 
 ---
 

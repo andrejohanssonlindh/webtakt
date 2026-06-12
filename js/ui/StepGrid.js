@@ -83,7 +83,9 @@ export class StepGrid {
           const activeNotes = allSteps.filter(s => s.active).map(s => s.voices[0]?.note ?? 60);
           const lowestNote = activeNotes.length > 0 ? Math.min(...activeNotes) : 36;
           target.active = true;
-          target.voices = [{ note: lowestNote, velocity: 100, length: 1, nudge: 0 }];
+          // Inherit the track's base velocity so the VELOCITY knob stays meaningful
+          // for grid-programmed steps (recorded steps carry their own MIDI velocity).
+          target.voices = [{ note: lowestNote, velocity: track.trigVelocity ?? 100, length: 1, nudge: 0 }];
         }
 
         this.state.emit('stepChanged', {

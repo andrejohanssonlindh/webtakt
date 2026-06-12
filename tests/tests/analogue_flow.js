@@ -102,24 +102,36 @@ suite('Analogue flow', () => {
       `velocity should make the soft note quieter (hard rms=${rms(hard).toFixed(5)}, soft=${rms(softW).toFixed(5)})`);
   });
 
-  test('digital path unchanged: velSens has no effect when not analogue', async () => {
-    // Regression guard — no worklet needed. With the digital engine, velocity
-    // sensitivity must be ignored entirely, so soft and hard notes have equal
-    // amplitude (the original behaviour for every existing machine).
-    const hard = await makeOfflineTrack('synth', DURATION);
-    hard.track.envelope.setParam('env.velSens', 1.0);   // should be ignored (digital)
-    hard.track.envelope.setParam('env.sustain', 0.8);
-    const [hardW] = await renderSteps(hard.track, hard.ctx, hard.sampleRate, 1, STEP_SEC,
-      () => ({ note: 60, velocity: 127, length: STEP_LEN }));
+  test('digital path: velSens curve is a no-op (velocity scales linearly)', async () => {
+    // Regression guard — no worklet needed. Velocity ALWAYS scales amplitude
+    // (Envelope.scheduleNote: velFactor = vel on the digital path). What velSens
+    // does is add an extra non-linear *curve*, and that curve must be inert when
+    // not analogue. So the digital amp ratio must follow the LINEAR velocity ratio
+    // (127/20 ≈ 6.35) regardless of env.velSens — i.e. velSens=0 and velSens=1
+    // produce the same digital output.
+    async function render(velSens, velocity) {
+      const t = await makeOfflineTrack('synth', DURATION);
+      t.track.envelope.setParam('env.velSens', velSens);  // curve only — inert on digital
+      t.track.envelope.setParam('env.sustain', 0.8);
+      const [w] = await renderSteps(t.track, t.ctx, t.sampleRate, 1, STEP_SEC,
+        () => ({ note: 60, velocity, length: STEP_LEN }));
+      return rms(w);
+    }
 
-    const soft = await makeOfflineTrack('synth', DURATION);
-    soft.track.envelope.setParam('env.velSens', 1.0);
-    soft.track.envelope.setParam('env.sustain', 0.8);
-    const [softW] = await renderSteps(soft.track, soft.ctx, soft.sampleRate, 1, STEP_SEC,
-      () => ({ note: 60, velocity: 20, length: STEP_LEN }));
+    // velSens must not change the digital result: hard@0 == hard@1, soft@0 == soft@1.
+    const hard0 = await render(0.0, 127);
+    const hard1 = await render(1.0, 127);
+    const soft0 = await render(0.0, 20);
+    const soft1 = await render(1.0, 20);
 
-    assert.near(rms(hardW), rms(softW), Math.max(rms(hardW) * 0.05, 1e-4),
-      `digital velSens must be a no-op (hard rms=${rms(hardW).toFixed(5)}, soft=${rms(softW).toFixed(5)})`);
+    assert.near(hard0, hard1, Math.max(hard0 * 0.05, 1e-4),
+      `digital velSens curve must be inert at high vel (velSens0=${hard0.toFixed(5)}, velSens1=${hard1.toFixed(5)})`);
+    assert.near(soft0, soft1, Math.max(soft0 * 0.05, 1e-4),
+      `digital velSens curve must be inert at low vel (velSens0=${soft0.toFixed(5)}, velSens1=${soft1.toFixed(5)})`);
+
+    // And velocity still scales amplitude linearly on the digital path.
+    assert.gt(hard0, soft0 * 2,
+      `digital velocity should scale amplitude linearly (hard=${hard0.toFixed(5)}, soft=${soft0.toFixed(5)})`);
   });
 
   test('chorus changes the signal when enabled', async () => {

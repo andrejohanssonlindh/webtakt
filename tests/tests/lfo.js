@@ -101,6 +101,10 @@ suite('LFO', () => {
       const { track, ctx, sampleRate } = await makeOfflineTrack('synth', SR_DUR);
       track.filter.setParam('filter.type', 'lowpass');
       track.filter.setParam('filter.cutoff', 60);    // base near the floor
+      track.filter.setParam('filter.slope', 1);       // steepen rolloff so the dark (down)
+                                                      // half genuinely kills a 130 Hz note —
+                                                      // a gentle single-stage slope leaks too
+                                                      // much and makes the ratio borderline
       track.filter.setParam('filter.envAmount', 0);   // isolate the LFO from the filter env
       track.lfos[0].setParam('lfo.waveform', 'square');
       track.lfos[0].setParam('lfo.syncMode', 'hz');

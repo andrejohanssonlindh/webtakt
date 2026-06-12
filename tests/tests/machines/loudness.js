@@ -27,7 +27,12 @@ import { suite, test, assert, makeOfflineTrack, fireStep, rms } from '../../runn
 
 // Render conditions — identical to the bench (tests/loudness.js).
 const NOTE       = 60;
-const VELOCITY   = 100;
+// Full velocity. The trims (LoudnessTrim.js) were calibrated against full-scale
+// note output; _fireStep now honours per-voice velocity (and the Envelope scales
+// amp by velocity/127), so the bench/guard must fire at 127 to measure the level
+// the trims actually target. (Previously velocity was ignored and notes always
+// played at trigVelocity=127, so this preserves the calibration reference.)
+const VELOCITY   = 127;
 const HITS       = 8;
 const STEP_SEC   = 0.5;
 const RENDER_SEC = HITS * STEP_SEC + 1.0;

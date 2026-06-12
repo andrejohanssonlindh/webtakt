@@ -31,6 +31,7 @@
 
 import { Machine } from './Machine.js';
 import { makeTrimGain } from './LoudnessTrim.js';
+import { noiseRandomValue } from '../util/AudioBuffers.js';
 
 export class KarplusMachine extends Machine {
   // All synthesis params are JS-only (read per-noteOn during buffer synthesis).
@@ -92,7 +93,7 @@ export class KarplusMachine extends Machine {
     const wavetable  = new Float32Array(exciteLen);
     let   lpState    = 0;
     for (let i = 0; i < exciteLen; i++) {
-      const noise = Math.random() * 2 - 1;
+      const noise = noiseRandomValue() * 2 - 1;  // seeded in tests (deterministic), Math.random in app
       lpState     = lpAlpha * noise + (1 - lpAlpha) * lpState;
       wavetable[i] = lpState;
     }

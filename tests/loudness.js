@@ -40,7 +40,7 @@ function makeToneBuffer(ctx, freq = 261.63, dur = 0.5) {
 }
 
 const NOTE      = 60;    // C4
-const VELOCITY  = 100;
+const VELOCITY  = 127;   // full velocity — matches the trim calibration (see machines/loudness.js)
 const HITS      = 8;     // fire 8 steps — spans the whole voice pool round-robin
 const STEP_SEC  = 0.5;   // 120 BPM eighth-ish spacing; long enough for tails
 const RENDER_SEC = HITS * STEP_SEC + 1.0;  // + tail for the last hit

@@ -23,6 +23,8 @@
  * reuse it without inheriting each other's structure.
  */
 
+import { noiseRandomValue } from '../util/AudioBuffers.js';
+
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 export const rand  = (lo = -1, hi = 1) => lo + Math.random() * (hi - lo);
 
@@ -47,12 +49,12 @@ export function makeImperfectWave(ctx, type, { tolerance = 0.03, pulseWidth = 0.
         a = 1 / n;
         break;
       case 'square':
-        a = n % 2 === 1 ? 1 / n : (tolerance * 0.5 * Math.random()) / n; // even-harmonic leakage
+        a = n % 2 === 1 ? 1 / n : (tolerance * 0.5 * noiseRandomValue()) / n; // even-harmonic leakage
         break;
       case 'triangle':
         a = n % 2 === 1
           ? ((n % 4 === 1 ? 1 : -1) / (n * n))
-          : (tolerance * 0.25 * Math.random()) / (n * n);
+          : (tolerance * 0.25 * noiseRandomValue()) / (n * n);
         break;
       case 'pulse':
         a = (2 / (n * Math.PI)) * Math.sin(n * Math.PI * pulseWidth);
@@ -64,9 +66,11 @@ export function makeImperfectWave(ctx, type, { tolerance = 0.03, pulseWidth = 0.
         a = 1 / n;
     }
     if (a === 0) continue;
-    a *= 1 + rand() * tolerance;          // harmonic amplitude tolerance
-    a *= Math.exp(-0.0007 * n * n);       // slew limiting: gentle HF rounding
-    const ph = rand() * tolerance * 0.7;  // slight phase smear
+    // Use the (test-seedable) noise source for spectrum randomness so analogue
+    // peak/RMS are reproducible under test; production still varies per voice.
+    a *= 1 + (noiseRandomValue() * 2 - 1) * tolerance;   // harmonic amplitude tolerance
+    a *= Math.exp(-0.0007 * n * n);                       // slew limiting: gentle HF rounding
+    const ph = (noiseRandomValue() * 2 - 1) * tolerance * 0.7;  // slight phase smear
     imag[n] = a * Math.cos(ph);
     real[n] = a * Math.sin(ph);
   }
@@ -86,7 +90,7 @@ export function makePinkBuffer(ctx, seconds) {
   const d = buf.getChannelData(0);
   let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
   for (let i = 0; i < len; i++) {
-    const w = Math.random() * 2 - 1;
+    const w = noiseRandomValue() * 2 - 1;
     b0 = 0.99886 * b0 + w * 0.0555179;
     b1 = 0.99332 * b1 + w * 0.0750759;
     b2 = 0.969 * b2 + w * 0.153852;
