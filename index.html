@@ -264,6 +264,10 @@
     // ── Mount UI ─────────────────────────────────────────────
     const trackRow   = new TrackRow(document.getElementById('track-row'), state);
     const synthPanel = new SynthPanel(document.getElementById('synth-panel'), state, library, _openModal, project.sampleStore, audio.context, midiEngine);
+    // Pull in factory sounds from the sounds/ folder (async fetch). Re-render the
+    // SOUNDS tab once they arrive so the list isn't empty on first paint. Tolerant
+    // of failure (e.g. file://) — the library just shows user sounds.
+    library.init().then(added => { if (added && state.activeTab === 'sounds') synthPanel.render(); });
     const stepGrid   = new StepGrid(document.getElementById('step-grid'), state);
     const oscilloscope = new Oscilloscope(synthPanel.scopeCanvas, audio.analyser);
     oscilloscope.start();

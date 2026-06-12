@@ -1,0 +1,83 @@
+{
+  "id": "seed_silk_kick",
+  "name": "Silk Kick",
+  "tags": [
+    "AI",
+    "kick",
+    "drum",
+    "round"
+  ],
+  "machine": {
+    "type": "kick.silk",
+    "params": {
+      "tune": 55,
+      "decay": 0.5,
+      "sweep": 5.5,
+      "punch": 0.8,
+      "punch.decay": 0.022,
+      "output.level": 0.95
+    }
+  },
+  "filter": {
+    "params": {
+      "filter.type": "lowpass",
+      "filter.cutoff": 8000,
+      "filter.resonance": 1.0,
+      "filter.gain": 0,
+      "filter.envAmount": 0.3,
+      "base.lpf": 20000,
+      "base.hpf": 20
+    }
+  },
+  "envelope": {
+    "params": {
+      "env.attack": 0.01,
+      "env.decay": 0.1,
+      "env.sustain": 0.7,
+      "env.release": 0.3,
+      "fenv.attack": 0.01,
+      "fenv.decay": 0.2,
+      "fenv.sustain": 0.0,
+      "fenv.release": 0.3
+    }
+  },
+  "delayFX": {
+    "params": {
+      "delay.time": 0.25,
+      "delay.feedback": 0.3,
+      "delay.wet": 0
+    },
+    "enabled": false
+  },
+  "bitcrushFX": {
+    "params": {
+      "crush.bits": 16,
+      "crush.rate": 1.0,
+      "crush.wet": 0
+    },
+    "enabled": false
+  },
+  "reverbFX": {
+    "params": {
+      "reverb.decay": 1.5,
+      "reverb.predelay": 0.02,
+      "reverb.damp": 8000,
+      "reverb.wet": 0
+    },
+    "enabled": false
+  },
+  "analogue": false,
+  "lfos": [
+    {
+      "params": {
+        "lfo.waveform": "sine",
+        "lfo.speed": 0.1,
+        "lfo.speedMult": 1,
+        "lfo.depth": 30
+      },
+      "destPath": ""
+    }
+  ],
+  "pan": 0,
+  "trigTone": 0
+}

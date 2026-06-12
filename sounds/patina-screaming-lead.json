@@ -1,0 +1,109 @@
+{
+  "id": "seed_patina_screaming_lead",
+  "name": "Patina Screaming Lead",
+  "tags": [
+    "AI",
+    "patina",
+    "analogue",
+    "lead",
+    "mono"
+  ],
+  "machine": {
+    "type": "moogish",
+    "params": {
+      "osc1.waveform": "saw",
+      "osc1.octave": 0,
+      "osc1.detune": -3,
+      "osc1.level": 0.55,
+      "osc2.waveform": "saw",
+      "osc2.octave": 1,
+      "osc2.detune": 4,
+      "osc2.level": 0.35,
+      "osc3.waveform": "saw",
+      "osc3.octave": 0,
+      "osc3.detune": 0,
+      "osc3.level": 0,
+      "sub.level": 0,
+      "noise.level": 0.3,
+      "drift": 0.6,
+      "hum": 0.15,
+      "humFreq": 50,
+      "output.level": 0.8
+    }
+  },
+  "filter": {
+    "params": {
+      "filter.engine": "analogue",
+      "filter.type": "lowpass",
+      "filter.cutoff": 2400,
+      "filter.resonance": 9.617391304347827,
+      "filter.gain": 0,
+      "filter.envAmount": 0.18181818181818182,
+      "filter.drive": 4.0,
+      "filter.drift": 0.01,
+      "filter.keytrack": 0.6,
+      "base.lpf": 20000,
+      "base.hpf": 20
+    }
+  },
+  "envelope": {
+    "params": {
+      "env.attack": 0.01,
+      "env.decay": 0.2,
+      "env.sustain": 0.85,
+      "env.release": 0.2,
+      "fenv.attack": 0.01,
+      "fenv.decay": 0.35,
+      "fenv.sustain": 0.4,
+      "fenv.release": 0.2,
+      "env.velSens": 0.6
+    }
+  },
+  "delayFX": {
+    "params": {
+      "delay.time": 0.25,
+      "delay.feedback": 0.3,
+      "delay.wet": 0
+    },
+    "enabled": false
+  },
+  "bitcrushFX": {
+    "params": {
+      "crush.bits": 16,
+      "crush.rate": 1.0,
+      "crush.wet": 0
+    },
+    "enabled": false
+  },
+  "chorusFX": {
+    "params": {
+      "chorus.mix": 0.2,
+      "chorus.rate": 0.7,
+      "chorus.depth": 0.4
+    },
+    "enabled": true
+  },
+  "reverbFX": {
+    "params": {
+      "reverb.decay": 1.8,
+      "reverb.predelay": 0.02,
+      "reverb.damp": 9000.0,
+      "reverb.wet": 0.18
+    },
+    "enabled": true
+  },
+  "analogue": true,
+  "lfos": [
+    {
+      "params": {
+        "lfo.waveform": "sine",
+        "lfo.speed": 0.1,
+        "lfo.speedMult": 1,
+        "lfo.depth": 30
+      },
+      "destPath": ""
+    }
+  ],
+  "pan": 0,
+  "trigTone": 0
+}

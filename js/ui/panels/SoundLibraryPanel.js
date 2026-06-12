@@ -11,6 +11,8 @@
  * Called by SynthPanel._renderSounds(track).
  */
 
+import { bufferToWav } from '../../state/SampleStore.js';
+
 export class SoundLibraryPanel {
   /**
    * @param {HTMLElement} container
@@ -161,6 +163,12 @@ export class SoundLibraryPanel {
     editBtn.title = 'Edit name / tags';
     editBtn.addEventListener('click', () => this._editSound(sound));
 
+    const exportBtn = document.createElement('button');
+    exportBtn.className = 'btn sl-card-btn';
+    exportBtn.textContent = '⤓';
+    exportBtn.title = 'Export to file (sounds/ + samples/)';
+    exportBtn.addEventListener('click', () => this._exportSound(sound));
+
     const delBtn = document.createElement('button');
     delBtn.className = 'btn sl-card-btn sl-card-btn-del';
     delBtn.textContent = '✕';
@@ -173,10 +181,42 @@ export class SoundLibraryPanel {
     actions.appendChild(previewBtn);
     actions.appendChild(loadBtn);
     actions.appendChild(editBtn);
+    actions.appendChild(exportBtn);
     actions.appendChild(delBtn);
     card.appendChild(actions);
 
     return card;
+  }
+
+  /**
+   * Export a sound to committable files: a sounds/<slug>.json plus a
+   * samples/<id>.wav for every sample the sound references. Drop the .json into
+   * sounds/, add its filename to sounds/index.json, drop any .wav into samples/,
+   * and commit — it then loads as a factory sound. Reuses the project-export
+   * Blob download pattern.
+   */
+  async _exportSound(sound) {
+    // Collect referenced sample ids from the machine (sampler / wt-sampler).
+    const m = sound.machine ?? {};
+    const sampleIds = [m.sampleId, m.sampleIdA, m.sampleIdB].filter(Boolean);
+
+    // Build the file payload: strip runtime-only fields, record sample filenames.
+    const { factory, createdAt, ...rest } = sound;
+    const payload = { ...rest };
+    if (sampleIds.length) payload.samples = sampleIds.map(id => `${id}.wav`);
+
+    const slug = (sound.name || 'sound').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'sound';
+    _download(`${slug}.json`, new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+
+    // Export each referenced sample as a real .wav (named by its id, matching
+    // the samples/<id>.wav path the loader fetches).
+    const sampleStore = this.state.project?.sampleStore;
+    const audioCtx    = this.state.project?.audio?.context;
+    for (const id of sampleIds) {
+      if (!sampleStore || !audioCtx) break;
+      const buf = await sampleStore.load(id, audioCtx);
+      if (buf) _download(`${id}.wav`, new Blob([bufferToWav(buf)], { type: 'audio/wav' }));
+    }
   }
 
   _startSave() {
@@ -219,4 +259,14 @@ export class SoundLibraryPanel {
       this._render();
     });
   }
+}
+
+/** Trigger a browser download of a Blob under the given filename. */
+function _download(filename, blob) {
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }

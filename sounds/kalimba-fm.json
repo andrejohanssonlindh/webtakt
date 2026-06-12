@@ -1,0 +1,108 @@
+{
+  "id": "seed_kalimba_fm",
+  "name": "Kalimba FM",
+  "tags": [
+    "AI",
+    "fm",
+    "melodic",
+    "percussive",
+    "world"
+  ],
+  "machine": {
+    "type": "fm",
+    "params": {
+      "op1.ratio": 1.0,
+      "op1.level": 0.85,
+      "op1.detune": 0,
+      "op1.env.a": 0.001,
+      "op1.env.d": 0.7,
+      "op1.env.s": 0.0,
+      "op1.env.r": 0.9,
+      "op2.ratio": 2.756,
+      "op2.level": 0.4,
+      "op2.feedback": 0.0,
+      "op2.detune": 8,
+      "op2.env.a": 0.001,
+      "op2.env.d": 0.25,
+      "op2.env.s": 0.0,
+      "op2.env.r": 0.2,
+      "op3.ratio": 5.0,
+      "op3.level": 0.12,
+      "op3.detune": -5,
+      "op3.env.a": 0.001,
+      "op3.env.d": 0.1,
+      "op3.env.s": 0.0,
+      "op3.env.r": 0.1,
+      "op4.ratio": 8.0,
+      "op4.level": 0.05,
+      "op4.detune": 0,
+      "op4.env.a": 0.001,
+      "op4.env.d": 0.06,
+      "op4.env.s": 0.0,
+      "op4.env.r": 0.05,
+      "output.level": 0.8
+    }
+  },
+  "filter": {
+    "params": {
+      "filter.type": "lowpass",
+      "filter.cutoff": 10000,
+      "filter.resonance": 1.0,
+      "filter.gain": 0,
+      "filter.envAmount": 0,
+      "base.lpf": 20000,
+      "base.hpf": 20
+    }
+  },
+  "envelope": {
+    "params": {
+      "env.attack": 0.001,
+      "env.decay": 0.9,
+      "env.sustain": 0.0,
+      "env.release": 1.0,
+      "fenv.attack": 0.001,
+      "fenv.decay": 0.2,
+      "fenv.sustain": 0.0,
+      "fenv.release": 0.3
+    }
+  },
+  "delayFX": {
+    "params": {
+      "delay.time": 0.25,
+      "delay.feedback": 0.3,
+      "delay.wet": 0
+    },
+    "enabled": false
+  },
+  "bitcrushFX": {
+    "params": {
+      "crush.bits": 16,
+      "crush.rate": 1.0,
+      "crush.wet": 0
+    },
+    "enabled": false
+  },
+  "reverbFX": {
+    "params": {
+      "reverb.decay": 1.8,
+      "reverb.predelay": 0.01,
+      "reverb.damp": 16000,
+      "reverb.wet": 0.25
+    },
+    "enabled": true
+  },
+  "analogue": false,
+  "lfos": [
+    {
+      "params": {
+        "lfo.waveform": "sine",
+        "lfo.speed": 0.1,
+        "lfo.speedMult": 1,
+        "lfo.depth": 30
+      },
+      "destPath": ""
+    }
+  ],
+  "pan": 0,
+  "trigTone": 0
+}

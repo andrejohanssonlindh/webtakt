@@ -15,6 +15,7 @@
  */
 
 const STORAGE_KEY = 'webtakt_samples';
+const SAMPLES_DIR = 'samples';
 
 export class SampleStore {
   constructor() {
@@ -59,7 +60,10 @@ export class SampleStore {
   }
 
   /**
-   * Decode a saved sample into an AudioBuffer.
+   * Decode a saved sample into an AudioBuffer. Resolution order:
+   *   1. in-memory cache
+   *   2. localStorage (user-imported samples)
+   *   3. the shipped samples/ folder (factory samples a sound file references)
    * @param {string} id
    * @param {AudioContext} context
    * @returns {Promise<AudioBuffer|null>}
@@ -69,11 +73,30 @@ export class SampleStore {
 
     const all   = this._loadAll();
     const entry = all.find(e => e.id === id);
-    if (!entry) return null;
+    if (entry) {
+      const bytes = _base64ToUint8(entry.data);
+      try {
+        const buf = await context.decodeAudioData(bytes.buffer.slice(0));
+        this._cache.set(id, buf);
+        return buf;
+      } catch (_) {
+        return null;
+      }
+    }
 
-    const bytes = _base64ToUint8(entry.data);
+    // Not in localStorage — try the shipped samples/ folder. Factory sounds
+    // reference a sampleId whose audio lives at samples/<id>.wav. Cached in
+    // memory on success; not written to localStorage (re-fetched each load).
+    return this._loadFromFolder(id, context);
+  }
+
+  /** @returns {Promise<AudioBuffer|null>} */
+  async _loadFromFolder(id, context) {
     try {
-      const buf = await context.decodeAudioData(bytes.buffer.slice(0));
+      const res = await fetch(`${SAMPLES_DIR}/${id}.wav`);
+      if (!res.ok) return null;
+      const bytes = await res.arrayBuffer();
+      const buf   = await context.decodeAudioData(bytes.slice(0));
       this._cache.set(id, buf);
       return buf;
     } catch (_) {
@@ -107,7 +130,9 @@ export class SampleStore {
 
 // ── WAV encoder ────────────────────────────────────────────────────────────
 
-/** Encode an AudioBuffer to a PCM16 WAV Uint8Array. */
+/** Encode an AudioBuffer to a PCM16 WAV Uint8Array. Exported for sound export. */
+export function bufferToWav(buffer) { return _bufferToWav(buffer); }
+
 function _bufferToWav(buffer) {
   const numChannels = buffer.numberOfChannels;
   const sampleRate  = buffer.sampleRate;

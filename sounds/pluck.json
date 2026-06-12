@@ -1,0 +1,82 @@
+{
+  "id": "seed_pluck",
+  "name": "Pluck",
+  "tags": [
+    "AI",
+    "pluck",
+    "bright",
+    "percussive"
+  ],
+  "machine": {
+    "type": "synth",
+    "params": {
+      "osc.waveform": "triangle",
+      "osc.detune": 0,
+      "sub.level": 0.15,
+      "sub.waveform": "sine",
+      "output.level": 0.85
+    }
+  },
+  "filter": {
+    "params": {
+      "filter.type": "lowpass",
+      "filter.cutoff": 3500,
+      "filter.resonance": 1.8,
+      "filter.gain": 0,
+      "filter.envAmount": 0.6,
+      "base.lpf": 18000,
+      "base.hpf": 30
+    }
+  },
+  "envelope": {
+    "params": {
+      "env.attack": 0.001,
+      "env.decay": 0.28,
+      "env.sustain": 0.0,
+      "env.release": 0.35,
+      "fenv.attack": 0.001,
+      "fenv.decay": 0.2,
+      "fenv.sustain": 0.0,
+      "fenv.release": 0.15
+    }
+  },
+  "delayFX": {
+    "params": {
+      "delay.time": 0.25,
+      "delay.feedback": 0.3,
+      "delay.wet": 0.22
+    },
+    "enabled": true
+  },
+  "bitcrushFX": {
+    "params": {
+      "crush.bits": 16,
+      "crush.rate": 1.0,
+      "crush.wet": 0
+    },
+    "enabled": false
+  },
+  "reverbFX": {
+    "params": {
+      "reverb.decay": 1.2,
+      "reverb.predelay": 0.01,
+      "reverb.damp": 12000,
+      "reverb.wet": 0.18
+    },
+    "enabled": true
+  },
+  "analogue": false,
+  "lfos": [
+    {
+      "params": {
+        "lfo.waveform": "sine",
+        "lfo.speed": 0.1,
+        "lfo.speedMult": 1,
+        "lfo.depth": 30
+      },
+      "destPath": ""
+    }
+  ],
+  "pan": 0,
+  "trigTone": 0
+}
