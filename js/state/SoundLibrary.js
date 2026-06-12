@@ -15,6 +15,7 @@ const _defEnv    = () => ({ params: { 'env.attack': 0.01, 'env.decay': 0.1, 'env
 const _defDelay  = () => ({ params: { 'delay.time': 0.25, 'delay.feedback': 0.3, 'delay.wet': 0 }, enabled: false });
 const _defCrush  = () => ({ params: { 'crush.bits': 16, 'crush.rate': 1.0, 'crush.wet': 0 }, enabled: false });
 const _defReverb = () => ({ params: { 'reverb.decay': 1.5, 'reverb.predelay': 0.02, 'reverb.damp': 8000, 'reverb.wet': 0 }, enabled: false });
+const _defChorus = () => ({ params: { 'chorus.mix': 0, 'chorus.rate': 0.55, 'chorus.depth': 0.5 }, enabled: false });
 const _noFX      = () => ({ delayFX: _defDelay(), bitcrushFX: _defCrush(), reverbFX: _defReverb() });
 
 export class SoundLibrary {
@@ -148,7 +149,7 @@ export class SoundLibrary {
   }
 
   _seed() {
-    const mk = (name, tags, machine, filter, envelope, fx) => ({
+    const mk = (name, tags, machine, filter, envelope, fx, opts = {}) => ({
       id:         'seed_' + name.replace(/\s+/g, '_').toLowerCase(),
       name,
       tags:       ['AI', ...tags],
@@ -157,10 +158,103 @@ export class SoundLibrary {
       filter:     filter  ?? _defFilter(),
       envelope:   envelope ?? _defEnv(),
       ...fx,
+      analogue:   opts.analogue ?? false,
       lfos:       [{ params: { 'lfo.waveform': 'sine', 'lfo.speed': 0.1, 'lfo.speedMult': 1, 'lfo.depth': 30 }, destPath: '' }],
       pan:        0,
       trigTone:   0,
     });
+
+    // ── Patina preset → Webtakt mapping helpers (analogue Moogish seeds) ──
+    // Patina's resonance is the ladder value 0–1.15; Webtakt stores the biquad Q
+    // knob (0.1–20) and maps it to the ladder linearly (_resToLadder). Invert it
+    // here so a ported preset hits the same ladder resonance.
+    const ladderResToQ = r => 0.1 + (Math.min(Math.max(r, 0), 1.15) / 1.15) * (20 - 0.1);
+    // Patina filter-env `amount` is Hz added on top of cutoff (peak = cutoff +
+    // amount). Webtakt's envAmount is a 0–1 fraction of the remaining headroom up
+    // to 20 kHz. Convert so the peak cutoff matches.
+    const envAmtFromHz = (amountHz, cutoff) =>
+      amountHz <= 0 ? 0 : Math.min(1, amountHz / Math.max(1, 20000 - cutoff));
+    // Build the four FX blocks from a Patina `fx` object. Chorus/reverb are the
+    // analogue-flow effects; delay/crush stay off (Patina has neither).
+    const patinaFX = (fx = {}) => {
+      const ch = fx.chorus ?? {};
+      const rv = fx.reverb ?? {};
+      const chMix = ch.mix ?? 0;
+      const rvMix = rv.mix ?? 0;
+      return {
+        delayFX:    _defDelay(),
+        bitcrushFX: _defCrush(),
+        chorusFX: {
+          params: { 'chorus.mix': chMix, 'chorus.rate': ch.rate ?? 0.55, 'chorus.depth': ch.depth ?? 0.5 },
+          enabled: chMix > 0,
+        },
+        reverbFX: {
+          // Patina `size` (s of tail) ≈ decay; `tone` 0–1 (darker→brighter) → damp Hz.
+          params: {
+            'reverb.decay':    rv.size ?? 1.5,
+            'reverb.predelay': 0.02,
+            'reverb.damp':     2000 + (rv.tone ?? 0.4) * 14000,
+            'reverb.wet':      rvMix,
+          },
+          enabled: rvMix > 0,
+        },
+      };
+    };
+    // Map up to three Patina oscillators (+ sub/noise) onto a Moogish machine.
+    // Patina osc types are already Moogish waveform names (saw/square/triangle/
+    // sine/pulse). Missing oscs are silenced (level 0).
+    const moogMachine = (oscs, sub = {}, noiseLevel = 0, character = {}) => {
+      const o = i => oscs[i] ?? { type: 'saw', octave: 0, detune: 0, level: 0 };
+      const p = {};
+      for (let i = 0; i < 3; i++) {
+        const osc = o(i);
+        p[`osc${i + 1}.waveform`] = osc.type ?? 'saw';
+        p[`osc${i + 1}.octave`]   = osc.octave ?? 0;
+        p[`osc${i + 1}.detune`]   = osc.detune ?? 0;
+        p[`osc${i + 1}.level`]    = i < oscs.length ? (osc.level ?? 0.45) : 0;
+      }
+      p['sub.level']   = sub.level ?? 0;
+      p['noise.level'] = noiseLevel;
+      p['drift']       = character.drift ?? 0.5;
+      p['hum']         = character.hum ?? 0.15;
+      p['humFreq']     = character.humFreq ?? 50;
+      p['output.level'] = 0.8;
+      return { type: 'moogish', params: p };
+    };
+    // Build a full analogue Moogish seed straight from a Patina preset object.
+    const patina = (name, tags, P) => {
+      const f  = P.filter ?? {};
+      const e  = P.envelope ?? {};
+      const fe = P.filterEnvelope ?? {};
+      const cutoff = f.cutoff ?? 1400;
+      const machine = moogMachine(P.oscillators ?? [], P.sub, (P.character ?? {}).noiseFloor ?? 0, P.character ?? {});
+      const filter = { params: {
+        'filter.engine':    'analogue',
+        'filter.type':      'lowpass',
+        'filter.cutoff':    cutoff,
+        'filter.resonance': ladderResToQ(f.resonance ?? 0.25),
+        'filter.gain':      0,
+        'filter.envAmount': envAmtFromHz(fe.amount ?? 0, cutoff),
+        'filter.drive':     f.drive ?? 1.6,
+        'filter.drift':     0.01,
+        'filter.keytrack':  f.keytrack ?? 0.4,
+        'base.lpf':         20000,
+        'base.hpf':         20,
+      } };
+      const envelope = { params: {
+        'env.attack':   e.attack  ?? 0.01,
+        'env.decay':    e.decay   ?? 0.25,
+        'env.sustain':  e.sustain ?? 0.7,
+        'env.release':  e.release ?? 0.35,
+        'fenv.attack':  fe.attack  ?? 0.01,
+        'fenv.decay':   fe.decay   ?? 0.3,
+        'fenv.sustain': fe.sustain ?? 0.25,
+        'fenv.release': fe.release ?? 0.3,
+        'env.velSens':  P.velocitySensitivity ?? 0.6,
+      } };
+      return mk(name, ['patina', 'analogue', ...tags], machine, filter, envelope,
+                patinaFX(P.fx), { analogue: true });
+    };
 
     const seeds = [
 
@@ -260,6 +354,130 @@ export class SoundLibrary {
         { params: { 'filter.type': 'highpass', 'filter.cutoff': 120, 'filter.resonance': 1.0, 'filter.gain': 0, 'filter.envAmount': 0, 'base.lpf': 20000, 'base.hpf': 80 } },
         _defEnv(),
         { delayFX: _defDelay(), bitcrushFX: _defCrush(), reverbFX: { params: { 'reverb.decay': 0.8, 'reverb.predelay': 0.005, 'reverb.damp': 6000, 'reverb.wet': 0.28 }, enabled: true } }),
+
+      // ── PATINA presets — analogue Moogish ports (A/B vs the originals) ──
+      // Faithful transcriptions of js/patina/patina.js PRESETS, mapped onto the
+      // MoogishMachine + analogue Filter/Envelope/Chorus flow via patina().
+
+      patina('Patina Init', ['init'], {
+        oscillators: [
+          { type: 'saw', octave: 0, detune: -6, level: 0.5 },
+          { type: 'saw', octave: 0, detune: +7, level: 0.5 },
+        ],
+        filter: { cutoff: 1400, resonance: 0.25, drive: 1.6, keytrack: 0.4 },
+        envelope:       { attack: 0.01, decay: 0.25, sustain: 0.7, release: 0.35 },
+        filterEnvelope: { attack: 0.01, decay: 0.30, sustain: 0.25, release: 0.30, amount: 2200 },
+        character: { drift: 0.5, noiseFloor: 0.35, hum: 0.15, humFreq: 50 },
+      }),
+
+      patina('Patina Warm Pad', ['pad', 'lush'], {
+        oscillators: [
+          { type: 'saw', octave: 0, detune: -9, level: 0.42 },
+          { type: 'saw', octave: 0, detune: +8, level: 0.42 },
+          { type: 'triangle', octave: -1, detune: 2, level: 0.35 },
+        ],
+        filter: { cutoff: 900, resonance: 0.18, drive: 1.8, keytrack: 0.3 },
+        envelope: { attack: 0.9, decay: 1.2, sustain: 0.8, release: 1.8 },
+        filterEnvelope: { attack: 1.4, decay: 1.6, sustain: 0.5, release: 1.6, amount: 1100 },
+        character: { drift: 0.7, noiseFloor: 0.45, hum: 0.2 },
+        fx: { chorus: { mix: 0.55, rate: 0.5, depth: 0.6 }, reverb: { mix: 0.3, size: 3.2, tone: 0.35 } },
+      }),
+
+      patina('Patina Fat Bass', ['bass', 'mono'], {
+        oscillators: [
+          { type: 'saw', octave: 0, detune: -4, level: 0.55 },
+          { type: 'square', octave: 0, detune: 5, level: 0.4 },
+        ],
+        sub: { level: 0.55 },
+        filter: { cutoff: 420, resonance: 0.35, drive: 3.2, keytrack: 0.5 },
+        envelope: { attack: 0.004, decay: 0.3, sustain: 0.55, release: 0.12 },
+        filterEnvelope: { attack: 0.004, decay: 0.22, sustain: 0.15, release: 0.1, amount: 2600 },
+        character: { drift: 0.4, noiseFloor: 0.25, hum: 0.1 },
+        fx: { chorus: { mix: 0 }, reverb: { mix: 0 } },
+      }),
+
+      patina('Patina Screaming Lead', ['lead', 'mono'], {
+        oscillators: [
+          { type: 'saw', octave: 0, detune: -3, level: 0.55 },
+          { type: 'saw', octave: 1, detune: 4, level: 0.35 },
+        ],
+        filter: { cutoff: 2400, resonance: 0.55, drive: 4.0, keytrack: 0.6 },
+        envelope: { attack: 0.01, decay: 0.2, sustain: 0.85, release: 0.2 },
+        filterEnvelope: { attack: 0.01, decay: 0.35, sustain: 0.4, release: 0.2, amount: 3200 },
+        character: { drift: 0.6, noiseFloor: 0.3, hum: 0.15 },
+        fx: { chorus: { mix: 0.2, rate: 0.7, depth: 0.4 }, reverb: { mix: 0.18, size: 1.8, tone: 0.5 } },
+      }),
+
+      patina('Patina String Machine', ['strings', 'lush'], {
+        oscillators: [
+          { type: 'saw', octave: 0, detune: -11, level: 0.4 },
+          { type: 'saw', octave: 0, detune: 10, level: 0.4 },
+          { type: 'saw', octave: 1, detune: -5, level: 0.22 },
+        ],
+        filter: { cutoff: 2600, resonance: 0.08, drive: 1.3, keytrack: 0.4 },
+        envelope: { attack: 0.35, decay: 0.5, sustain: 0.85, release: 0.9 },
+        filterEnvelope: { attack: 0.4, decay: 0.5, sustain: 0.6, release: 0.8, amount: 500 },
+        character: { drift: 0.8, noiseFloor: 0.5, hum: 0.25 },
+        fx: { chorus: { mix: 0.85, rate: 0.65, depth: 0.8 }, reverb: { mix: 0.25, size: 2.6, tone: 0.4 } },
+      }),
+
+      patina('Patina EP Keys', ['keys', 'ep'], {
+        oscillators: [
+          { type: 'sine', octave: 0, detune: -2, level: 0.6 },
+          { type: 'triangle', octave: 1, detune: 3, level: 0.18 },
+        ],
+        sub: { level: 0.2 },
+        filter: { cutoff: 1900, resonance: 0.12, drive: 2.2, keytrack: 0.7 },
+        envelope: { attack: 0.003, decay: 1.6, sustain: 0.25, release: 0.5 },
+        filterEnvelope: { attack: 0.002, decay: 0.7, sustain: 0.1, release: 0.4, amount: 1500 },
+        velocitySensitivity: 0.85,
+        character: { drift: 0.35, noiseFloor: 0.3, hum: 0.2 },
+        fx: { chorus: { mix: 0.4, rate: 0.8, depth: 0.5 }, reverb: { mix: 0.22, size: 2.0, tone: 0.45 } },
+      }),
+
+      patina('Patina Acid 303', ['acid', 'mono'], {
+        oscillators: [{ type: 'square', octave: 0, detune: 0, level: 0.7 }],
+        filter: { cutoff: 320, resonance: 0.92, drive: 2.6, keytrack: 0.4 },
+        envelope: { attack: 0.003, decay: 0.18, sustain: 0.0, release: 0.08 },
+        filterEnvelope: { attack: 0.003, decay: 0.22, sustain: 0.0, release: 0.1, amount: 3400 },
+        character: { drift: 0.45, noiseFloor: 0.2, hum: 0.1 },
+        fx: { chorus: { mix: 0 }, reverb: { mix: 0.1, size: 1.2, tone: 0.5 } },
+      }),
+
+      patina('Patina Poly Brass', ['brass'], {
+        oscillators: [
+          { type: 'saw', octave: 0, detune: -7, level: 0.5 },
+          { type: 'saw', octave: 0, detune: 6, level: 0.5 },
+        ],
+        filter: { cutoff: 700, resonance: 0.3, drive: 2.4, keytrack: 0.5 },
+        envelope: { attack: 0.06, decay: 0.25, sustain: 0.85, release: 0.25 },
+        filterEnvelope: { attack: 0.09, decay: 0.4, sustain: 0.45, release: 0.25, amount: 2800 },
+        character: { drift: 0.6, noiseFloor: 0.35, hum: 0.2 },
+        fx: { chorus: { mix: 0.25, rate: 0.6, depth: 0.4 }, reverb: { mix: 0.15, size: 1.8, tone: 0.5 } },
+      }),
+
+      patina('Patina Haunted Organ', ['organ', 'dark'], {
+        oscillators: [
+          { type: 'pulse', octave: 0, detune: -5, level: 0.4 },
+          { type: 'pulse', octave: 0, detune: 6, level: 0.4 },
+          { type: 'sine', octave: 1, detune: 0, level: 0.2 },
+        ],
+        sub: { level: 0.3 },
+        filter: { cutoff: 1500, resonance: 0.2, drive: 1.8, keytrack: 0.3 },
+        envelope: { attack: 0.05, decay: 0.1, sustain: 1.0, release: 0.4 },
+        filterEnvelope: { attack: 0.05, decay: 0.2, sustain: 0.8, release: 0.4, amount: 300 },
+        character: { drift: 0.9, noiseFloor: 0.6, hum: 0.4 },
+        fx: { chorus: { mix: 0.5, rate: 0.4, depth: 0.7 }, reverb: { mix: 0.45, size: 3.6, tone: 0.3 } },
+      }),
+
+      patina('Patina Whistle', ['whistle', 'mono', 'self-osc'], {
+        oscillators: [{ type: 'saw', octave: 0, detune: 0, level: 0.0 }],
+        filter: { cutoff: 800, resonance: 1.08, drive: 1.2, keytrack: 1.0 },
+        envelope: { attack: 0.05, decay: 0.3, sustain: 0.8, release: 0.6 },
+        filterEnvelope: { attack: 0.05, decay: 0.3, sustain: 1.0, release: 0.6, amount: 0 },
+        character: { drift: 0.8, noiseFloor: 0.4, hum: 0.1 },
+        fx: { chorus: { mix: 0.3, rate: 0.5, depth: 0.5 }, reverb: { mix: 0.4, size: 3.0, tone: 0.35 } },
+      }),
 
     ];
 
