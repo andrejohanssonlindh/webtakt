@@ -205,6 +205,8 @@ const EXPECTED = {
     { path: 'sub.level',     label: 'Sub',       type: 'number', min: 0,   max: 1,   default: 0.0,  modulatable: true, lfoMin: 0,   lfoMax: 1,  plockMode: 'audioParam' },
     { path: 'noise.level',   label: 'Noise',     type: 'number', min: 0,   max: 1,   default: 0.0,  modulatable: true, lfoMin: 0,   lfoMax: 1,  plockMode: 'audioParam' },
     { path: 'drift',         label: 'Drift',     type: 'number', min: 0,   max: 1,   default: 0.5,  plockMode: 'js' },
+    { path: 'hum',           label: 'Hum',       type: 'number', min: 0,   max: 1,   default: 0.0,  modulatable: true, lfoMin: 0,   lfoMax: 1,  plockMode: 'js' },
+    { path: 'humFreq',       label: 'Hum Hz',    type: 'enum',   options: [50, 60], plockMode: 'js' },
     { path: 'osc.detune',    label: 'Detune',    type: 'number', min: -100, max: 100, default: 0,   modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
     { path: 'output.level',  label: 'Level',     type: 'number', min: 0,   max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,   lfoMax: 1,  plockMode: 'audioParam' },
   ],

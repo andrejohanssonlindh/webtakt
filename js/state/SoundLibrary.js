@@ -53,7 +53,9 @@ export class SoundLibrary {
       envelope:    json.envelope,
       delayFX:     json.delayFX,
       bitcrushFX:  json.bitcrushFX,
+      chorusFX:    json.chorusFX,
       reverbFX:    json.reverbFX,
+      analogue:    json.analogue,
       lfos:        json.lfos,
       pan:         json.pan,
       trigTone:    json.trigTone,
@@ -79,7 +81,12 @@ export class SoundLibrary {
     track.envelope.fromJSON(sound.envelope ?? {});
     track.delayFX.fromJSON(sound.delayFX ?? {});
     track.bitcrushFX.fromJSON(sound.bitcrushFX ?? {});
+    track.chorusFX.fromJSON(sound.chorusFX ?? {});
     track.reverbFX.fromJSON(sound.reverbFX ?? {});
+    // Analogue flow: derive from the saved flag, or fall back to the restored
+    // filter engine for sounds saved before the flag existed. setAnalogue keeps
+    // the chorus enable + filter engine consistent.
+    track.setAnalogue(sound.analogue ?? (track.filter.getParam('filter.engine') === 'analogue'));
     // Restore sampler buffer via SampleStore if present on the track
     if (track.machine.type === 'sampler' && track.machine.sampleId && track.sampleStore) {
       track.sampleStore.load(track.machine.sampleId, track.audio.context).then(buf => {

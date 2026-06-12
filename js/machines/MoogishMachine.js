@@ -30,9 +30,11 @@
  * Audio graph:
  *   Osc1 → g1 ─┐
  *   Osc2 → g2 ─┤
- *   Osc3 → g3 ─┼→ _mixGain → outputGain → _trimGain → [Filter]
- *   Sub  → gS ─┤
- *   Noise→ gN ─┘
+ *   Osc3 → g3 ─┤
+ *   Sub  → gS ─┼→ _mixGain → outputGain → _trimGain → [Filter]
+ *   Noise→ gN ─┤
+ *   Hum  → gH ─┤
+ *   Hum2 → gH2─┘
  *
  * Parameters (all p-lockable + LFO-assignable where they back an AudioParam):
  *   'osc1.waveform' 'osc1.octave' 'osc1.detune' 'osc1.level'
@@ -41,6 +43,8 @@
  *   'sub.level'     — sub sine, one octave below osc1 (0–1)
  *   'noise.level'   — circuit hiss (0–1)
  *   'drift'         — thermal pitch wander amount (0–1)
+ *   'hum'           — mains hum level (0–1): sine at humFreq + 2nd harmonic
+ *   'humFreq'       — 50 (Europe) | 60 (Americas) Hz
  *   'osc.detune'    — master detune cents (hidden, trig tab), -100..+100
  *   'output.level'  — 0–1
  */
@@ -145,6 +149,14 @@ export class MoogishMachine extends Machine {
                        target: m => m._noiseGain.gain, schedule: 'setTarget', tc: 0.01 },
     'drift':         { label: 'Drift', type: 'number', min: 0, max: 1, default: 0.5,
                        plockMode: 'js' },
+    // Mains hum (ported from Patina): a sine at humFreq + its 2nd harmonic, the
+    // "circuit is never entirely quiet" floor. hum scales both levels; humFreq is
+    // 50 Hz (Europe) or 60 Hz (Americas). _hum (a fixed scalar) drives the gains.
+    'hum':           { label: 'Hum', type: 'number', min: 0, max: 1, default: 0.0,
+                       modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'js',
+                       apply: (v, t, m) => m._applyHum(t) },
+    'humFreq':       { label: 'Hum Hz', type: 'enum', options: [50, 60], default: 50,
+                       plockMode: 'js', apply: (v, t, m) => m._applyHum(t) },
 
     'osc.detune':    { label: 'Detune', type: 'number', min: -100, max: 100, default: 0, hidden: true,
                        modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam',
@@ -226,6 +238,23 @@ export class MoogishMachine extends Machine {
     this._noiseSrc.connect(this._noiseGain);
     this._noiseSrc.start();
 
+    // Mains hum — a sine at humFreq plus its 2nd harmonic (real hum is never a
+    // pure tone), summed into the mix bus. Levels driven by _applyHum from the
+    // `hum` param; ported from Patina (0.0011 / 0.0004 × hum). Off by default.
+    this._humOsc  = context.createOscillator();
+    this._humOsc2 = context.createOscillator();
+    this._humOsc.type  = 'sine';
+    this._humOsc2.type = 'sine';
+    this._humGain  = context.createGain();
+    this._humGain2 = context.createGain();
+    this._humGain.gain.value  = 0;
+    this._humGain2.gain.value = 0;
+    this._humOsc.connect(this._humGain).connect(this._mixGain);
+    this._humOsc2.connect(this._humGain2).connect(this._mixGain);
+    this._humOsc.start();
+    this._humOsc2.start();
+    this._applyHum(context.currentTime);
+
     // Thermal drift clock — bounded random walk on every osc detune, ~12×/s.
     // Released in disconnect() (Machine base warns: un-released timers leak).
     this._driftTimer = setInterval(() => this._tickDrift(), 85);
@@ -282,6 +311,21 @@ export class MoogishMachine extends Machine {
     this._oscSub.frequency.setValueAtTime(subFreq, t);
   }
 
+  /**
+   * Apply the mains-hum level + frequency. hum scales both the fundamental and
+   * its (quieter) 2nd harmonic; humFreq selects 50/60 Hz. Levels ported from
+   * Patina. setTargetAtTime so live `hum` knob moves don't click.
+   */
+  _applyHum(time) {
+    const t    = time ?? this.context.currentTime;
+    const hum  = this._params['hum'];
+    const freq = Number(this._params['humFreq']);
+    this._humOsc.frequency.setTargetAtTime(freq,     t, 0.05);
+    this._humOsc2.frequency.setTargetAtTime(freq * 2, t, 0.05);
+    this._humGain.gain.setTargetAtTime(0.0011 * hum, t, 0.1);
+    this._humGain2.gain.setTargetAtTime(0.0004 * hum, t, 0.1);
+  }
+
   /** Thermal drift: bounded random walk nudging each osc detune. */
   _tickDrift() {
     const cents = this._params['drift'] * 3.5; // up to ±3.5 cents wander
@@ -315,6 +359,8 @@ export class MoogishMachine extends Machine {
     this._oscs.forEach(osc => { try { osc.stop(); } catch (_) {} });
     try { this._oscSub.stop();   } catch (_) {}
     try { this._noiseSrc.stop(); } catch (_) {}
+    try { this._humOsc.stop();   } catch (_) {}
+    try { this._humOsc2.stop();  } catch (_) {}
     this.outputGain.disconnect();
     this._trimGain.disconnect();
   }

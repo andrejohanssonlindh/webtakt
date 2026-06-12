@@ -121,9 +121,10 @@ export class SynthPanel {
     this._fxBar.className = 'fx-bar';
 
     const fxDefs = [
-      { tab: 'delay',  label: 'DLY',   getFx: () => this.state.selectedTrack?.delayFX },
-      { tab: 'crush',  label: 'CRUSH', getFx: () => this.state.selectedTrack?.bitcrushFX },
-      { tab: 'reverb', label: 'REV',   getFx: () => this.state.selectedTrack?.reverbFX },
+      { tab: 'delay',  label: 'DLY',    getFx: () => this.state.selectedTrack?.delayFX },
+      { tab: 'crush',  label: 'CRUSH',  getFx: () => this.state.selectedTrack?.bitcrushFX },
+      { tab: 'chorus', label: 'CHORUS', getFx: () => this.state.selectedTrack?.chorusFX },
+      { tab: 'reverb', label: 'REV',    getFx: () => this.state.selectedTrack?.reverbFX },
     ];
 
     fxDefs.forEach(({ tab, label, getFx }) => {
@@ -221,6 +222,7 @@ export class SynthPanel {
     if (path.startsWith('lfo.'))                              return 'lfo';
     if (path.startsWith('delay.'))                            return 'delay';
     if (path.startsWith('crush.'))                            return 'crush';
+    if (path.startsWith('chorus.'))                           return 'chorus';
     if (path.startsWith('reverb.'))                           return 'reverb';
     if (path === 'trig.tone' || path === 'osc.detune')        return 'trig';
     // Everything else is a machine param → SYNTH tab.
@@ -284,7 +286,9 @@ export class SynthPanel {
           envelope:   track.envelope.toJSON(),
           delayFX:    track.delayFX.toJSON(),
           bitcrushFX: track.bitcrushFX.toJSON(),
+          chorusFX:   track.chorusFX.toJSON(),
           reverbFX:   track.reverbFX.toJSON(),
+          analogue:   track.analogue,
           lfos:       track.lfos.map((lfo, i) => ({
             ...lfo.toJSON(),
             destPath: track._lfoDestPaths[i] ?? '',
@@ -334,7 +338,9 @@ export class SynthPanel {
       track._pool.syncParams();
       track.delayFX.fromJSON(d.delayFX ?? {});
       track.bitcrushFX.fromJSON(d.bitcrushFX ?? {});
+      track.chorusFX.fromJSON(d.chorusFX ?? {});
       track.reverbFX.fromJSON(d.reverbFX ?? {});
+      track.setAnalogue(d.analogue ?? (track.filter.getParam('filter.engine') === 'analogue'));
 
       // Restore LFOs
       track.lfos.forEach(l => l.stop());
@@ -378,6 +384,7 @@ export class SynthPanel {
       case 'midi':   this._renderMidiIn(track); break;
       case 'delay':  this._renderDelay(track);  break;
       case 'crush':  this._renderCrush(track);  break;
+      case 'chorus': this._renderChorus(track); break;
       case 'reverb': this._renderReverb(track); break;
     }
   }
@@ -563,6 +570,10 @@ export class SynthPanel {
 
   _renderCrush(track) {
     new FXPanel().render(this._makeTabContext(track), track.bitcrushFX);
+  }
+
+  _renderChorus(track) {
+    new FXPanel().render(this._makeTabContext(track), track.chorusFX);
   }
 
   _renderReverb(track) {

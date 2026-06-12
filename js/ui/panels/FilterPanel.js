@@ -88,12 +88,16 @@ export class FilterPanel {
       return knob;
     };
 
-    // Engine dropdown (digital biquad ↔ analogue Moog ladder)
+    // Engine dropdown — the track ANALOGUE switch. Selecting 'analogue' drives
+    // the whole analogue flow via Track.setAnalogue: the Moog ladder filter, RC
+    // envelope curves, filter keytrack, velocity sensitivity, and the BBD chorus.
+    // 'digital' is the clean default path. We label it ANALOGUE (not ENGINE) to
+    // reflect that it is more than just the filter engine now.
     const engineRow = document.createElement('div');
     engineRow.className = 'filter-type-row';
     const engineLbl = document.createElement('span');
     engineLbl.className = 'param-label label';
-    engineLbl.textContent = 'ENGINE';
+    engineLbl.textContent = 'ANALOGUE';
     const engineSel = document.createElement('select');
     engineSel.className = 'param-select';
     ['digital','analogue'].forEach(opt => {
@@ -103,7 +107,9 @@ export class FilterPanel {
       engineSel.appendChild(o);
     });
     engineSel.addEventListener('change', () => {
-      writeValue(track.filter, 'filter.engine', engineSel.value, true);
+      // setAnalogue sets filter.engine (mirrored to all voice slots) + the chorus
+      // enable as a unit, keeping the flow consistent.
+      track.setAnalogue(engineSel.value === 'analogue');
       applyEngineVisibility(engineSel.value);
       mainViz.refresh();
     });
@@ -156,6 +162,7 @@ export class FilterPanel {
     // Analogue-ladder-only knobs (shown when engine = analogue).
     const driveKnob  = mkKnob('filter.drive',      'DRIVE', 0.1, 12,    2.0,  false, v => v.toFixed(1));
     const driftKnob  = mkKnob('filter.drift',      'DRIFT', 0,   0.08,  0.01, false, v => Math.round(v / 0.08 * 100) + '%');
+    const keytrkKnob = mkKnob('filter.keytrack',   'KEYTRK', 0,   1,     0.0,  false, v => Math.round(v * 100) + '%');
 
     gainKnob.el.style.display = getFilterParam('filter.type') === 'peaking' ? '' : 'none';
 
@@ -166,7 +173,8 @@ export class FilterPanel {
     mainKnobRow.appendChild(slopeKnob.el);
     mainKnobRow.appendChild(driveKnob.el);
     mainKnobRow.appendChild(driftKnob.el);
-    activeWidgets.push(cutoffKnob, resKnob, gainKnob, envAmtKnob, slopeKnob, driveKnob, driftKnob);
+    mainKnobRow.appendChild(keytrkKnob.el);
+    activeWidgets.push(cutoffKnob, resKnob, gainKnob, envAmtKnob, slopeKnob, driveKnob, driftKnob, keytrkKnob);
     knobByPath.set('filter.cutoff',    cutoffKnob);
     knobByPath.set('filter.resonance', resKnob);
     knobByPath.set('filter.gain',      gainKnob);
@@ -174,6 +182,7 @@ export class FilterPanel {
     knobByPath.set('filter.slope',     slopeKnob);
     knobByPath.set('filter.drive',     driveKnob);
     knobByPath.set('filter.drift',     driftKnob);
+    knobByPath.set('filter.keytrack',  keytrkKnob);
 
     // Engine-dependent visibility: the analogue ladder is a fixed 24 dB/oct
     // lowpass, so TYPE + SLOPE are N/A there; DRIVE + DRIFT are ladder-only.
@@ -185,6 +194,7 @@ export class FilterPanel {
       slopeKnob.el.style.pointerEvents = analogue ? 'none' : '';
       driveKnob.el.style.display = analogue ? '' : 'none';
       driftKnob.el.style.display = analogue ? '' : 'none';
+      keytrkKnob.el.style.display = analogue ? '' : 'none';
     }
     applyEngineVisibility(getFilterParam('filter.engine'));
 

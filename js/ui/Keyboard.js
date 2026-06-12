@@ -330,7 +330,7 @@ export class Keyboard {
       this._heldSlots.set(midiNote, voice);
 
       machine?.noteOn(midiNote, 100, time);
-      envelope.noteOn(time);
+      envelope.noteOn(time, midiNote);
     }
 
     // ── Fire followers (live keyboard note) ────────────────

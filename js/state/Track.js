@@ -70,6 +70,7 @@ import { LFO }           from '../signal/LFO.js';
 import { Sequencer }     from '../sequencer/Sequencer.js';
 import { DelayFX }       from '../signal/DelayFX.js';
 import { BitcrushFX }    from '../signal/BitcrushFX.js';
+import { ChorusFX }      from '../signal/ChorusFX.js';
 import { ReverbFX }      from '../signal/ReverbFX.js';
 import { Arpeggiator }   from '../signal/Arpeggiator.js';
 import { LiveArp }       from '../signal/LiveArp.js';
@@ -167,9 +168,12 @@ export class Track {
     this.pannerNode = audio.context.createStereoPanner();
     this.pannerNode.pan.value = 0;
 
-    // Per-track FX chain: panner → delay → bitcrush → reverb → fxBus
+    // Per-track FX chain: panner → delay → bitcrush → chorus → reverb → fxBus.
+    // The BBD chorus is part of the analogue flow — it stays in the chain for
+    // every track but is bypassed (dry) unless the track's analogue flag is on.
     this.delayFX    = new DelayFX(audio.context);
     this.bitcrushFX = new BitcrushFX(audio.context);
+    this.chorusFX   = new ChorusFX(audio.context);
     this.reverbFX   = new ReverbFX(audio.context);
 
     // Arpeggiator — schedules note fans from Sequencer triggers
@@ -183,7 +187,8 @@ export class Track {
     this.tremGain.connect(this.pannerNode);
     this.pannerNode.connect(this.delayFX.inputNode);
     this.delayFX.connect(this.bitcrushFX.inputNode);
-    this.bitcrushFX.connect(this.reverbFX.inputNode);
+    this.bitcrushFX.connect(this.chorusFX.inputNode);
+    this.chorusFX.connect(this.reverbFX.inputNode);
     this.reverbFX.connect(this._outputBus);
 
     // Canonical (slot-0) filter — UI/sequencer read & write params here. Each
@@ -228,6 +233,14 @@ export class Track {
 
     // DJ filter: -1 = full LPF, 0 = flat, +1 = full HPF
     this.djFilter = 0;
+
+    // Analogue flow: one track-level switch that drives the whole analogue
+    // signal path as a unit — the Moog ladder filter engine, RC (exponential)
+    // envelope curves, filter keytrack, and velocity sensitivity. The per-slot
+    // Envelope/Filter read this flag indirectly via filter.engine (set in
+    // setAnalogue), so no extra per-slot plumbing is needed. false = the clean
+    // digital path (default, unchanged behaviour for every existing machine).
+    this.analogue = false;
 
     // Note Follow delay in milliseconds (applied to follower track playback)
     this.followDelay = 0;
@@ -347,6 +360,24 @@ export class Track {
     this.followSource = trackIndex;
   }
 
+  /**
+   * Toggle the analogue flow for this track. One switch drives the whole
+   * analogue path:
+   *   - filter engine → Moog ladder ('analogue') vs. biquad ('digital'),
+   *   - RC envelope curves + keytrack + velocity (the per-slot Envelope reads
+   *     `filter.engine` to decide, so flipping it here is enough),
+   *   - the BBD chorus FX (enabled only in analogue mode).
+   * The Filter mirrors `filter.engine` to every voice slot, so a single set on
+   * the canonical filter covers the whole pool.
+   * @param {boolean} on
+   */
+  setAnalogue(on) {
+    this.analogue = !!on;
+    const t = this.audio.context.currentTime;
+    this.filter.setParam('filter.engine', this.analogue ? 'analogue' : 'digital', t);
+    this.chorusFX?.setEnabled(this.analogue && this.chorusFX.getParam('chorus.mix') > 0);
+  }
+
   /** Called by Project when BPM changes — propagates to synced FX and arpeggiator. */
   onBpmChanged(bpm) {
     this.delayFX.setBpm(bpm);
@@ -409,7 +440,7 @@ export class Track {
     machine?.syncParamsAt?.(startTime);
     machine?.noteOn(note, velocity, startTime, stopTime);
     machine?.noteOff(oscOffTime);
-    envelope?.scheduleNote(startTime, stopTime, {});
+    envelope?.scheduleNote(startTime, stopTime, { note, velocity });
     this.lfos?.forEach(lfo => {
       lfo.noteOn(startTime, stopTime, envelope?._params ?? {});
       lfo.noteOff(stopTime);
@@ -456,6 +487,7 @@ export class Track {
       { obj: this.filter,      params: this.filter.getParamList()       },
       { obj: this.delayFX,     params: this.delayFX.getParamList()      },
       { obj: this.bitcrushFX,  params: this.bitcrushFX.getParamList()   },
+      { obj: this.chorusFX,    params: this.chorusFX.getParamList()     },
       { obj: this.reverbFX,    params: this.reverbFX.getParamList()     },
     ];
     for (const { obj, params } of sources) {
@@ -716,11 +748,13 @@ export class Track {
       scaleIndex:    this.scaleIndex,
       leadNote:     this.leadNote,
       djFilter:     this.djFilter,
+      analogue:     this.analogue,
       machine:      this.machine.toJSON(),
       filter:       this.filter.toJSON(),
       envelope:     this.envelope.toJSON(),   // slot-0 envelope (canonical)
       delayFX:      this.delayFX.toJSON(),
       bitcrushFX:   this.bitcrushFX.toJSON(),
+      chorusFX:     this.chorusFX.toJSON(),
       reverbFX:     this.reverbFX.toJSON(),
       arp:          this.arp.toJSON(),
       lfos:         this.lfos.map((lfo, i) => ({
@@ -780,6 +814,14 @@ export class Track {
     this.delayFX.fromJSON(obj.delayFX ?? {});
     this.bitcrushFX.fromJSON(obj.bitcrushFX ?? {});
     this.reverbFX.fromJSON(obj.reverbFX ?? {});
+    this.chorusFX.fromJSON(obj.chorusFX ?? {});
+
+    // Analogue flow flag. Back-compat: projects saved before the unified flag
+    // carry only filter.engine, so derive the flag from it when absent. Then
+    // re-assert via setAnalogue so the chorus enable + engine stay consistent.
+    const analogue = obj.analogue ?? (this.filter.getParam('filter.engine') === 'analogue');
+    this.setAnalogue(analogue);
+
     if (obj.arp) this.arp.fromJSON(obj.arp);
     this.onBpmChanged(this.clock.bpm);
     this.sequencer.fromJSON(obj.sequencer ?? {});

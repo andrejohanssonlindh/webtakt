@@ -182,7 +182,7 @@ export class LiveArp {
     machine?.syncParamsAt?.(ev.time);
     machine?.noteOn(ev.note, ev.velocity, ev.time, ev.offTime);
     machine?.noteOff(oscOffTime);
-    envelope?.scheduleNote(ev.time, ev.offTime, {});
+    envelope?.scheduleNote(ev.time, ev.offTime, { note: ev.note, velocity: ev.velocity });
     const ampParams = envelope?._params ?? {};
     track.lfos?.forEach(lfo => {
       lfo.noteOn(ev.time, ev.offTime, ampParams);

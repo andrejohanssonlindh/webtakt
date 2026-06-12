@@ -52,6 +52,21 @@ function _resToLadder(q) {
 // (see scheduleFrequency baseCut anchor).
 const ANCHOR_GLIDE = 0.0015;
 
+/**
+ * One RC (exponential-approach) cutoff segment toward `target`, started at
+ * `start` and pinned to exactly `target` at `start + dur`. Mirrors
+ * Envelope._rcSegment so the analogue filter envelope curves identically to the
+ * analogue amp envelope. A near-zero duration degrades to an instant step.
+ */
+function _rcFreq(freq, start, dur, target) {
+  if (dur <= 0.0005) {
+    freq.setValueAtTime(target, start);
+    return;
+  }
+  freq.setTargetAtTime(target, start, dur / 3);
+  freq.setValueAtTime(target, start + dur);
+}
+
 export class Filter {
   /** @param {AudioContext} context */
   constructor(context) {
@@ -67,6 +82,8 @@ export class Filter {
       'filter.slope':     0,
       'filter.drive':     2.0,        // analogue ladder only: input gain into tanh stage
       'filter.drift':     0.01,       // analogue ladder only: thermal cutoff wander
+      'filter.keytrack':  0.0,        // analogue flow: cutoff follows pitch (0–1). 1.0 = the
+                                      // self-oscillating ladder plays in tune across the keyboard.
       'base.lpf':         20000,
       'base.hpf':         20,
     };
@@ -288,6 +305,9 @@ export class Filter {
         if (this._ladder) this._ladder.parameters.get('drift').setTargetAtTime(value, t, 0.01);
         break;
       case 'filter.envAmount':
+      case 'filter.keytrack':
+        // Read at note-fire time by Envelope.scheduleNote (plockMode 'envelope');
+        // no live AudioParam to update here.
         break;
       case 'filter.slope':
         this._applySlope(value, t);
@@ -335,6 +355,7 @@ export class Filter {
       { path: 'filter.slope',     label: 'Slope',     type: 'number', min: 0,   max: 1,     default: 0,     modulatable: true, lfoMin: 0,    lfoMax: 1,     plockMode: 'filter'   },
       { path: 'filter.drive',     label: 'Drive',     type: 'number', min: 0.1, max: 12,    default: 2.0,   modulatable: true, lfoMin: 0.1,  lfoMax: 12,    plockMode: 'filter'   },
       { path: 'filter.drift',     label: 'Drift',     type: 'number', min: 0,   max: 0.08,  default: 0.01,  modulatable: true, lfoMin: 0,    lfoMax: 0.08,  plockMode: 'filter'   },
+      { path: 'filter.keytrack',  label: 'Keytrack',  type: 'number', min: 0,   max: 1,     default: 0.0,                                                   plockMode: 'envelope' },
       { path: 'base.lpf',         label: 'Base LPF',  type: 'number', min: 200, max: 20000, default: 20000, modulatable: true, lfoMin: 200,  lfoMax: 20000, lfoUnit: 'cents', plockMode: 'filter'   },
       { path: 'base.hpf',         label: 'Base HPF',  type: 'number', min: 20,  max: 8000,  default: 20,    modulatable: true, lfoMin: 20,   lfoMax: 8000,  lfoUnit: 'cents', plockMode: 'filter'   },
     ];
@@ -382,7 +403,7 @@ export class Filter {
     return [this.node.frequency, ...this._stages.map(s => s.biquad.frequency)];
   }
 
-  scheduleFrequency(time, a, d, peakCut, sustainCut, offTime, fr, trueCut, baseCut = null) {
+  scheduleFrequency(time, a, d, peakCut, sustainCut, offTime, fr, trueCut, baseCut = null, analogue = false) {
     for (const freq of this._cutoffParams()) {
       if (typeof freq.cancelAndHoldAtTime === 'function') {
         freq.cancelAndHoldAtTime(time);
@@ -395,10 +416,20 @@ export class Filter {
       // the amp "pre-note". baseCut, when given, IS that anchor; otherwise pin the
       // held value. See Envelope._scheduleADS for the full rationale.
       freq.setValueAtTime(baseCut !== null ? baseCut : freq.value, time);
-      freq.linearRampToValueAtTime(peakCut,    time + a);
-      freq.linearRampToValueAtTime(sustainCut, time + a + d);
-      freq.setValueAtTime(sustainCut, offTime);
-      freq.linearRampToValueAtTime(trueCut, offTime + fr);
+      if (analogue) {
+        // RC (exponential) filter sweep, matching the analogue amp envelope's
+        // curve. Each segment approaches asymptotically (tc = dur/3) and is
+        // pinned to its exact endpoint so the A→D→S→R chain stays accurate.
+        _rcFreq(freq, time,       a,  peakCut);
+        _rcFreq(freq, time + a,   d,  sustainCut);
+        freq.setValueAtTime(sustainCut, offTime);
+        _rcFreq(freq, offTime,    fr, trueCut);
+      } else {
+        freq.linearRampToValueAtTime(peakCut,    time + a);
+        freq.linearRampToValueAtTime(sustainCut, time + a + d);
+        freq.setValueAtTime(sustainCut, offTime);
+        freq.linearRampToValueAtTime(trueCut, offTime + fr);
+      }
     }
   }
 

@@ -66,6 +66,46 @@ export class AmpPanel {
     activeWidgets.push(panKnob);
     knobByPath.set('amp.pan', panKnob);
 
+    // ── Velocity sensitivity (analogue flow) ───────────────────
+    // How much note velocity scales the amp + filter envelope. Only takes effect
+    // when the track is in analogue mode; harmless (no-op) otherwise, so it is
+    // always shown. p-lockable like pan.
+    const hasVelPLock = hasStep && step.plocks.has('env.velSens');
+    const velVal = () => {
+      if (hasStep && step.plocks.has('env.velSens')) return step.plocks.get('env.velSens');
+      return track.envelope.getParam('env.velSens');
+    };
+    const velKnob = new KnobWidget({
+      label:   'VEL',
+      min:     0,
+      max:     1,
+      value:   velVal(),
+      bipolar: false,
+      size:    64,
+      fmt:     v => Math.round(v * 100) + '%',
+      onChange: v => {
+        if (hasStep) {
+          step.setPLock('env.velSens', v);
+          velKnob.setHasPLock(true);
+        } else {
+          track.envelope.setParam('env.velSens', v);
+        }
+      },
+      onRelease: () => {
+        if (hasStep) {
+          state.emit('stepChanged', {
+            trackIndex: state.selectedTrackIndex,
+            stepIndex:  state.selectedStepIndex,
+            step,
+          });
+        }
+      },
+    });
+    velKnob.setHasPLock(hasVelPLock);
+    panSec.appendChild(velKnob.el);
+    activeWidgets.push(velKnob);
+    knobByPath.set('env.velSens', velKnob);
+
     // ── Amp ADSR (right, compact) ──────────────────────────────
     const adsrSec = document.createElement('div');
     adsrSec.className = 'amp-adsr-sec';

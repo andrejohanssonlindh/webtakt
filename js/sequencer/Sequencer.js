@@ -162,6 +162,7 @@ getVisibleSteps() {
     if (path.startsWith('filter.') || path === 'base.lpf' || path === 'base.hpf') return this.track.filter;
     if (path.startsWith('delay.'))  return this.track.delayFX;
     if (path.startsWith('crush.'))  return this.track.bitcrushFX;
+    if (path.startsWith('chorus.')) return this.track.chorusFX;
     if (path.startsWith('reverb.')) return this.track.reverbFX;
     if (path.startsWith('arp.'))    return this.track.arp;
     return this.track.machine;
@@ -197,6 +198,7 @@ getVisibleSteps() {
       this.track.filter,
       this.track.delayFX,
       this.track.bitcrushFX,
+      this.track.chorusFX,
       this.track.reverbFX,
     ];
     for (const src of sources) {
@@ -450,7 +452,9 @@ getVisibleSteps() {
           this._anchorVoiceCutoff(voice, envOverrides, voiceWasIdle);
           machine?.noteOn(ev.note, ev.velocity, ev.time, ev.offTime);
           machine?.noteOff(oscOff);
-          envelope?.scheduleNote(ev.time, ev.offTime, envOverrides);
+          // note + velocity ride in via overrides for analogue keytrack/velocity
+          // (ignored on the digital path). Spread, don't mutate the shared object.
+          envelope?.scheduleNote(ev.time, ev.offTime, { ...envOverrides, note: ev.note, velocity: ev.velocity });
           const ampParams = envelope?._params ?? {};
           this.track.lfos.forEach(lfo => {
             lfo.noteOn(ev.time, ev.offTime, { ...ampParams, ...envOverrides });
@@ -470,7 +474,7 @@ getVisibleSteps() {
         this._anchorVoiceCutoff(voice, envOverrides, voiceWasIdle);
         machine?.noteOn(finalNote, sv.velocity, time, offTime);
         machine?.noteOff(oscOffTime);
-        envelope?.scheduleNote(time, offTime, envOverrides);
+        envelope?.scheduleNote(time, offTime, { ...envOverrides, note: finalNote, velocity: sv.velocity });
         const ampParams = envelope?._params ?? {};
         this.track.lfos.forEach(lfo => {
           lfo.noteOn(time, offTime, { ...ampParams, ...envOverrides });
