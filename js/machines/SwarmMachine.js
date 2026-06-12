@@ -36,6 +36,8 @@ const NUM_SWARM = 6; // voices around the root (3 above, 3 below)
 
 export class SwarmMachine extends Machine {
   static SPEC = {
+    'osc.wave':     { label: 'Wave', type: 'enum', options: ['sawtooth','square','triangle','sine'], default: 'sawtooth',
+                      apply: (v, t, m) => { m._root.type = v; m._swarm.forEach(o => { o.type = v; }); } },
     'osc.detune':   { label: 'Detune', type: 'number', min: -100, max: 100, default: 0,
                       modulatable: true, lfoMin: -100, lfoMax: 100, hidden: true,
                       target: m => m._root.detune, schedule: 'setTarget', tc: 0.005 },
@@ -80,7 +82,7 @@ export class SwarmMachine extends Machine {
 
     // ── Root oscillator ──
     this._root = context.createOscillator();
-    this._root.type            = 'sawtooth';
+    this._root.type            = this._params['osc.wave'];
     this._root.frequency.value = 440;
     this._root.detune.value    = 0;
     this._root.connect(this._mix);
@@ -104,7 +106,7 @@ export class SwarmMachine extends Machine {
     });
     this._swarm = Array.from({ length: NUM_SWARM }, (_, i) => {
       const osc = context.createOscillator();
-      osc.type            = 'sawtooth';
+      osc.type            = this._params['osc.wave'];
       osc.frequency.value = 440;
       osc.connect(this._voiceGain[i]);
       osc.start();
