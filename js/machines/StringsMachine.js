@@ -203,6 +203,9 @@ export class StringsMachine extends Machine {
       const freq  = baseFreq * Math.pow(2, semis / 12);
       // Alternating per-voice detune for a wide unison stack
       const spreadCents = (i % 2 === 0 ? 1 : -1) * Math.ceil((i + 1) / 2) * spread * 0.5;
+      // Drop stale future frequency events from a previous held chord before
+      // retuning — see SynthMachine.noteOn for the LiveArp octave-bleed rationale.
+      osc.frequency.cancelScheduledValues(t);
       osc.frequency.setValueAtTime(freq, t);
       osc.detune.setValueAtTime(detune + spreadCents, t);
     });

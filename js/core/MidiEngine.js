@@ -30,6 +30,8 @@
  *   offCC(fn)                       — unregister
  *   onNoteOn(fn)                    — fn(inputId, ch, note, vel)
  *   offNoteOn(fn)
+ *   onNoteOff(fn)                   — fn(inputId, ch, note); also fired for note-on vel=0
+ *   offNoteOff(fn)
  *   sendNoteOn(outputId, ch, note, vel, audioTime, audioCtx)
  *   sendNoteOff(outputId, ch, note, audioTime, audioCtx)
  *   sendCC(outputId, ch, cc, val)
@@ -47,6 +49,7 @@ export class MidiEngine {
     this._syncOutputId  = null;
     this._ccListeners   = new Set();
     this._noteOnListeners = new Set();
+    this._noteOffListeners = new Set();
     this._clock         = null;
     this._audioCtx      = null;
     this._clockTickCb   = null;
@@ -95,6 +98,9 @@ export class MidiEngine {
       for (const fn of this._ccListeners) fn(inputId, ch + 1, data1, data2);
     } else if (type === 0x90 && data2 > 0) {
       for (const fn of this._noteOnListeners) fn(inputId, ch + 1, data1, data2);
+    } else if (type === 0x80 || (type === 0x90 && data2 === 0)) {
+      // Note-off: explicit 0x80, or running-status note-on with velocity 0.
+      for (const fn of this._noteOffListeners) fn(inputId, ch + 1, data1);
     }
   }
 
@@ -111,6 +117,10 @@ export class MidiEngine {
   onNoteOn(fn)  { this._noteOnListeners.add(fn); }
   /** @param {Function} fn */
   offNoteOn(fn) { this._noteOnListeners.delete(fn); }
+  /** @param {Function} fn */
+  onNoteOff(fn)  { this._noteOffListeners.add(fn); }
+  /** @param {Function} fn */
+  offNoteOff(fn) { this._noteOffListeners.delete(fn); }
 
   /**
    * Schedule a note-on at audioTime (AudioContext seconds).

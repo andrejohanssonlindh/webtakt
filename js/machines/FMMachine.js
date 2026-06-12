@@ -71,8 +71,10 @@ function _scheduleADS(param, time, a, d, peak, sustain) {
     param.cancelAndHoldAtTime(time);
   } else {
     param.cancelScheduledValues(time);
-    param.setValueAtTime(param.value, time);
   }
+  // Always anchor the start at `time`; cancelAndHoldAtTime alone is not a reliable
+  // ramp anchor in Chrome (ramps early → "pre-note"). See Envelope._scheduleADS.
+  param.setValueAtTime(param.value, time);
   param.linearRampToValueAtTime(peak,    time + a);
   param.linearRampToValueAtTime(sustain, time + a + d);
 }
@@ -285,6 +287,11 @@ export class FMMachine extends Machine {
     const f3 = freq * this._params['op3.ratio'];
     const f4 = freq * this._params['op4.ratio'];
 
+    // Drop stale future frequency events from a previous held chord before
+    // retuning — see SynthMachine.noteOn for the LiveArp octave-bleed rationale.
+    for (const osc of [this._op1Osc, this._op2Osc, this._op3Osc, this._op4Osc]) {
+      osc.frequency.cancelScheduledValues(t);
+    }
     this._op1Osc.frequency.setValueAtTime(f1, t);
     this._op2Osc.frequency.setValueAtTime(f2, t);
     this._op3Osc.frequency.setValueAtTime(f3, t);

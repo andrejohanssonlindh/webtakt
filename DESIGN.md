@@ -24,7 +24,7 @@ A browser-based modular step sequencer / synthesizer inspired by Elektron Syntak
 Built in vanilla HTML5 + JavaScript. No build step, no framework, no package manager.
 Served via `python3 -m http.server 8000` and opened in Chrome.
 
-**Current scope:** 8–12 tracks (configurable at runtime via TRACKS +/− in the transport bar, default 8), unlimited steps per track (configurable per track, 16 visible per page), SynthMachine as primary voice, full suite of synthesis drum voices and melodic machines. MIDI out (MidiMachine per track), MIDI In CC routing per track, MIDI clock sync out (24 PPQN).
+**Current scope:** 8–12 tracks (configurable at runtime via TRACKS +/− in the transport bar, default 8), unlimited steps per track (configurable per track, 16 visible per page), SynthMachine as primary voice, full suite of synthesis drum voices and melodic machines. MIDI out (MidiMachine per track), MIDI In note + CC routing per track (live play, record-to-pattern, and live-arp input), MIDI clock sync out (24 PPQN).
 
 ---
 
@@ -39,11 +39,12 @@ js/
     AudioEngine.js      — AudioContext, master gain, FX bus, AnalyserNode (master output tap); preloads the analogue ladder worklet (ladderReady/ladderLoaded)
     Clock.js            — BPM clock, tick scheduling via AudioContext.currentTime
     GlobalRecorder.js   — MediaRecorder wrapper tapping masterGain
-    MidiEngine.js       — Web MIDI singleton: port enumeration, note/CC out, CC in routing, 24-PPQN clock sync out
+    MidiEngine.js       — Web MIDI singleton: port enumeration, note/CC out, note-on/note-off + CC in routing, 24-PPQN clock sync out. Note-off dispatches on 0x80 and on 0x90 velocity-0 (running status).
   sequencer/
     Sequencer.js        — Per-track step runner, polyrhythm, page logic, p-lock dispatch
     Step.js             — Single step: note, vel, length, nudge, retrigger, chance, condition, plocks
     Condition.js        — Condition objects: ratio-based (hits:of) and always
+    LiveRecorder.js     — Records live MIDI-In notes into the pattern while armed. Per (track,note); uses each track's own Sequencer.stepIndexAtTime() for absStep+nudge, so it places notes correctly on every armed track regardless of which is selected. (Keyboard.js keeps its own inline record path.)
   machines/
     Machine.js          — Abstract base class all machines extend. Optional declarative
                           param layer: a machine defines `static SPEC` (path → descriptor +
@@ -122,7 +123,7 @@ js/
       ArpPanel.js             — ARP tab: arpeggiator mode/rate/variance controls (Chord/Manual/Random/Input)
   signal/
     Arpeggiator.js      — Per-track arpeggiator: Chord / Manual / Random / Input modes; BPM-sync; variance. Chord/Manual/Random are step-triggered (Sequencer._fireStep). Input is keyboard-driven (see LiveArp.js): the held keys ARE the chord, played at absolute pitch; steps do not trigger it. RATE/GATE/VARIANCE are p-lockable + LFO-able via virtual params arp.rate/arp.gate/arp.variance (JS-only: p-lock exact, LFO sample-and-hold per fire — arp timing isn't an AudioParam).
-    LiveArp.js          — Free-running scheduler for Arpeggiator 'input' mode. Fed key on/off by Keyboard.js; cycles the held notes ahead-of-time on the BPM grid (own setTimeout loop so it works with transport stopped). When recording, prints each fired note into the playing step via Keyboard.captureArpNote() — no re-arping on playback. Owned by Track.
+    LiveArp.js          — Free-running scheduler for Arpeggiator 'input' mode. Fed key on/off by Keyboard.js AND by MIDI In (index.html note handlers route to track.liveArp when arp mode is 'input'); cycles the held notes ahead-of-time on the BPM grid (own setTimeout loop so it works with transport stopped). When recording, prints each fired note into the playing step via Keyboard.captureArpNote() — no re-arping on playback. Owned by Track.
   util/
     BpmSync.js          — Shared BPM-sync utility. Unified sync-knob model: 1/32-note integer counts (count32ToSeconds, MUSICAL_SNAP_32, formatCount32, divToCount32). Used by DelayFX, ReverbFX, LFO, Arpeggiator. Legacy DIV_QN/SYNC_DIVISIONS/divToSeconds kept for load back-compat.
   state/
@@ -233,6 +234,8 @@ UI (reads AppState, calls Track/Sequencer/Machine methods)
 | WavetableSamplerMachine reliability | VoicePool polyphony introduced 8 slots; non-canonical slots (1–7) never received buffer data since `fromJSON` is JSON-only. Fixed via `syncFrom(slot0)` called in `nextVoice()` — copies `_bufferA/B` references to any slot before it fires. Trigger timing race also fixed: `startTime` embedded in trigger message; worklet holds `_pendingTrigger` and arms in `process()` when `currentTime >= startTime`. |
 | Trig RESET TRIG | Now sets `step.active = false` in addition to resetting voices to one, so the step is fully deactivated. Individual `×` buttons remain on all voices when multiple exist; only the last voice has no `×` (deactivating is done via RESET TRIG). |
 | Arp rate/gate LFO | Arp timing is plain JS read once per build, not a Web Audio `AudioParam`, so it cannot be continuously LFO-modulated. LFO on `arp.rate`/`arp.gate`/`arp.variance` is **sample-and-hold** (per step-fire / per arp cycle, like `trig.tone`). P-locks on these apply exactly. Documented as a Web Audio limitation rather than worked around. |
+| Chrome "pre-note" / soft pre-onset | `Envelope._scheduleADS`, `Envelope.noteOff`, `Filter.scheduleFrequency`, and `FMMachine._scheduleADS` called `cancelAndHoldAtTime(time)` then `linearRampToValueAtTime(…, time+a)` with **no explicit anchor event at `time`**. Chrome ramps from the *previous* automation event (the prior note's release, in the past) instead of from `time`, so the attack/sweep began ~one scheduler-lookahead early — an audible soft "pre-note" before the real onset. Firefox inserts an implicit hold and was unaffected (Chrome-only). Fixed by always re-asserting `setValueAtTime(value, time)` after the cancel so both engines ramp from `time`. |
+| Input-arp octave bleed (first ~8 notes) | Persistent oscillators are only retuned via `frequency.setValueAtTime` per note and never cleared. LiveArp schedules a whole cycle ahead in one burst, so reusing a pool slot for a new held chord left **stale future** frequency events from the previous chord queued on the slot's oscillator — the osc hopped back to the old pitch when they fired, so the previous octave bled into the first ~8 notes (one per pool slot) of the new arp. Fixed by `frequency.cancelScheduledValues(time)` before the retune in every persistent-osc machine (Synth, FM, Moogish, Bass, Wavetable, Strings, Chord). |
 
 ---
 

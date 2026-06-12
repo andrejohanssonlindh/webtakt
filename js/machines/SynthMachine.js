@@ -87,7 +87,18 @@ export class SynthMachine extends Machine {
    */
   noteOn(midiNote, velocity, time) {
     const freq = Machine.midiToFreq(midiNote);
+    // Cancel any frequency events scheduled at/after `time` before retuning. The
+    // oscillators are persistent and shared across notes on this slot; LiveArp
+    // schedules a whole cycle ahead in one burst, so a slot reused for the next
+    // chord could still carry stale future setValueAtTime events from the PREVIOUS
+    // held chord (e.g. an octave-7 note queued later than this octave-3 note's
+    // time). Without cancelling, the osc would hop back to the old pitch when that
+    // stale event fires — heard as the previous octave bleeding into the first
+    // notes of the new arp. cancelScheduledValues(time) drops only events ≥ time,
+    // leaving any still-valid earlier note untouched.
+    this._oscMain.frequency.cancelScheduledValues(time);
     this._oscMain.frequency.setValueAtTime(freq,     time);
+    this._oscSub.frequency.cancelScheduledValues(time);
     this._oscSub.frequency.setValueAtTime(freq / 2,  time);
   }
 

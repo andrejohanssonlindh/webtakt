@@ -388,9 +388,13 @@ export class Filter {
         freq.cancelAndHoldAtTime(time);
       } else {
         freq.cancelScheduledValues(time);
-        freq.setValueAtTime(freq.value, time);
       }
-      if (baseCut !== null) freq.setValueAtTime(baseCut, time);
+      // Always anchor the curve start at `time`. Without an explicit event here
+      // Chrome ramps the sweep from the previous automation event (in the past),
+      // so the cutoff begins moving a lookahead early — the filter-side twin of
+      // the amp "pre-note". baseCut, when given, IS that anchor; otherwise pin the
+      // held value. See Envelope._scheduleADS for the full rationale.
+      freq.setValueAtTime(baseCut !== null ? baseCut : freq.value, time);
       freq.linearRampToValueAtTime(peakCut,    time + a);
       freq.linearRampToValueAtTime(sustainCut, time + a + d);
       freq.setValueAtTime(sustainCut, offTime);

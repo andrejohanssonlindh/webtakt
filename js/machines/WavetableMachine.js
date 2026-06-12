@@ -207,6 +207,11 @@ export class WavetableMachine extends Machine {
 
   noteOn(midiNote, velocity, time) {
     const freq = Machine.midiToFreq(midiNote);
+    // Drop stale future frequency events from a previous held chord before
+    // retuning — see SynthMachine.noteOn for the LiveArp octave-bleed rationale.
+    this._oscA.frequency.cancelScheduledValues(time);
+    this._oscB.frequency.cancelScheduledValues(time);
+    this._oscSub.frequency.cancelScheduledValues(time);
     this._oscA.frequency.setValueAtTime(freq,     time);
     this._oscB.frequency.setValueAtTime(freq,     time);
     this._oscSub.frequency.setValueAtTime(freq / 2, time);

@@ -103,14 +103,23 @@ export class Envelope {
    * `sustainVal` — value at end of decay
    * Uses cancelAndHoldAtTime so an overlapping new note starts from wherever
    * the param currently is.
+   *
+   * After cancelAndHoldAtTime we ALWAYS re-assert an explicit setValueAtTime
+   * anchor at `time`. Without it Chrome's linearRampToValueAtTime ramps from the
+   * time of the previous automation event (the prior note's release, now in the
+   * past) instead of from `time` — so the attack rises ~one lookahead early and
+   * you hear a soft "pre-note" before the real onset. Firefox inserts an implicit
+   * hold and was unaffected, which is why the glitch was Chrome-only. Pinning the
+   * start here makes both engines ramp from `time`. (snapshot() reads the value
+   * cancelAndHold settled to; for an idle gate that's the held 0.)
    */
   _scheduleADS(param, time, a, d, peakVal, sustainVal) {
     if (typeof param.cancelAndHoldAtTime === 'function') {
       param.cancelAndHoldAtTime(time);
     } else {
       param.cancelScheduledValues(time);
-      param.setValueAtTime(param.value, time);
     }
+    param.setValueAtTime(param.value, time);
     param.linearRampToValueAtTime(peakVal,    time + a);
     param.linearRampToValueAtTime(sustainVal, time + a + d);
   }
@@ -223,8 +232,8 @@ export class Envelope {
       g.cancelAndHoldAtTime(time);
     } else {
       g.cancelScheduledValues(time);
-      g.setValueAtTime(g.value, time);
     }
+    g.setValueAtTime(g.value, time);   // anchor so the release ramps from `time` (see _scheduleADS)
     g.linearRampToValueAtTime(0, time + r);
 
     if (this._filter) {
@@ -236,8 +245,8 @@ export class Envelope {
         freq.cancelAndHoldAtTime(time);
       } else {
         freq.cancelScheduledValues(time);
-        freq.setValueAtTime(freq.value, time);
       }
+      freq.setValueAtTime(freq.value, time);
       freq.linearRampToValueAtTime(baseCut, time + fr);
     }
   }

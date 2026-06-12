@@ -134,6 +134,9 @@ export class ChordMachine extends Machine {
       const freq = rootFreq * Math.pow(2, intervals[i] / 12);
       // Alternating detune per voice for stereo spread character
       const spreadCents = (i % 2 === 0 ? 1 : -1) * Math.floor(i / 2 + 1) * spread * 0.5;
+      // Drop stale future frequency events from a previous held chord before
+      // retuning — see SynthMachine.noteOn for the LiveArp octave-bleed rationale.
+      osc.frequency.cancelScheduledValues(t);
       osc.frequency.setValueAtTime(freq, t);
       osc.detune.setValueAtTime(this._params['osc.detune'] + spreadCents, t);
     });

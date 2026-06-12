@@ -98,6 +98,7 @@
     import { GlobalRecorder }    from './js/core/GlobalRecorder.js';
     import { Clock }         from './js/core/Clock.js';
     import { MidiEngine }    from './js/core/MidiEngine.js';
+    import { LiveRecorder }  from './js/sequencer/LiveRecorder.js';
     import { AppState }      from './js/state/AppState.js';
     import { Project }       from './js/state/Project.js';
     import { DeckManager }   from './js/state/DeckManager.js';
@@ -122,6 +123,10 @@
 
     // ── MIDI ─────────────────────────────────────────────────
     const midiEngine = new MidiEngine();
+    // Records live MIDI-In notes into the sequencer while record mode is armed.
+    const midiRecorder = new LiveRecorder(state);
+    state.on('recordingChanged', ({ recording }) => { if (!recording) midiRecorder.reset(); });
+    state.on('panic', () => midiRecorder.reset());
     midiEngine.init().then(() => {
       if (midiEngine.available) {
         midiEngine.connectClock(clock, audio.context);
@@ -156,7 +161,10 @@
           });
         });
 
-        // Route incoming MIDI notes to selected track + fire followers
+        // Route incoming MIDI notes to every armed track (those whose MIDI In is
+        // mapped to this port/channel) + fire followers. Held voices are tracked
+        // per-track in track._midiInVoices (Map<note, voice>) so the matching
+        // note-off can release the right voice slot.
         midiEngine.onNoteOn((inputId, channel, note, velocity) => {
           const ctx = audio.context;
           const time = ctx.currentTime + 0.015;
@@ -164,18 +172,70 @@
             const cfg = track.midiIn;
             if (!cfg.inputId || cfg.inputId !== inputId) return;
             if (cfg.channel !== 0 && cfg.channel !== channel) return;
-            // Play note on the track that has MIDI In mapped to this port/channel
-            const voice    = track._pool?.nextVoice() ?? null;
-            const machine  = voice?.machine  ?? track.machine;
-            const envelope = voice?.envelope ?? track.envelope;
-            if (voice) voice.claim(time + 30);
-            machine?.noteOn(note, velocity, time);
-            envelope?.noteOn(time);
+
+            // Live-input arp mode: the held note set IS the chord — feed LiveArp,
+            // which fans it out and (when recording) prints each fired note via its
+            // own record hook. No direct note trigger and no recorder write here,
+            // exactly as the on-screen keyboard does in this mode.
+            const liveArp = track.arp?.enabled && track.arp.getParam('mode') === 'input';
+            if (liveArp) {
+              track.liveArp.noteOn(note, velocity);
+            } else {
+              // Play note on the track that has MIDI In mapped to this port/channel
+              const voice    = track._pool?.nextVoice() ?? null;
+              const machine  = voice?.machine  ?? track.machine;
+              const envelope = voice?.envelope ?? track.envelope;
+              // Claim the slot for the duration the note is held; note-off re-claims
+              // it for just the release tail. The generous ceiling guards against a
+              // dropped note-off stealing the voice mid-hold.
+              if (voice) voice.claim(time + 30);
+              if (!track._midiInVoices) track._midiInVoices = new Map();
+              track._midiInVoices.set(note, voice);
+              machine?.noteOn(note, velocity, time);
+              envelope?.noteOn(time);
+              // Record into the playhead step (no-op unless record mode is armed)
+              midiRecorder.noteOn(track, note, velocity, ctx.currentTime);
+            }
+
             // Fire followers
             state.project.tracks.forEach(follower => {
               if (follower.followSource !== track.index) return;
               follower.fireFollowNote(note, velocity, time, time + 0.5);
             });
+          });
+        });
+
+        // Release the note when the key is lifted (or note-on velocity 0).
+        midiEngine.onNoteOff((inputId, channel, note) => {
+          const ctx = audio.context;
+          const time = ctx.currentTime + 0.015;
+          state.project.tracks.forEach(track => {
+            const cfg = track.midiIn;
+            if (!cfg.inputId || cfg.inputId !== inputId) return;
+            if (cfg.channel !== 0 && cfg.channel !== channel) return;
+
+            // Live-input arp mode: remove the note from the held chord; LiveArp
+            // stops the runner when nothing is held. No direct release or recorder
+            // writeback (the arp owns both).
+            const liveArp = track.arp?.enabled && track.arp.getParam('mode') === 'input';
+            if (liveArp) {
+              track.liveArp.noteOff(note);
+              return;
+            }
+
+            const voice    = track._midiInVoices?.get(note) ?? null;
+            const machine  = voice?.machine  ?? track.machine;
+            const envelope = voice?.envelope ?? track.envelope;
+            track._midiInVoices?.delete(note);
+            // Re-claim the slot for just the release tail so the pool can reuse it.
+            if (voice) {
+              const release = envelope?.getParam('env.release') ?? 0.3;
+              voice.claim(time + release);
+            }
+            machine?.noteOff(time);
+            envelope?.noteOff(time);
+            // Close out the recorded note's length (no-op if not captured)
+            midiRecorder.noteOff(track, note, ctx.currentTime);
           });
         });
       }

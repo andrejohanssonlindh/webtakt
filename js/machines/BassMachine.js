@@ -115,6 +115,11 @@ export class BassMachine extends Machine {
     const glideMs    = this._params['glide'];
     const glideTime  = glideMs / 1000;
 
+    // Drop stale future frequency events from a previous note/chord before
+    // retuning — see SynthMachine.noteOn for the LiveArp octave-bleed rationale.
+    this._oscMain.frequency.cancelScheduledValues(time);
+    this._oscSub.frequency.cancelScheduledValues(time);
+
     if (glideTime > 0.001) {
       // Portamento — ramp from last frequency
       this._oscMain.frequency.setValueAtTime(this._lastFreq, time);

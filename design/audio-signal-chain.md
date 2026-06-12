@@ -256,10 +256,26 @@ deck is instantly reusable. Deck B boots empty. See `ui.md` → Deck Tab.
 
 - **Shared ampGain node:** All oscillators on a track share one `ampGain` GainNode. A new
   note's attack overwrites the previous note's release — standard monophonic behaviour.
-- **linearRampToValueAtTime requires an anchor.** Always preceded by `setValueAtTime` or
-  `cancelAndHoldAtTime`.
+- **linearRampToValueAtTime requires an *explicit* anchor at the start time.** Always precede it
+  with `setValueAtTime(value, time)`. **`cancelAndHoldAtTime(time)` alone is NOT a reliable anchor
+  in Chrome:** when the only prior events are already in the past, Chrome ramps from the previous
+  event's time instead of from `time`, so the ramp starts a scheduler-lookahead early — heard as a
+  soft "pre-note" before the onset (Firefox inserts an implicit hold and was unaffected). Every
+  cancel-then-ramp site (`Envelope._scheduleADS`, `Envelope.noteOff`, `Filter.scheduleFrequency`)
+  therefore re-issues `setValueAtTime` at `time` after the cancel.
 - **`cancelAndHoldAtTime` preferred over `cancelScheduledValues`.** The former holds the
-  param at its current scheduled value; the latter snaps to the JS-thread value.
+  param at its current scheduled value; the latter snaps to the JS-thread value. Still anchor
+  explicitly afterwards (see above).
+- **Persistent oscillators must `cancelScheduledValues(time)` before retuning on `noteOn`.**
+  Melodic machines (SynthMachine, FMMachine, MoogishMachine, BassMachine, WavetableMachine,
+  StringsMachine, ChordMachine) keep their oscillators running forever and only retune via
+  `frequency.setValueAtTime` per note. LiveArp (input-mode arp) schedules a whole cycle ahead in
+  one burst, so a slot reused for the next held chord can still carry **stale future** frequency
+  events from the *previous* chord. Without cancelling, the osc hops back to the old pitch when a
+  stale event fires — heard as the previous octave bleeding into the first ~8 notes (one per pool
+  slot) of the new arp. Each `noteOn`/`_retune`/`_applyChord`/`_applyTuning` therefore calls
+  `frequency.cancelScheduledValues(time)` (drops only events ≥ `time`, leaving valid earlier notes
+  intact) before the `setValueAtTime`.
 - **Never read `gainNode.gain.value` for future state.** Returns the current JS-thread value.
 - **Env p-locks must bypass `setParam`.** `Envelope.setParam` only writes `_params`.
   Passing overrides directly to `scheduleNote` is the correct path.

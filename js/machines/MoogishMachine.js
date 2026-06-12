@@ -270,11 +270,15 @@ export class MoogishMachine extends Machine {
       const oct  = this._params[`osc${i + 1}.octave`];
       const det  = this._params[`osc${i + 1}.detune`];
       const freq = Machine.midiToFreq(this._rootMidi + oct * 12);
+      // Drop stale future frequency events from a previous held chord before
+      // retuning — see SynthMachine.noteOn for the LiveArp octave-bleed rationale.
+      this._oscs[i].frequency.cancelScheduledValues(t);
       this._oscs[i].frequency.setValueAtTime(freq, t);
       this._oscs[i].detune.setValueAtTime(det + master + this._tolTune, t);
     }
     const subOct = this._params['osc1.octave'];
     const subFreq = Machine.midiToFreq(this._rootMidi + subOct * 12 - 12);
+    this._oscSub.frequency.cancelScheduledValues(t);
     this._oscSub.frequency.setValueAtTime(subFreq, t);
   }
 
