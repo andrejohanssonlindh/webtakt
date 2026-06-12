@@ -56,8 +56,15 @@ js/
     KickMachine.js      — Backward-compat alias → KickSilkMachine (type: 'kick')
     KickSilkMachine.js  — Clean kick: sine + pitch sweep + noise punch (type: 'kick.silk')
     KickHardMachine.js  — Fat kick: sub osc + body + waveshaper saturation + noise punch (type: 'kick.hard')
+    AnalogueKickMachine.js — Analogue kick: KickHard structure with imperfect-sine body/sub + per-instance tolerance + thermal drift + pink-noise punch (type: 'kick.analogue'); built on AnalogueParts.js
+    AnalogueParts.js    — Shared analogue building blocks extracted from MoogishMachine/PATINA: makeImperfectWave, makePinkBuffer, DriftClock (thermal pitch drift), rand/clamp. Imported by MoogishMachine + AnalogueKickMachine
     SnareMachine.js     — Synthesis snare: triangle tone + filtered noise
+    AnalogueSnareMachine.js — Analogue snare: Snare structure with imperfect-triangle body + per-instance tolerance + thermal drift + pink-noise snares (type: 'snare.analogue'); built on AnalogueParts.js
     HiHatMachine.js     — Synthesis hi-hat: 6 inharmonic square oscs + HP filter
+    AnalogueHiHatMachine.js — Analogue hi-hat: 6 imperfect-square oscs with per-instance ratio tolerance + thermal drift + HP filter (type: 'hihat.analogue'); built on AnalogueParts.js
+    AnalogueTomMachine.js — Analogue tuned tom: imperfect-sine body + pitch sweep + thermal drift + pink-noise attack + soft-clip (type: 'tom.analogue'); no digital sibling; built on AnalogueParts.js
+    AnalogueClappMachine.js — Analogue clap: Clapp's 3 staggered bursts but pink noise + per-instance spread tolerance (type: 'clapp.analogue'); built on AnalogueParts.js
+    AnalogueCymbalMachine.js — Analogue cymbal: 6 imperfect-square oscs with per-instance ratio tolerance + thermal drift + HPF/BP, closed/mid/open tiers (type: 'cymbal.analogue'); built on AnalogueParts.js
     FMMachine.js        — 4-operator FM synth; per-op ADSR envelopes
     DrumMachine.js      — Generic drum stub (future)
     SamplerMachine.js   — Sample playback: load file or record mic, trim/reverse/loop
@@ -74,7 +81,7 @@ js/
     CombMachine.js      — Pitched resonator: two decaying sinusoidal partials (bell/marimba/gamelan)
     ChordMachine.js     — 4-voice chord synth: 11 chord types, inversions, p-lockable per step
     StringsMachine.js   — Bowed string section: detuned saw unison + body/tone filters + bow noise + vibrato; violin/viola/cello/ensemble modes
-    MoogishMachine.js   — Analogue (PATINA-derived) oscillator voice: 3 imperfect-spectrum oscs + sub + pink hiss + thermal drift + component tolerance + mains hum (hum/humFreq); feeds existing Filter/Envelope/LFO (type: 'moogish')
+    MoogishMachine.js   — Analogue (PATINA-derived) oscillator voice: 3 imperfect-spectrum oscs + sub + pink hiss + thermal drift + component tolerance + mains hum (hum/humFreq); feeds existing Filter/Envelope/LFO (type: 'moogish'). Analogue helpers (imperfect wave, pink noise, drift) now live in AnalogueParts.js
   signal/
     Filter.js           — Filter wrapper, two engines (filter.engine): digital biquad cascade (type/cutoff/res/gain/slope) + analogue PATINA Moog ladder worklet (drive/drift/keytrack); base LPF/HPF; cutoffParam()/scheduleFrequency engine-aware (RC curves in analogue mode)
     Envelope.js         — Dual ADSR (amp + filter env), scheduleNote for sequencer, noteOn/noteOff for live; per-stage MS/BPM tempo-sync on A/D/R; analogue flow (filter.engine='analogue') switches to RC (exponential) curves + applies keytrack + velocity sensitivity (env.velSens)
@@ -212,7 +219,7 @@ UI (reads AppState, calls Track/Sequencer/Machine methods)
 | Steps total | 64 per track |
 | Steps visible | 16 (one page) |
 | Step pages | Per-track page nav UI built |
-| Machines | SynthMachine, KickSilkMachine, KickHardMachine, SnareMachine, HiHatMachine, FMMachine, SwarmMachine, NoiseMachine, TransientMachine, SamplerMachine, WavetableSamplerMachine, SampleSwarmMachine, CymbalMachine, WoodMachine, ClappMachine, WavetableMachine, KarplusMachine, MarimbaMachine, BassMachine, CombMachine, ChordMachine, MoogishMachine active; DrumMachine stubbed |
+| Machines | SynthMachine, KickSilkMachine, KickHardMachine, AnalogueKickMachine, SnareMachine, AnalogueSnareMachine, HiHatMachine, AnalogueHiHatMachine, AnalogueTomMachine, FMMachine, SwarmMachine, NoiseMachine, TransientMachine, SamplerMachine, WavetableSamplerMachine, SampleSwarmMachine, CymbalMachine, AnalogueCymbalMachine, WoodMachine, ClappMachine, AnalogueClappMachine, WavetableMachine, KarplusMachine, MarimbaMachine, BassMachine, CombMachine, ChordMachine, MoogishMachine active; DrumMachine stubbed |
 | Filter | Two engines (`filter.engine`): **digital** biquad (LP/HP/BP/Notch/Peaking/Allpass + slope) and **analogue** PATINA Moog ladder worklet (24 dB/oct, self-oscillation, drive, drift, **keytrack**) + base filter (HPF+LPF), FilterViz with env ghost (approx curve in analogue mode). Analogue mode also sweeps the cutoff with RC (exponential) curves. |
 | Pan | Per-track stereo pan, p-lockable + LFO-assignable |
 | Delay | Per-track feedback delay, p-lockable + LFO-assignable |

@@ -66,6 +66,20 @@ Parameters: `tune` (Hz, LFO+plock), `decay`, `sweep`, `sub.level` (plock), `driv
 
 Note: `sub.level` and `drive` are p-lockable (`plockMode: 'js'`) but not LFO-assignable — they are read per-hit, not as live AudioParams.
 
+### AnalogueKickMachine (`type: 'kick.analogue'`)
+Analogue-modelled counterpart to KickHard — the same three-layer structure, but
+every layer is given PATINA "analogue" character via the shared `AnalogueParts.js`
+helpers (see Analogue Machines below). The body/sub use imperfect-sine
+`PeriodicWave`s (not textbook sines), a fixed per-instance tuning tolerance is
+baked in at construction, a `DriftClock` wanders the body/sub `detune` ~12×/s
+(scaled by `drift`), and the punch transient is **pink** noise instead of white.
+```
+_tuneOsc (imperfect-sine, persistent, +tol/drift on detune) → bodyGain (2× vel, exp decay) ─┐
+_subOsc  (imperfect-sine, tune/2)                            → subGain  (sub.level×2×vel)   ─┼→ WaveShaperNode (tanh, 4× oversample) → outputGain → [Filter]
+AudioBufferSourceNode (pink)                                 → punchGain (bypasses shaper)   ─┘
+```
+Parameters: `tune` (Hz, LFO+plock), `decay`, `sweep`, `sub.level` (plock), `drive` (1–6, plock — rebuilds curve, not LFO-able), `drift` (0–1, plock — read by DriftClock), `punch`, `punch.decay`, `output.level` (LFO+plock). The per-note pitch sweep writes `.frequency` while drift writes `.detune`, so the two stack without fighting. `drive` defaults lower (2.5) and `tune` lower (55 Hz) than KickHard for a rounder analogue character.
+
 ### KickMachine (`type: 'kick'`) — backward compat alias
 Re-exports `KickSilkMachine`. Existing saved projects with `type:'kick'` load as Kick Silk.
 
@@ -77,16 +91,44 @@ AudioBufferSourceNode → HP filter     │
 ```
 Parameters: `tune` (Hz), `decay`, `tone` (body level), `snap` (noise level), `noise.cutoff` (Hz), `output.level`
 
+### AnalogueSnareMachine (`type: 'snare.analogue'`)
+Analogue counterpart to Snare via the shared `AnalogueParts.js` helpers (see Analogue Machines below): the body oscillator is an imperfect-triangle `PeriodicWave` with a per-instance tuning tolerance and a `DriftClock` wandering its `detune` (scaled by `drift`), and the "snares" use **pink** noise (`makePinkBuffer`) instead of white. Same two-layer structure and per-note decay amps as Snare.
+```
+_tuneOsc (imperfect tri, +tol/drift) → _toneGain → _bodyAmp ─┐
+_noiseSrc (pink, loop) → _noiseHP → _snapGain → _noiseAmp ───┴→ outputGain → [Filter]
+```
+Parameters: `tune` (Hz, LFO+plock), `decay`, `tone` (LFO+plock), `snap` (LFO+plock), `noise.cutoff` (LFO+plock), `drift` (0–1, plock — read by DriftClock), `output.level` (LFO+plock).
+
 ### HiHatMachine (`type: 'hihat'`)
 ```
 Osc×6 (square, inharmonic ratios) → mixGain → HP filter → ampGain (exp decay) → outputGain → [Filter]
 ```
 Parameters: `decay`, `open.decay`, `open` (boolean), `cutoff` (HP Hz), `tone` (HP Q), `output.level`
 
+### AnalogueHiHatMachine (`type: 'hihat.analogue'`)
+Analogue counterpart to HiHat via the shared `AnalogueParts.js` helpers. The six oscillators are imperfect **squares**; each oscillator's inharmonic ratio gets a fixed per-instance tolerance nudge (±0.6%) so the metallic cluster differs per instance, and a `DriftClock` wanders all six detunes (scaled by `drift`). Same HP-filtered cluster + per-note amp as HiHat.
+```
+Osc×6 (imperfect square, +ratio-tol, +drift) → mixGain → HP filter → ampGain (exp decay) → outputGain → [Filter]
+```
+Parameters: `decay`, `open.decay`, `open` (boolean), `cutoff` (HP Hz, LFO+plock), `tone` (HP Q, LFO+plock), `drift` (0–1, plock — read by DriftClock), `output.level` (LFO+plock).
+
 ### CymbalMachine (`type: 'cymbal'`)
 Crash / ride cymbal. 6 inharmonic square oscillators at metallic ratios → HPF (tone) → resonant bandpass (body) → per-note exponential decay.
 Three decay tiers: `closed`, `mid`, `open` — selected by `mode` enum p-lockable per step.
 Parameters: `tune` (base Hz, LFO+plock), `tone` (HP cutoff, LFO+plock), `body` (BP center, LFO+plock), `resonance` (BP Q, LFO+plock), `decay`, `mid.decay`, `open.decay`, `mode`, `output.level`.
+
+### AnalogueCymbalMachine (`type: 'cymbal.analogue'`)
+Analogue counterpart to Cymbal via the shared `AnalogueParts.js` helpers (see Analogue Machines below). The six oscillators are imperfect **squares**; each gets a fixed per-instance ratio-tolerance nudge (±0.5%) and a `DriftClock` wanders all six detunes (scaled by `drift`). Same HPF → BP topology and closed/mid/open tiers as Cymbal. `tune` (manualTarget) writes each osc's `.frequency` by its tolerance-skewed ratio; drift writes `.detune`, so the two coexist.
+Parameters: as Cymbal, plus `drift` (0–1, plock — read by DriftClock).
+
+### AnalogueTomMachine (`type: 'tom.analogue'`)
+Tuned analogue drum — there is **no digital "Tom" machine**; this is a focused single-body pitched drum, closest in structure to the analogue kick but tuned higher, with no sub and a soft pink-noise attack rather than a hard punch. The body is an imperfect-sine `PeriodicWave` with a per-instance tuning tolerance and a `DriftClock` on its `detune` (scaled by `drift`); a per-note pitch sweep writes `.frequency` (drift writes `.detune` — no conflict). The body passes through a soft-clip waveshaper.
+```
+_tuneOsc (imperfect sine, +tol/drift) → _bodyGain (per-note) → _shaper → outputGain → [Filter]
+PinkNoiseSource (per-note) → _attackGain (bypasses shaper) ───────────────────────────┘
+```
+Parameters: `tune` (Hz, LFO+plock), `decay`, `sweep`, `drive` (1–4, plock — rebuilds curve), `drift` (0–1, plock), `attack` (pink-noise attack level), `attack.decay`, `output.level` (LFO+plock).
+**Loudness:** brand-new voice with no digital sibling — its `LOUDNESS_TRIM` is a placeholder (1.0) and **must** be measured on `tests/loudness.html`.
 
 ### WoodMachine (`type: 'wood'`)
 Clave / wood block / rimshot / cowbell. Two resonant bandpass filters (ring1, ring2) driven by a looping noise source through per-note decay gains, plus a sine click burst. `mix` knob blends between the two resonator bands.
@@ -100,6 +142,10 @@ AudioBufferSourceNode × 3 (one-shot) → BandpassFilter (persistent) → ampGai
 ```
 First two bursts are short transients (~12 ms); the third carries the decay tail. `spread` controls the inter-burst gap (0–30 ms).
 Parameters: `tone` (BP center Hz, LFO+plock), `snap` (BP Q, LFO+plock), `decay`, `spread`, `output.level`.
+
+### AnalogueClappMachine (`type: 'clapp.analogue'`)
+Analogue counterpart to Clapp via the shared `AnalogueParts.js` helpers. Same three-burst 808 structure, but the noise is **pink** (`makePinkBuffer`) instead of white — rounding off the harsh top of a white-noise clap — and a fixed per-instance jitter (±8%) on the inter-burst gap keeps the layered claps from sounding mechanically even. No persistent oscillators, so no DriftClock (there is no pitched layer to wander).
+Parameters: as Clapp (`tone`, `snap`, `decay`, `spread`, `output.level`).
 
 ### TransientMachine
 Transient-focused drum machine (details TBD).
@@ -154,7 +200,24 @@ Machines adapted from the PATINA analog-modelling engine (`js/patina/`). They re
 PATINA's *oscillator* character (imperfect spectra, thermal drift, component tolerance,
 circuit hiss) but deliberately rely on Webtakt's own Filter / Envelope / LFO / FX rather
 than PATINA's built-in versions — so every existing GUI tab, p-lock and LFO destination
-drives them with no machine-specific UI. Shown under the **Analogue** group in the MACHINE tab.
+drives them with no machine-specific UI. Shown under the **Analogue** group in the MACHINE tab
+(the analogue **drums** — kick, snare, hi-hat, tom, clap, cymbal — live in the Drums group, since they are percussion voices, not osc voices; only Moogish sits in the Analogue group).
+
+**Shared toolkit — `AnalogueParts.js`.** The reusable analogue building blocks were extracted
+out of MoogishMachine into `js/machines/AnalogueParts.js` so every analogue machine imports them
+rather than carrying private copies:
+- `makeImperfectWave(ctx, type, {tolerance, pulseWidth})` — the imperfect-spectrum `PeriodicWave`.
+- `makePinkBuffer(ctx, seconds)` — Paul-Kellet pink noise (circuit hiss / drum noise colour).
+- `DriftClock(ctx, detuneParams, {baseFor, amountFor, …})` — graph-agnostic thermal-drift clock:
+  bounded random walk on a set of oscillator `detune` params; the caller supplies the per-osc
+  *base* detune via `baseFor(i)` and the max wander via `amountFor()`. Owns its own `setInterval`
+  (call `.stop()` in the machine's `disconnect()`).
+- `rand` / `clamp` helpers.
+
+The full analogue family — MoogishMachine plus the analogue drums (Kick, Snare, HiHat, Tom, Clapp,
+Cymbal) — all build on these helpers: imperfect spectra + drift on every pitched/metallic voice,
+plus pink noise wherever a noise layer exists (kick punch, snare snares, tom attack, clap bursts),
+rather than re-porting from PATINA. Any further analogue voices should follow the same pattern.
 
 The analogue *ladder* filter (PATINA's self-oscillating transistor ladder) is now available as
 the `filter.engine: analogue` option in the FILTER pane, app-wide (any track, not just Moogish) —
@@ -167,12 +230,13 @@ Analogue-modelling oscillator voice — the tone-generator section of PATINA. Th
 main oscillators (each with its own *imperfect* `PeriodicWave`: harmonic-amplitude tolerance,
 even-harmonic leakage on squares, phase smear, gentle HF slew-limiting — ported from PATINA's
 `makeImperfectWave`) + a sine sub one octave below osc1 + a looped pink-noise hiss layer, summed
-into a mix bus → `outputGain` → `_trimGain` → [Filter]. A `setInterval` drift clock (≈12×/s, like
-SwarmMachine) applies a bounded random-walk to every oscillator's `detune`, scaled by `drift`;
-fixed per-instance "component tolerance" tuning offsets are baked in at construction so two
-instances differ subtly. Persistent-oscillator architecture (like Synth/Strings/Chord): amplitude
-is gated by the track Envelope; `noteOn` retunes via `_retune`, `noteOff` is a no-op. The drift
-timer is released in `disconnect()` (un-released timers leak — see Machine base note).
+into a mix bus → `outputGain` → `_trimGain` → [Filter]. A `DriftClock` (from `AnalogueParts.js`,
+≈12×/s, like SwarmMachine) applies a bounded random-walk to every oscillator's `detune`, scaled by
+`drift`; the per-osc *base* detune it wanders around is supplied by `_driftBase(i)`. Fixed
+per-instance "component tolerance" tuning offsets are baked in at construction so two instances
+differ subtly. Persistent-oscillator architecture (like Synth/Strings/Chord): amplitude is gated by
+the track Envelope; `noteOn` retunes via `_retune`, `noteOff` is a no-op. The drift clock is
+released via `this._drift.stop()` in `disconnect()` (un-released timers leak — see Machine base note).
 Parameters: per-osc `oscN.waveform` (enum: saw/square/triangle/pulse/sine, JS), `oscN.octave`
 (−2..+2, JS — retunes), `oscN.detune` (±50 ¢, manualTarget — retunes, preserves master detune),
 `oscN.level` (drives that osc's gain); `sub.level`, `noise.level`, `drift` (0–1, JS), `osc.detune`

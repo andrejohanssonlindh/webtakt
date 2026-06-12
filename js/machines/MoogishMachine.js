@@ -4,14 +4,15 @@
  * Analogue-modelling oscillator machine — the tone-generator section of the
  * PATINA engine (js/patina/patina.js) adapted to the Webtakt machine contract.
  *
- * What makes it sound "analogue" (ported from Patina):
- *   - Custom oscillator spectra (`_makeImperfectWave`): real analogue waveforms
+ * The analogue character comes from shared building blocks in AnalogueParts.js
+ * (extracted from here / PATINA so the analogue drums reuse them too):
+ *   - Custom oscillator spectra (`makeImperfectWave`): real analogue waveforms
  *     are never textbook-perfect. Component tolerance skews harmonic amplitudes,
  *     comparator asymmetry leaks even harmonics into "square" waves, and op-amp
  *     slew limiting rounds off the very top. Each oscillator gets a fresh,
  *     slightly different PeriodicWave so no two are identical.
- *   - Slow thermal pitch DRIFT: a bounded random walk nudges every oscillator's
- *     detune ~12×/s (own setInterval, like SwarmMachine). `drift` scales it.
+ *   - Slow thermal pitch DRIFT (`DriftClock`): a bounded random walk nudges every
+ *     oscillator's detune ~12×/s (own setInterval, like SwarmMachine). `drift` scales it.
  *   - Per-instance component TOLERANCE: fixed random tuning/level offsets baked
  *     in at construction, so two MoogishMachine instances differ subtly.
  *   - Pink-noise hiss layer (circuit noise) blended in pre-filter.
@@ -51,53 +52,9 @@
 
 import { Machine } from './Machine.js';
 import { makeTrimGain } from './LoudnessTrim.js';
+import { makeImperfectWave, makePinkBuffer, DriftClock, rand } from './AnalogueParts.js';
 
 const WAVEFORMS = ['saw', 'square', 'triangle', 'pulse', 'sine'];
-
-const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-const rand  = (lo = -1, hi = 1) => lo + Math.random() * (hi - lo);
-
-/**
- * Imperfect oscillator spectrum (ported from Patina makeImperfectWave).
- * Bakes component tolerance, even-harmonic leakage, phase smear and gentle
- * HF slew-limiting into a PeriodicWave — a fresh, slightly different one per osc.
- */
-function _makeImperfectWave(ctx, type, { tolerance = 0.03, pulseWidth = 0.25 } = {}) {
-  const N = 64;
-  const real = new Float32Array(N + 1);
-  const imag = new Float32Array(N + 1);
-  for (let n = 1; n <= N; n++) {
-    let a = 0;
-    switch (type) {
-      case 'saw':
-        a = 1 / n;
-        break;
-      case 'square':
-        a = n % 2 === 1 ? 1 / n : (tolerance * 0.5 * Math.random()) / n; // even-harmonic leakage
-        break;
-      case 'triangle':
-        a = n % 2 === 1
-          ? ((n % 4 === 1 ? 1 : -1) / (n * n))
-          : (tolerance * 0.25 * Math.random()) / (n * n);
-        break;
-      case 'pulse':
-        a = (2 / (n * Math.PI)) * Math.sin(n * Math.PI * pulseWidth);
-        break;
-      case 'sine':
-        a = n === 1 ? 1 : n <= 3 ? (tolerance * 0.3) / (n * n) : 0; // trace harmonics
-        break;
-      default:
-        a = 1 / n;
-    }
-    if (a === 0) continue;
-    a *= 1 + rand() * tolerance;          // harmonic amplitude tolerance
-    a *= Math.exp(-0.0007 * n * n);       // slew limiting: gentle HF rounding
-    const ph = rand() * tolerance * 0.7;  // slight phase smear
-    imag[n] = a * Math.cos(ph);
-    real[n] = a * Math.sin(ph);
-  }
-  return ctx.createPeriodicWave(real, imag);
-}
 
 export class MoogishMachine extends Machine {
   // Per-osc waveform/octave are JS side-effects (PeriodicWave swap / retune);
@@ -195,10 +152,9 @@ export class MoogishMachine extends Machine {
     // Three persistent main oscillators, each with its own imperfect spectrum.
     this._oscs       = [];
     this._gains      = [];
-    this._driftState = [];
     for (let i = 0; i < 3; i++) {
       const osc = context.createOscillator();
-      osc.setPeriodicWave(_makeImperfectWave(context, this._params[`osc${i + 1}.waveform`], {
+      osc.setPeriodicWave(makeImperfectWave(context, this._params[`osc${i + 1}.waveform`], {
         tolerance: 0.04,
       }));
       osc.frequency.value = 261.63;
@@ -212,7 +168,6 @@ export class MoogishMachine extends Machine {
 
       this._oscs.push(osc);
       this._gains.push(g);
-      this._driftState.push({ value: 0, target: 0 });
     }
 
     // Sub oscillator — sine, one octave below osc1.
@@ -220,19 +175,18 @@ export class MoogishMachine extends Machine {
     this._subGain.gain.value = this._params['sub.level'];
     this._subGain.connect(this._mixGain);
     this._oscSub = context.createOscillator();
-    this._oscSub.setPeriodicWave(_makeImperfectWave(context, 'sine', { tolerance: 0.02 }));
+    this._oscSub.setPeriodicWave(makeImperfectWave(context, 'sine', { tolerance: 0.02 }));
     this._oscSub.frequency.value = 130.81;
     this._oscSub.detune.value    = this._tolSub;
     this._oscSub.connect(this._subGain);
     this._oscSub.start();
-    this._driftState.push({ value: 0, target: 0 }); // sub drift slot
 
     // Circuit hiss — looped pink noise, gated by _noiseGain.
     this._noiseGain = context.createGain();
     this._noiseGain.gain.value = this._params['noise.level'];
     this._noiseGain.connect(this._mixGain);
     this._noiseSrc        = context.createBufferSource();
-    this._noiseSrc.buffer = this._makePinkBuffer(context, 2);
+    this._noiseSrc.buffer = makePinkBuffer(context, 2);
     this._noiseSrc.loop   = true;
     this._noiseSrc.playbackRate.value = 1 + rand() * 0.1; // decorrelate
     this._noiseSrc.connect(this._noiseGain);
@@ -255,36 +209,30 @@ export class MoogishMachine extends Machine {
     this._humOsc2.start();
     this._applyHum(context.currentTime);
 
-    // Thermal drift clock — bounded random walk on every osc detune, ~12×/s.
-    // Released in disconnect() (Machine base warns: un-released timers leak).
-    this._driftTimer = setInterval(() => this._tickDrift(), 85);
+    // Thermal drift clock — bounded random walk on every osc detune (3 main +
+    // sub), ~12×/s. Each tick DriftClock adds a small wander on top of the
+    // per-osc base detune supplied by _driftBase(). Released in disconnect()
+    // (Machine base warns: un-released timers leak).
+    this._drift = new DriftClock(
+      context,
+      [...this._oscs, this._oscSub].map(o => o.detune),
+      { baseFor: i => this._driftBase(i), amountFor: () => this._params['drift'] * 3.5 },
+    );
 
     this._retune(context.currentTime);
   }
 
-  /** Paul Kellet pink noise (ported from Patina makePinkNoiseBuffer). */
-  _makePinkBuffer(ctx, seconds) {
-    const len = Math.floor(ctx.sampleRate * seconds);
-    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-    for (let i = 0; i < len; i++) {
-      const w = Math.random() * 2 - 1;
-      b0 = 0.99886 * b0 + w * 0.0555179;
-      b1 = 0.99332 * b1 + w * 0.0750759;
-      b2 = 0.969 * b2 + w * 0.153852;
-      b3 = 0.8665 * b3 + w * 0.3104856;
-      b4 = 0.55 * b4 + w * 0.5329522;
-      b5 = -0.7616 * b5 - w * 0.016898;
-      d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.11;
-      b6 = w * 0.115926;
+  /** Base detune (excluding wander) for drift index i: 0–2 = main oscs, 3 = sub. */
+  _driftBase(i) {
+    if (i < 3) {
+      return this._params[`osc${i + 1}.detune`] + this._params['osc.detune'] + this._tolTune;
     }
-    return buf;
+    return this._tolSub;
   }
 
   /** Swap one oscillator's waveform (regenerates its imperfect spectrum). */
   _setWave(idx, type) {
-    this._oscs[idx].setPeriodicWave(_makeImperfectWave(this.context, type, { tolerance: 0.04 }));
+    this._oscs[idx].setPeriodicWave(makeImperfectWave(this.context, type, { tolerance: 0.04 }));
   }
 
   /**
@@ -326,24 +274,6 @@ export class MoogishMachine extends Machine {
     this._humGain2.gain.setTargetAtTime(0.0004 * hum, t, 0.1);
   }
 
-  /** Thermal drift: bounded random walk nudging each osc detune. */
-  _tickDrift() {
-    const cents = this._params['drift'] * 3.5; // up to ±3.5 cents wander
-    if (cents <= 0) return;
-    const t = this.context.currentTime;
-    const master = this._params['osc.detune'];
-    const all = [...this._oscs, this._oscSub];
-    all.forEach((osc, i) => {
-      const st = this._driftState[i];
-      if (Math.random() < 0.25) st.target = rand() * cents;
-      st.value += (st.target - st.value) * 0.3;
-      const base = i < 3
-        ? this._params[`osc${i + 1}.detune`] + master + this._tolTune
-        : this._tolSub;
-      osc.detune.setTargetAtTime(base + st.value, t, 0.15);
-    });
-  }
-
   /** Retune to the played note. Amplitude gating handled by the track Envelope. */
   noteOn(midiNote, velocity, time) {
     this._rootMidi = midiNote;
@@ -355,7 +285,7 @@ export class MoogishMachine extends Machine {
   connect(destinationNode) { this._trimGain.connect(destinationNode); }
 
   disconnect() {
-    clearInterval(this._driftTimer);
+    this._drift.stop();
     this._oscs.forEach(osc => { try { osc.stop(); } catch (_) {} });
     try { this._oscSub.stop();   } catch (_) {}
     try { this._noiseSrc.stop(); } catch (_) {}

@@ -32,7 +32,9 @@
 export const LOUDNESS_TRIM = {
   // ── coming DOWN (louder than median) ──
   'kick.hard':    0.34,
+  'kick.analogue': 0.34,  // measured: RMS 0.072 ≈ kick.hard, lands on median (GAIN× 0.96)
   'synth':        0.39,
+  'tom.analogue': 0.44,   // measured: imperfect-sine body is loud (RMS 0.154) — pulled to median (peak 0.30, safe)
   'wavetable':    0.44,
   'bass':         0.46,
   'moogish':      0.42,   // PATINA-derived dual imperfect saws ≈ synth/wavetable level (verify via tests/loudness.html)
@@ -54,8 +56,12 @@ export const LOUDNESS_TRIM = {
   // ── spiky percussion: capped so peak ≤ 0.90 (sit below median RMS) ──
   'clapp':        1.34,
   'snare':        1.70,
+  'snare.analogue': 3.67,   // measured: pink snares quiet (RMS 0.054); capped to peak ≤0.90 (peak 0.78)
+  'clapp.analogue': 4.14,   // measured: pink clap very quiet (RMS 0.017) but huge headroom (peak 0.29); capped to peak ≤0.90
   'cymbal':       4.89,
+  'cymbal.analogue': 4.42,  // measured: at peak ceiling (peak 1.00); held to peak ≤0.90, sits just below cymbal
   'noise':        6.87,
+  'hihat.analogue': 11.46,  // measured: tracks hihat (RMS 0.033); held to peak ≤0.90 (peak 1.00)
   'wood':        12.68,
   'hihat':       12.68,
 };

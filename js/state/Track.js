@@ -42,6 +42,12 @@ import { SynthMachine }     from '../machines/SynthMachine.js';
 import { FMMachine }        from '../machines/FMMachine.js';
 import { KickMachine }      from '../machines/KickMachine.js';
 import { KickHardMachine }  from '../machines/KickHardMachine.js';
+import { AnalogueKickMachine } from '../machines/AnalogueKickMachine.js';
+import { AnalogueSnareMachine } from '../machines/AnalogueSnareMachine.js';
+import { AnalogueHiHatMachine } from '../machines/AnalogueHiHatMachine.js';
+import { AnalogueTomMachine }   from '../machines/AnalogueTomMachine.js';
+import { AnalogueClappMachine } from '../machines/AnalogueClappMachine.js';
+import { AnalogueCymbalMachine } from '../machines/AnalogueCymbalMachine.js';
 import { KickSilkMachine }  from '../machines/KickSilkMachine.js';
 import { SnareMachine }     from '../machines/SnareMachine.js';
 import { HiHatMachine }     from '../machines/HiHatMachine.js';
@@ -82,15 +88,21 @@ const MACHINES = {
   kick:       KickMachine,      // backward compat alias → KickSilkMachine
   'kick.silk': KickSilkMachine,
   'kick.hard': KickHardMachine,
+  'kick.analogue': AnalogueKickMachine,
   snare:      SnareMachine,
+  'snare.analogue': AnalogueSnareMachine,
   hihat:      HiHatMachine,
+  'hihat.analogue': AnalogueHiHatMachine,
   noise:      NoiseMachine,
   transient:  TransientMachine,
   swarm:      SwarmMachine,
   sampler:    SamplerMachine,
   cymbal:     CymbalMachine,
+  'cymbal.analogue': AnalogueCymbalMachine,
   wood:       WoodMachine,
   clapp:      ClappMachine,
+  'clapp.analogue': AnalogueClappMachine,
+  'tom.analogue': AnalogueTomMachine,
   wavetable:  WavetableMachine,
   karplus:    KarplusMachine,
   marimba:    MarimbaMachine,

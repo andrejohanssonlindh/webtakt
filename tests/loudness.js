@@ -24,8 +24,10 @@ import { makeOfflineTrack, fireStep, rms } from './runner.js';
 //   sampler / wt-sampler — need a loaded buffer / AudioWorklet
 //   midi                 — no audio output
 const MACHINES = [
-  'synth', 'fm', 'kick.silk', 'kick.hard', 'snare', 'hihat', 'noise',
-  'transient', 'swarm', 'cymbal', 'wood', 'clapp', 'wavetable',
+  'synth', 'fm', 'kick.silk', 'kick.hard', 'kick.analogue', 'snare', 'snare.analogue',
+  'hihat', 'hihat.analogue', 'noise',
+  'transient', 'swarm', 'cymbal', 'cymbal.analogue', 'wood', 'clapp', 'clapp.analogue',
+  'tom.analogue', 'wavetable',
   'karplus', 'marimba', 'bass', 'comb', 'chord', 'strings', 'moogish', 'sample-swarm',
 ];
 
