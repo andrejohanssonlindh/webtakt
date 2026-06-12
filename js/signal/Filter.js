@@ -124,7 +124,7 @@ export class Filter {
       const biquad  = context.createBiquadFilter();
       biquad.type            = this._params['filter.type'];
       biquad.frequency.value = this._params['filter.cutoff'];
-      biquad.Q.value         = this._params['filter.resonance'];
+      biquad.Q.value         = 0.7071; // slope stages: flat Butterworth, no resonance stacking
       biquad.gain.value      = this._params['filter.gain'];
 
       const dryGain = context.createGain();
@@ -291,7 +291,9 @@ export class Filter {
         break;
       case 'filter.resonance':
         this.node.Q.setTargetAtTime(value, t, 0.005);
-        for (const { biquad } of this._stages) biquad.Q.setTargetAtTime(value, t, 0.005);
+        // Slope stages stay at Butterworth Q (0.7071) — applying user Q to every
+        // pole causes resonance to compound-multiply across stages, blowing up at
+        // high slope + high Q. Only the primary node carries the resonance peak.
         if (this._ladder) this._ladder.parameters.get('resonance').setTargetAtTime(_resToLadder(value), t, 0.005);
         break;
       case 'filter.gain':
