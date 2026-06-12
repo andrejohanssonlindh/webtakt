@@ -324,7 +324,33 @@ export class FilterViz {
       }
       return pts;
     };
-    const mainCurve = buildSlopedCurve(mainType, mainCutoff, mainQ, mainGain);
+    const engine = gp('filter.engine') ?? 'digital';
+
+    // Analogue ladder: a fixed 4-pole (24 dB/oct) lowpass — type/slope don't apply.
+    // We can't read the worklet's true response, so draw an APPROXIMATION: two
+    // cascaded 2-pole lowpasses (= 4-pole) at the cutoff, with a resonance bump
+    // derived from the RES knob (Q 0.1–20 → ladder feedback toward self-osc).
+    const buildLadderCurve = (cutoff, Q) => {
+      // Map biquad-Q knob to a visual resonance peak; near the top it spikes
+      // (self-oscillation territory), mirroring _resToLadder in Filter.js.
+      const r       = Math.max(0, Math.min(1.15, (Q - 0.1) / (20 - 0.1) * 1.15));
+      const peakQ   = 0.5 + r * 9;   // resonance height of the per-stage biquad
+      const pts = [];
+      for (let i = 0; i <= N; i++) {
+        const t   = i / N;
+        const hz  = FREQ_MIN * Math.pow(FREQ_MAX / FREQ_MIN, t);
+        // 4-pole = (one resonant 2-pole) × (one gentle 2-pole) for the extra slope.
+        const mag = _evalBiquad('lowpass', cutoff, peakQ, SR, hz)
+                  * _evalBiquad('lowpass', cutoff, 0.7071, SR, hz);
+        const db  = Math.max(DB_MIN, Math.min(DB_MAX, _magToDb(mag)));
+        pts.push({ x: pad.l + t * cw, y: pad.t + (1 - (db - DB_MIN) / (DB_MAX - DB_MIN)) * ch });
+      }
+      return pts;
+    };
+
+    const mainCurve = engine === 'analogue'
+      ? buildLadderCurve(mainCutoff, mainQ)
+      : buildSlopedCurve(mainType, mainCutoff, mainQ, mainGain);
 
     // Fill under main filter
     ctx.beginPath();
@@ -353,6 +379,14 @@ export class FilterViz {
     ctx.setLineDash([3, 3]);
     ctx.stroke();
     ctx.setLineDash([]);
+
+    // ── Analogue mode badge (the curve is an approximation) ──
+    if (engine === 'analogue') {
+      ctx.fillStyle = 'rgba(232,160,32,0.55)';
+      ctx.font = '7px "JetBrains Mono",monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('≈ LADDER 24dB/oct', pad.l + 3, pad.t + 9);
+    }
 
     // ── Env ghost ────────────────────────────────────────────
     // Show the amp env ADSR shape as a faint vertical strip on the right side,

@@ -14,9 +14,12 @@
  * noteOn / noteOff are kept for live keyboard playing (they do cancel,
  * which is fine for interactive use).
  *
- * Filter modulation fix: we drive filter.node.frequency AudioParam directly
+ * Filter modulation fix: we drive the active engine's cutoff AudioParam directly
  * with scheduled ramps rather than via a GainNode (which had no input and
- * therefore always produced silence regardless of its gain value).
+ * therefore always produced silence regardless of its gain value). The sequencer
+ * path goes through Filter.scheduleFrequency; the live keyboard path uses
+ * Filter.cutoffParam() — both resolve to the biquad (digital) or ladder (analogue)
+ * cutoff depending on filter.engine.
  *
  * Tempo-sync (per stage): each timed stage (attack/decay/release of both the
  * amp and filter envelopes) can be locked to tempo. When
@@ -201,7 +204,7 @@ export class Envelope {
       const peakCut    = baseCut + modDepth;
       const sustainCut = baseCut + modDepth * fs;
 
-      const freq = this._filter.node.frequency;
+      const freq = this._filter.cutoffParam();
       freq.cancelScheduledValues(time);
       freq.setValueAtTime(baseCut, time);
       freq.linearRampToValueAtTime(peakCut,    time + fa);
@@ -227,7 +230,7 @@ export class Envelope {
     if (this._filter) {
       const fr      = this._stageSeconds('fenv', 'release');
       const baseCut = this._filter.getParam('filter.cutoff');
-      const freq    = this._filter.node.frequency;
+      const freq    = this._filter.cutoffParam();
 
       if (typeof freq.cancelAndHoldAtTime === 'function') {
         freq.cancelAndHoldAtTime(time);
@@ -254,7 +257,7 @@ export class Envelope {
 
     if (this._filter) {
       const baseCut = this._filter.getParam('filter.cutoff');
-      const freq    = this._filter.node.frequency;
+      const freq    = this._filter.cutoffParam();
       if (typeof freq.cancelAndHoldAtTime === 'function') freq.cancelAndHoldAtTime(time);
       else                                                freq.cancelScheduledValues(time);
       freq.setValueAtTime(baseCut, time);

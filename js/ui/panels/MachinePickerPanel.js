@@ -45,6 +45,12 @@ export const MACHINE_GROUPS = [
     ],
   },
   {
+    label: 'Analogue',
+    defs: [
+      { type: 'moogish', label: 'Moogish', desc: 'Analogue osc + drift (Patina)' },
+    ],
+  },
+  {
     label: 'Sampler',
     defs: [
       { type: 'sampler',      label: 'Sampler',    desc: 'Load file or record mic' },

@@ -88,6 +88,29 @@ export class FilterPanel {
       return knob;
     };
 
+    // Engine dropdown (digital biquad ↔ analogue Moog ladder)
+    const engineRow = document.createElement('div');
+    engineRow.className = 'filter-type-row';
+    const engineLbl = document.createElement('span');
+    engineLbl.className = 'param-label label';
+    engineLbl.textContent = 'ENGINE';
+    const engineSel = document.createElement('select');
+    engineSel.className = 'param-select';
+    ['digital','analogue'].forEach(opt => {
+      const o = document.createElement('option');
+      o.value = opt; o.textContent = opt;
+      if (getFilterParam('filter.engine') === opt) o.selected = true;
+      engineSel.appendChild(o);
+    });
+    engineSel.addEventListener('change', () => {
+      writeValue(track.filter, 'filter.engine', engineSel.value, true);
+      applyEngineVisibility(engineSel.value);
+      mainViz.refresh();
+    });
+    engineRow.appendChild(engineLbl);
+    engineRow.appendChild(engineSel);
+    knobSec.appendChild(engineRow);
+
     // Type dropdown
     const typeRow = document.createElement('div');
     typeRow.className = 'filter-type-row';
@@ -130,6 +153,9 @@ export class FilterPanel {
       const poles = 1 + Math.round(v * 7);
       return poles + 'P/' + (poles * 12) + 'dB';
     });
+    // Analogue-ladder-only knobs (shown when engine = analogue).
+    const driveKnob  = mkKnob('filter.drive',      'DRIVE', 0.1, 12,    2.0,  false, v => v.toFixed(1));
+    const driftKnob  = mkKnob('filter.drift',      'DRIFT', 0,   0.08,  0.01, false, v => Math.round(v / 0.08 * 100) + '%');
 
     gainKnob.el.style.display = getFilterParam('filter.type') === 'peaking' ? '' : 'none';
 
@@ -138,12 +164,29 @@ export class FilterPanel {
     mainKnobRow.appendChild(gainKnob.el);
     mainKnobRow.appendChild(envAmtKnob.el);
     mainKnobRow.appendChild(slopeKnob.el);
-    activeWidgets.push(cutoffKnob, resKnob, gainKnob, envAmtKnob, slopeKnob);
+    mainKnobRow.appendChild(driveKnob.el);
+    mainKnobRow.appendChild(driftKnob.el);
+    activeWidgets.push(cutoffKnob, resKnob, gainKnob, envAmtKnob, slopeKnob, driveKnob, driftKnob);
     knobByPath.set('filter.cutoff',    cutoffKnob);
     knobByPath.set('filter.resonance', resKnob);
     knobByPath.set('filter.gain',      gainKnob);
     knobByPath.set('filter.envAmount', envAmtKnob);
     knobByPath.set('filter.slope',     slopeKnob);
+    knobByPath.set('filter.drive',     driveKnob);
+    knobByPath.set('filter.drift',     driftKnob);
+
+    // Engine-dependent visibility: the analogue ladder is a fixed 24 dB/oct
+    // lowpass, so TYPE + SLOPE are N/A there; DRIVE + DRIFT are ladder-only.
+    function applyEngineVisibility(engine) {
+      const analogue = engine === 'analogue';
+      typeSel.disabled        = analogue;
+      typeRow.style.opacity   = analogue ? '0.4' : '';
+      slopeKnob.el.style.opacity       = analogue ? '0.4' : '';
+      slopeKnob.el.style.pointerEvents = analogue ? 'none' : '';
+      driveKnob.el.style.display = analogue ? '' : 'none';
+      driftKnob.el.style.display = analogue ? '' : 'none';
+    }
+    applyEngineVisibility(getFilterParam('filter.engine'));
 
     // ── Base filter knobs — below main knobs in the left column
     const baseKnobRow = document.createElement('div');

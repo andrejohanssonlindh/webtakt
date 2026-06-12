@@ -36,7 +36,7 @@ css/
   style.css
 js/
   core/
-    AudioEngine.js      — AudioContext, master gain, FX bus, AnalyserNode (master output tap)
+    AudioEngine.js      — AudioContext, master gain, FX bus, AnalyserNode (master output tap); preloads the analogue ladder worklet (ladderReady/ladderLoaded)
     Clock.js            — BPM clock, tick scheduling via AudioContext.currentTime
     GlobalRecorder.js   — MediaRecorder wrapper tapping masterGain
     MidiEngine.js       — Web MIDI singleton: port enumeration, note/CC out, CC in routing, 24-PPQN clock sync out
@@ -73,8 +73,9 @@ js/
     CombMachine.js      — Pitched resonator: two decaying sinusoidal partials (bell/marimba/gamelan)
     ChordMachine.js     — 4-voice chord synth: 11 chord types, inversions, p-lockable per step
     StringsMachine.js   — Bowed string section: detuned saw unison + body/tone filters + bow noise + vibrato; violin/viola/cello/ensemble modes
+    MoogishMachine.js   — Analogue (PATINA-derived) oscillator voice: 3 imperfect-spectrum oscs + sub + pink hiss + thermal drift + component tolerance; feeds existing Filter/Envelope/LFO (type: 'moogish')
   signal/
-    Filter.js           — BiquadFilterNode wrapper: type, cutoff, resonance, envAmount + base LPF/HPF
+    Filter.js           — Filter wrapper, two engines (filter.engine): digital biquad cascade (type/cutoff/res/gain/slope) + analogue PATINA Moog ladder worklet (drive/drift); base LPF/HPF; cutoffParam()/scheduleFrequency engine-aware
     Envelope.js         — Dual ADSR (amp + filter env), scheduleNote for sequencer, noteOn/noteOff for live; per-stage MS/BPM tempo-sync on A/D/R (resolved at note-fire via setBpm + count32ToSeconds)
     LFO.js              — LFO: waveform, speed, depth, destination routing (supports multiple AudioParam destinations)
     VoicePool.js        — 8-slot voice pool per track: each slot owns machine + envelope + filter; slot-0 filter is canonical and mirrors params to siblings; all slots share outputGain
@@ -134,6 +135,7 @@ js/
     Scales.js           — Scale definitions (20 scales) + noteInScale() helper
   worklets/
     wavetable-sampler-processor.js — AudioWorkletProcessor for WavetableSamplerMachine
+    patina-ladder-processor.js     — AudioWorkletProcessor: PATINA Moog transistor-ladder filter (Filter.js engine='analogue'); preloaded at boot by AudioEngine
 ```
 
 ---
@@ -208,8 +210,8 @@ UI (reads AppState, calls Track/Sequencer/Machine methods)
 | Steps total | 64 per track |
 | Steps visible | 16 (one page) |
 | Step pages | Per-track page nav UI built |
-| Machines | SynthMachine, KickSilkMachine, KickHardMachine, SnareMachine, HiHatMachine, FMMachine, SwarmMachine, NoiseMachine, TransientMachine, SamplerMachine, WavetableSamplerMachine, SampleSwarmMachine, CymbalMachine, WoodMachine, ClappMachine, WavetableMachine, KarplusMachine, MarimbaMachine, BassMachine, CombMachine, ChordMachine active; DrumMachine stubbed |
-| Filter | Main filter (LP/HP/BP/Notch/Peaking/Allpass) + base filter (HPF+LPF), FilterViz with env ghost |
+| Machines | SynthMachine, KickSilkMachine, KickHardMachine, SnareMachine, HiHatMachine, FMMachine, SwarmMachine, NoiseMachine, TransientMachine, SamplerMachine, WavetableSamplerMachine, SampleSwarmMachine, CymbalMachine, WoodMachine, ClappMachine, WavetableMachine, KarplusMachine, MarimbaMachine, BassMachine, CombMachine, ChordMachine, MoogishMachine active; DrumMachine stubbed |
+| Filter | Two engines (`filter.engine`): **digital** biquad (LP/HP/BP/Notch/Peaking/Allpass + slope) and **analogue** PATINA Moog ladder worklet (24 dB/oct, self-oscillation, drive, drift) + base filter (HPF+LPF), FilterViz with env ghost (approx curve in analogue mode) |
 | Pan | Per-track stereo pan, p-lockable + LFO-assignable |
 | Delay | Per-track feedback delay, p-lockable + LFO-assignable |
 | Bitcrush | Per-track bit-depth + rate reduction, p-lockable + LFO-assignable |
@@ -217,7 +219,7 @@ UI (reads AppState, calls Track/Sequencer/Machine methods)
 | Deck / DJ crossfade | Two decks (Project A+B) on a shared beatmatched clock; constant-power crossfader, per-deck control/silence/load/unload. DECK tab. Not persisted (live performance layer). |
 | MIDI | MIDI out (MidiMachine per track), MIDI In CC routing, 24-PPQN clock sync out. Timing via setTimeout (Web MIDI has no sample-accurate send) — see MidiEngine.js header. |
 | Loudness | Per-machine fixed trim (`js/machines/LoudnessTrim.js`) normalises every machine to a common loudness. Measured/re-tuned via the loudness bench at `tests/loudness.html`. See `design/machines.md` → Loudness Normalisation. |
-| Analogue emulation | Out of scope |
+| Analogue emulation | Phase 1: MoogishMachine (`type: 'moogish'`) — PATINA-derived analogue oscillators (imperfect spectra + thermal drift + tolerance + hiss). Phase 2 (done): analogue Moog ladder-filter engine (`filter.engine: analogue`) in the FILTER pane, app-wide — PATINA worklet ladder with drive + drift. See `design/machines.md` → Analogue Machines and `design/audio-signal-chain.md` → Filter Engine. |
 
 ---
 

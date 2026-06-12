@@ -43,6 +43,7 @@ tests/
     lfo.js                — LFO core behaviour: depth=0 baseline, depth=100 variation, TRG determinism
     lfo_machine_params.js — LFO wiring tests for every modulatable param on every machine + signal chain
     plocks.js             — p-lock apply and restore tests
+    filter_engine.js      — digital/analogue filter engine switch (analogue = PATINA ladder worklet; pass-with-note if worklet unavailable offline)
     machines/
       synth.js
       kick_silk.js
@@ -59,8 +60,14 @@ tests/
       wavetable.js
       comb.js
       chord.js
+      strings.js
       swarm.js
       sample_swarm.js
+      marimba.js
+      param_spec.js         — declarative `static SPEC` regression: getParamList/resolveAudioParam/toJSON round-trip per machine
+      loudness.js           — pass/fail loudness-normalisation guard (median-band for tonal machines, peak ceiling for percussion)
+  loudness.js               — MANUAL loudness BENCH (no pass/fail) — see loudness.html
+  loudness.html             — bench page: renders the table + suggested per-machine trim
 ```
 
 ---
@@ -171,6 +178,22 @@ Additional machine-specific tests:
 | CymbalMachine | Energy concentrated in high frequencies | `bandEnergy` hi > lo |
 | SnareMachine | Mid-frequency energy present | `bandEnergy` 200–4kHz > 0 |
 | FMMachine | op2.level=1 spreads sidebands above 1kHz | `bandEnergy` 1–10kHz wet >> dry |
+
+### Loudness normalisation (`tests/machines/loudness.js`)
+
+A pass/fail guard built on the same model as the manual loudness BENCH (`tests/loudness.html`),
+turning its measurement into a regression test. Each machine renders through the production stack
+(filter wide open, FX off, 8 hits @ note 60 / vel 100) — i.e. *after* its `LOUDNESS_TRIM` is applied.
+
+- **Tonal/sustained machines** (synth, fm, wavetable, bass, marimba, comb, chord, strings, **moogish**,
+  swarm, karplus, kick.silk) must land within **0.5×–2.2×** of the MEDIAN trimmed RMS. The band is wide
+  on purpose: it catches a *gross* mistune (a missing or zero trim → ≫2×), not small drift. A failure
+  means "re-run tests/loudness.html and update that machine's `LOUDNESS_TRIM`".
+- **Percussion** (kick.hard, snare, hihat, cymbal, clapp, wood, noise, transient) is intentionally
+  *below* median RMS — the bench caps their trim so transient peaks keep headroom — so they are held
+  only to a **peak ceiling** (< 1.0 linear) + audibility, not the band.
+- Catches: a new machine added without a tuned trim (defaults to 1.0 → usually fails the band), or a
+  synthesis change that shifts a machine's level. Each machine is rendered once (cached) across its tests.
 
 ---
 

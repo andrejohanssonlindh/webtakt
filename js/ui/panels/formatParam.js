@@ -33,6 +33,8 @@ export function formatParam(p, v) {
   if (p.path === 'reverb.wet')       return Math.round(v * 100) + '%';
   if (p.path === 'base.lpf')         return Math.round(v) + 'Hz';
   if (p.path === 'base.hpf')         return Math.round(v) + 'Hz';
+  if (p.path === 'filter.drive')     return v.toFixed(1);
+  if (p.path === 'filter.drift')     return Math.round(v / 0.08 * 100) + '%';
   if (p.path === 'osc.detune')       return (v >= 0 ? '+' : '') + Math.round(v) + '¢';
   if (p.path === 'amp.pan')          return Math.abs(v) < 0.01 ? 'C' : (v < 0 ? 'L' : 'R') + Math.round(Math.abs(v) * 100);
   if (p.path === 'sub.level')        return Math.round(v * 100) + '%';
@@ -114,6 +116,11 @@ export function formatParam(p, v) {
   if (p.path === 'bow')              return Math.round(v * 100) + '%';
   if (p.path === 'vibrato')          return Math.round(v) + '¢';
   if (p.path === 'vibrato.rate')     return v.toFixed(2) + 'Hz';
+  // MoogishMachine
+  if (p.path.endsWith('.octave'))    return (v > 0 ? '+' : '') + Math.round(v);
+  if (/^osc[123]\.detune$/.test(p.path)) return (v >= 0 ? '+' : '') + Math.round(v) + '¢';
+  if (p.path === 'drift')            return Math.round(v * 100) + '%';
+  if (p.path === 'noise.level')      return Math.round(v * 100) + '%';
   // FMMachine
   if (p.path.endsWith('.ratio'))     return 'x' + v.toFixed(2);
   if (p.path.endsWith('.feedback'))  return Math.round(v * 100) + '%';

@@ -26,7 +26,7 @@ import { makeOfflineTrack, fireStep, rms } from './runner.js';
 const MACHINES = [
   'synth', 'fm', 'kick.silk', 'kick.hard', 'snare', 'hihat', 'noise',
   'transient', 'swarm', 'cymbal', 'wood', 'clapp', 'wavetable',
-  'karplus', 'marimba', 'bass', 'comb', 'chord', 'strings', 'sample-swarm',
+  'karplus', 'marimba', 'bass', 'comb', 'chord', 'strings', 'moogish', 'sample-swarm',
 ];
 
 // Sample-swarm needs a buffer injected before it makes sound.

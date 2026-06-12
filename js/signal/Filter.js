@@ -40,6 +40,14 @@
 
 const EXTRA_STAGES = 7; // 7 extra → 8 poles max (96 dB/oct)
 
+// Map the UI resonance knob (biquad Q, 0.1–20) onto the analogue ladder's
+// resonance range (0–1.15, where > ~1.0 self-oscillates). Linear so the top of
+// the knob reaches self-oscillation; clamped to the ladder's worklet range.
+function _resToLadder(q) {
+  const t = (q - 0.1) / (20 - 0.1);           // 0..1 across the Q knob
+  return Math.max(0, Math.min(1.15, t * 1.15));
+}
+
 // Short glide used to reach the note-on cutoff without a coefficient-step click
 // (see scheduleFrequency baseCut anchor).
 const ANCHOR_GLIDE = 0.0015;
@@ -50,15 +58,27 @@ export class Filter {
     this.context = context;
 
     this._params = {
+      'filter.engine':    'digital',  // 'digital' (biquad) | 'analogue' (ladder worklet)
       'filter.type':      'lowpass',
       'filter.cutoff':    8000,
       'filter.resonance': 1.0,
       'filter.gain':      0,
       'filter.envAmount': 0.3,
       'filter.slope':     0,
+      'filter.drive':     2.0,        // analogue ladder only: input gain into tanh stage
+      'filter.drift':     0.01,       // analogue ladder only: thermal cutoff wander
       'base.lpf':         20000,
       'base.hpf':         20,
     };
+
+    // Lazily-created analogue ladder worklet node (Moog transistor ladder).
+    // Stays null until the user switches this filter to engine='analogue'.
+    this._ladder = null;
+    // Which engine is currently WIRED into the audio path. The constructor wires
+    // the digital biquad cascade below, so this starts 'digital'. _setEngine only
+    // re-routes on an actual transition (re-connecting an already-connected node
+    // pair would double the signal).
+    this._wiredEngine = 'digital';
 
     // Primary filter node — LFO + env connect here
     this.node = context.createBiquadFilter();
@@ -130,11 +150,82 @@ export class Filter {
       prev = sumNode;
     }
     prev.connect(this._outputGain);
+    // Tail of the digital biquad cascade — disconnected from _outputGain when the
+    // analogue ladder takes over the path (see _setEngine).
+    this._biquadTail = prev;
   }
 
   /** @param {AudioNode} destinationNode */
   connect(destinationNode) {
     this._outputGain.connect(destinationNode);
+  }
+
+  /**
+   * Switch the filter engine between the digital biquad cascade and the analogue
+   * Moog ladder worklet. Both subgraphs stay alive; we only move two cut points:
+   *
+   *   digital:  _baseLPF → node → stages… → _biquadTail → _outputGain
+   *   analogue: _baseLPF →               _ladder        → _outputGain
+   *
+   * The ladder node is created lazily on first switch (its worklet module is
+   * preloaded at boot by AudioEngine, so construction here is synchronous). If
+   * the worklet is unavailable (load failed / OfflineAudioContext w/o worklet)
+   * we fall back to staying digital rather than silencing the track.
+   *
+   * @param {string} engine 'digital' | 'analogue'
+   * @param {number} [time]
+   */
+  _setEngine(engine, time) {
+    const target = engine === 'analogue' ? 'analogue' : 'digital';
+    if (target === this._wiredEngine) return;   // idempotent: only act on transitions
+
+    const analogue = target === 'analogue';
+    if (analogue && !this._ladder) {
+      try {
+        this._ladder = new AudioWorkletNode(this.context, 'patina-ladder', {
+          numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
+        });
+      } catch (err) {
+        console.warn('Filter: analogue ladder unavailable, staying digital.', err);
+        this._params['filter.engine'] = 'digital';
+        return;
+      }
+    }
+
+    const t = time ?? this.context.currentTime;
+    if (analogue) {
+      // base → ladder → output ; detach biquad cascade from base + output.
+      try { this._baseLPF.disconnect(this.node); } catch (_) {}
+      try { this._biquadTail.disconnect(this._outputGain); } catch (_) {}
+      this._baseLPF.connect(this._ladder);
+      this._ladder.connect(this._outputGain);
+      // Push current params into the ladder so it matches the knobs.
+      this._ladder.parameters.get('cutoff').setValueAtTime(this._params['filter.cutoff'], t);
+      this._ladder.parameters.get('resonance').setValueAtTime(_resToLadder(this._params['filter.resonance']), t);
+      this._ladder.parameters.get('drive').setValueAtTime(this._params['filter.drive'], t);
+      this._ladder.parameters.get('drift').setValueAtTime(this._params['filter.drift'], t);
+    } else {
+      // base → node → … → output ; detach ladder.
+      if (this._ladder) {
+        try { this._baseLPF.disconnect(this._ladder); } catch (_) {}
+        try { this._ladder.disconnect(this._outputGain); } catch (_) {}
+      }
+      this._baseLPF.connect(this.node);
+      this._biquadTail.connect(this._outputGain);
+    }
+    this._wiredEngine = target;
+  }
+
+  /**
+   * The cutoff AudioParam of the ACTIVE engine — ladder `cutoff` in analogue mode,
+   * else the primary biquad's `frequency`. The Envelope (live keyboard path) writes
+   * cutoff through this so it targets whichever engine is running.
+   * @returns {AudioParam}
+   */
+  cutoffParam() {
+    return (this._params['filter.engine'] === 'analogue' && this._ladder)
+      ? this._ladder.parameters.get('cutoff')
+      : this.node.frequency;
   }
 
   /** Connect an incoming node to the filter input (base HPF entry point) */
@@ -143,6 +234,10 @@ export class Filter {
   }
 
   disconnect() {
+    if (this._ladder) {
+      try { this._ladder.port.postMessage('kill'); } catch (_) {}
+      try { this._ladder.disconnect(); } catch (_) {}
+    }
     this._outputGain.disconnect();
   }
 
@@ -164,21 +259,33 @@ export class Filter {
     const t = time ?? this.context.currentTime;
 
     switch (path) {
+      case 'filter.engine':
+        this._setEngine(value, t);
+        break;
       case 'filter.type':
         this.node.type = value;
         for (const { biquad } of this._stages) biquad.type = value;
         break;
       case 'filter.cutoff':
+        // Write both engines so the inactive one stays in sync for a later switch.
         this.node.frequency.setTargetAtTime(value, t, 0.005);
         for (const { biquad } of this._stages) biquad.frequency.setTargetAtTime(value, t, 0.005);
+        if (this._ladder) this._ladder.parameters.get('cutoff').setTargetAtTime(value, t, 0.005);
         break;
       case 'filter.resonance':
         this.node.Q.setTargetAtTime(value, t, 0.005);
         for (const { biquad } of this._stages) biquad.Q.setTargetAtTime(value, t, 0.005);
+        if (this._ladder) this._ladder.parameters.get('resonance').setTargetAtTime(_resToLadder(value), t, 0.005);
         break;
       case 'filter.gain':
         this.node.gain.setTargetAtTime(value, t, 0.005);
         for (const { biquad } of this._stages) biquad.gain.setTargetAtTime(value, t, 0.005);
+        break;
+      case 'filter.drive':
+        if (this._ladder) this._ladder.parameters.get('drive').setTargetAtTime(value, t, 0.01);
+        break;
+      case 'filter.drift':
+        if (this._ladder) this._ladder.parameters.get('drift').setTargetAtTime(value, t, 0.01);
         break;
       case 'filter.envAmount':
         break;
@@ -219,12 +326,15 @@ export class Filter {
 
   getParamList() {
     return [
+      { path: 'filter.engine',    label: 'Engine',    type: 'enum',   options: ['digital','analogue'], plockMode: 'js' },
       { path: 'filter.type',      label: 'Type',      type: 'enum',   options: ['lowpass','highpass','bandpass','notch','peaking','allpass'], plockMode: 'js'        },
       { path: 'filter.cutoff',    label: 'Cutoff',    type: 'number', min: 20,  max: 20000, default: 8000,  modulatable: true, lfoMin: 20,   lfoMax: 20000, lfoUnit: 'cents', plockMode: 'envelope' },
       { path: 'filter.resonance', label: 'Resonance', type: 'number', min: 0.1, max: 20,    default: 1.0,   modulatable: true, lfoMin: 0.1,  lfoMax: 20,    plockMode: 'filter'   },
       { path: 'filter.gain',      label: 'Gain',      type: 'number', min: -30, max: 30,    default: 0,     modulatable: true, lfoMin: -30,  lfoMax: 30,    plockMode: 'filter'   },
       { path: 'filter.envAmount', label: 'Env Amt',   type: 'number', min: -1,  max: 1,     default: 0.3,                                                   plockMode: 'envelope' },
       { path: 'filter.slope',     label: 'Slope',     type: 'number', min: 0,   max: 1,     default: 0,     modulatable: true, lfoMin: 0,    lfoMax: 1,     plockMode: 'filter'   },
+      { path: 'filter.drive',     label: 'Drive',     type: 'number', min: 0.1, max: 12,    default: 2.0,   modulatable: true, lfoMin: 0.1,  lfoMax: 12,    plockMode: 'filter'   },
+      { path: 'filter.drift',     label: 'Drift',     type: 'number', min: 0,   max: 0.08,  default: 0.01,  modulatable: true, lfoMin: 0,    lfoMax: 0.08,  plockMode: 'filter'   },
       { path: 'base.lpf',         label: 'Base LPF',  type: 'number', min: 200, max: 20000, default: 20000, modulatable: true, lfoMin: 200,  lfoMax: 20000, lfoUnit: 'cents', plockMode: 'filter'   },
       { path: 'base.hpf',         label: 'Base HPF',  type: 'number', min: 20,  max: 8000,  default: 20,    modulatable: true, lfoMin: 20,   lfoMax: 8000,  lfoUnit: 'cents', plockMode: 'filter'   },
     ];
@@ -259,10 +369,21 @@ export class Filter {
    *   envelope from baseCut with no discontinuity. baseCut here is informational /
    *   back-compat for the sweep start; the actual pre-position is anchorFrequency.
    */
+  /**
+   * Cutoff AudioParam(s) of the active engine. Digital: the primary biquad +
+   * every slope stage (all must track the envelope identically). Analogue: the
+   * single ladder `cutoff` param. Envelope sweeps + LFO + anchor all fan to these.
+   * @returns {AudioParam[]}
+   */
+  _cutoffParams() {
+    if (this._params['filter.engine'] === 'analogue' && this._ladder) {
+      return [this._ladder.parameters.get('cutoff')];
+    }
+    return [this.node.frequency, ...this._stages.map(s => s.biquad.frequency)];
+  }
+
   scheduleFrequency(time, a, d, peakCut, sustainCut, offTime, fr, trueCut, baseCut = null) {
-    const nodes = [this.node, ...this._stages.map(s => s.biquad)];
-    for (const n of nodes) {
-      const freq = n.frequency;
+    for (const freq of this._cutoffParams()) {
       if (typeof freq.cancelAndHoldAtTime === 'function') {
         freq.cancelAndHoldAtTime(time);
       } else {
@@ -292,14 +413,14 @@ export class Filter {
    * @param {number} settleTime — AudioContext time the move should start
    */
   anchorFrequency(freqHz, settleTime) {
-    for (const n of [this.node, ...this._stages.map(s => s.biquad)]) {
-      n.frequency.setTargetAtTime(freqHz, settleTime, ANCHOR_GLIDE);
+    for (const freq of this._cutoffParams()) {
+      freq.setTargetAtTime(freqHz, settleTime, ANCHOR_GLIDE);
     }
   }
 
   resolveAudioParam(path) {
     switch (path) {
-      case 'filter.cutoff':    return this.node.frequency;
+      case 'filter.cutoff':    return this.cutoffParam();
       case 'filter.resonance': return this.node.Q;
       case 'base.lpf':         return this._baseLPF.frequency;
       case 'base.hpf':         return this._baseHPF.frequency;
@@ -334,7 +455,13 @@ export class Filter {
   resolveLFOTargets(path) {
     switch (path) {
       case 'filter.cutoff':
-        // Primary node + every slope stage, so all active poles track the LFO.
+        // Analogue ladder has no .detune — the LFO rides the worklet's `cutoff`
+        // param directly (Hz, linear). Depth is then interpreted in Hz rather than
+        // cents; see Track.lfoDepthScale / design doc note.
+        if (this._params['filter.engine'] === 'analogue' && this._ladder) {
+          return [this._ladder.parameters.get('cutoff')];
+        }
+        // Digital: primary node + every slope stage, so all active poles track the LFO.
         return [this.node.detune, ...this._stages.map(s => s.biquad.detune)];
       case 'base.lpf': return [this._baseLPF.detune];
       case 'base.hpf': return [this._baseHPF.detune];

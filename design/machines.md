@@ -148,6 +148,40 @@ Parameters: `mode` (enum, JS), `osc.detune` (hidden, trig tab — manualTarget, 
 
 ---
 
+## Analogue Machines
+
+Machines adapted from the PATINA analog-modelling engine (`js/patina/`). They reproduce
+PATINA's *oscillator* character (imperfect spectra, thermal drift, component tolerance,
+circuit hiss) but deliberately rely on Webtakt's own Filter / Envelope / LFO / FX rather
+than PATINA's built-in versions — so every existing GUI tab, p-lock and LFO destination
+drives them with no machine-specific UI. Shown under the **Analogue** group in the MACHINE tab.
+
+The analogue *ladder* filter (PATINA's self-oscillating transistor ladder) is now available as
+the `filter.engine: analogue` option in the FILTER pane, app-wide (any track, not just Moogish) —
+see `design/audio-signal-chain.md` → Filter Engine. Pairing Moogish with the analogue ladder gives
+the most complete PATINA emulation (imperfect oscillators + Moog ladder); Moogish also works fine
+through the default digital biquad filter.
+
+### MoogishMachine (`type: 'moogish'`)
+Analogue-modelling oscillator voice — the tone-generator section of PATINA. Three persistent
+main oscillators (each with its own *imperfect* `PeriodicWave`: harmonic-amplitude tolerance,
+even-harmonic leakage on squares, phase smear, gentle HF slew-limiting — ported from PATINA's
+`makeImperfectWave`) + a sine sub one octave below osc1 + a looped pink-noise hiss layer, summed
+into a mix bus → `outputGain` → `_trimGain` → [Filter]. A `setInterval` drift clock (≈12×/s, like
+SwarmMachine) applies a bounded random-walk to every oscillator's `detune`, scaled by `drift`;
+fixed per-instance "component tolerance" tuning offsets are baked in at construction so two
+instances differ subtly. Persistent-oscillator architecture (like Synth/Strings/Chord): amplitude
+is gated by the track Envelope; `noteOn` retunes via `_retune`, `noteOff` is a no-op. The drift
+timer is released in `disconnect()` (un-released timers leak — see Machine base note).
+Parameters: per-osc `oscN.waveform` (enum: saw/square/triangle/pulse/sine, JS), `oscN.octave`
+(−2..+2, JS — retunes), `oscN.detune` (±50 ¢, manualTarget — retunes, preserves master detune),
+`oscN.level` (drives that osc's gain); `sub.level`, `noise.level`, `drift` (0–1, JS), `osc.detune`
+(hidden, trig tab — manualTarget master detune), `output.level`. All level/detune params are
+LFO/p-lock assignable; waveforms, octaves and drift are JS-only. Presets are recreated as saved
+SoundLibrary snapshots (machine + Filter + Envelope together), not a machine-level dropdown.
+
+---
+
 ## Sampler Machines
 
 ### SamplerMachine (`type: 'sampler'`)

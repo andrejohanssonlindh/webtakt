@@ -61,6 +61,7 @@ import { WavetableSamplerMachine } from '../machines/WavetableSamplerMachine.js'
 import { SampleSwarmMachine }     from '../machines/SampleSwarmMachine.js';
 import { MarimbaMachine }         from '../machines/MarimbaMachine.js';
 import { StringsMachine }         from '../machines/StringsMachine.js';
+import { MoogishMachine }         from '../machines/MoogishMachine.js';
 import { MidiMachine }           from '../machines/MidiMachine.js';
 import { Filter }        from '../signal/Filter.js';
 import { Envelope }      from '../signal/Envelope.js';
@@ -96,6 +97,7 @@ const MACHINES = {
   comb:       CombMachine,
   chord:      ChordMachine,
   strings:    StringsMachine,
+  moogish:    MoogishMachine,
   'wt-sampler':     WavetableSamplerMachine,
   'sample-swarm':   SampleSwarmMachine,
   midi:             MidiMachine,

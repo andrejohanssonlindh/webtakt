@@ -189,6 +189,25 @@ const EXPECTED = {
     { path: 'vibrato.rate', label: 'Vib Rate', type: 'number', min: 0.5,  max: 12,   default: 5.0,  modulatable: true, lfoMin: 0.5,  lfoMax: 12,   plockMode: 'audioParam' },
     { path: 'output.level', label: 'Level',    type: 'number', min: 0,    max: 1,    default: 0.7,  modulatable: true, lfoMin: 0,    lfoMax: 1,    plockMode: 'audioParam' },
   ],
+  moogish: [
+    { path: 'osc1.waveform', label: 'O1 Wave',   type: 'enum',   options: ['saw','square','triangle','pulse','sine'], plockMode: 'js' },
+    { path: 'osc1.octave',   label: 'O1 Oct',    type: 'number', min: -2,  max: 2,   default: 0,    plockMode: 'js' },
+    { path: 'osc1.detune',   label: 'O1 Detune', type: 'number', min: -50, max: 50,  default: -6,   modulatable: true, lfoMin: -50, lfoMax: 50, plockMode: 'audioParam' },
+    { path: 'osc1.level',    label: 'O1 Level',  type: 'number', min: 0,   max: 1,   default: 0.45, modulatable: true, lfoMin: 0,   lfoMax: 1,  plockMode: 'audioParam' },
+    { path: 'osc2.waveform', label: 'O2 Wave',   type: 'enum',   options: ['saw','square','triangle','pulse','sine'], plockMode: 'js' },
+    { path: 'osc2.octave',   label: 'O2 Oct',    type: 'number', min: -2,  max: 2,   default: 0,    plockMode: 'js' },
+    { path: 'osc2.detune',   label: 'O2 Detune', type: 'number', min: -50, max: 50,  default: 7,    modulatable: true, lfoMin: -50, lfoMax: 50, plockMode: 'audioParam' },
+    { path: 'osc2.level',    label: 'O2 Level',  type: 'number', min: 0,   max: 1,   default: 0.45, modulatable: true, lfoMin: 0,   lfoMax: 1,  plockMode: 'audioParam' },
+    { path: 'osc3.waveform', label: 'O3 Wave',   type: 'enum',   options: ['saw','square','triangle','pulse','sine'], plockMode: 'js' },
+    { path: 'osc3.octave',   label: 'O3 Oct',    type: 'number', min: -2,  max: 2,   default: -1,   plockMode: 'js' },
+    { path: 'osc3.detune',   label: 'O3 Detune', type: 'number', min: -50, max: 50,  default: 2,    modulatable: true, lfoMin: -50, lfoMax: 50, plockMode: 'audioParam' },
+    { path: 'osc3.level',    label: 'O3 Level',  type: 'number', min: 0,   max: 1,   default: 0.0,  modulatable: true, lfoMin: 0,   lfoMax: 1,  plockMode: 'audioParam' },
+    { path: 'sub.level',     label: 'Sub',       type: 'number', min: 0,   max: 1,   default: 0.0,  modulatable: true, lfoMin: 0,   lfoMax: 1,  plockMode: 'audioParam' },
+    { path: 'noise.level',   label: 'Noise',     type: 'number', min: 0,   max: 1,   default: 0.0,  modulatable: true, lfoMin: 0,   lfoMax: 1,  plockMode: 'audioParam' },
+    { path: 'drift',         label: 'Drift',     type: 'number', min: 0,   max: 1,   default: 0.5,  plockMode: 'js' },
+    { path: 'osc.detune',    label: 'Detune',    type: 'number', min: -100, max: 100, default: 0,   modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
+    { path: 'output.level',  label: 'Level',     type: 'number', min: 0,   max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,   lfoMax: 1,  plockMode: 'audioParam' },
+  ],
   sampler: [
     { path: 'sample.start',     label: 'Start',    type: 'number',  min: 0,   max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
     { path: 'sample.end',       label: 'End',      type: 'number',  min: 0,   max: 1,   default: 1,    modulatable: false, plockMode: 'js' },
@@ -222,6 +241,8 @@ const RESOLVES = {
   bass: ['osc.detune', 'sub.level', 'output.level'],
   swarm: ['osc.detune', 'height', 'output.level'],
   strings: ['osc.detune', 'tone', 'body', 'resonance', 'bow', 'vibrato', 'vibrato.rate', 'output.level'],
+  moogish: ['osc1.detune', 'osc1.level', 'osc2.detune', 'osc2.level', 'osc3.detune', 'osc3.level',
+            'sub.level', 'noise.level', 'osc.detune', 'output.level'],
   sampler: ['output.level'],
 };
 
@@ -231,7 +252,7 @@ suite('Param spec (declarative machines)', () => {
     'synth', 'snare', 'chord',
     'kick.silk', 'kick.hard', 'hihat', 'clapp', 'cymbal',
     'noise', 'karplus', 'comb', 'marimba', 'transient', 'wood',
-    'bass', 'swarm', 'strings', 'sampler',
+    'bass', 'swarm', 'strings', 'moogish', 'sampler',
   ]) {
 
     test(`${type}: getParamList matches original descriptors`, async () => {

@@ -35,6 +35,7 @@ export const LOUDNESS_TRIM = {
   'synth':        0.39,
   'wavetable':    0.44,
   'bass':         0.46,
+  'moogish':      0.42,   // PATINA-derived dual imperfect saws ≈ synth/wavetable level (verify via tests/loudness.html)
   'marimba':      0.50,
   'fm':           0.57,
   'comb':         0.61,

@@ -91,6 +91,50 @@ filter curves are drawn as a dim overlay in the main FilterViz.
 **Machine connection**: `machine.connect(this.filter._baseHPF)` — machines feed the base HPF,
 not `filter.node` directly.
 
+### Filter Engine: digital biquad ↔ analogue ladder (`filter.engine`)
+
+`filter.engine` (enum `digital` | `analogue`, default `digital`, p-lockable) selects which DSP
+runs after the base filters. Available on **every** track, switchable live in the FILTER tab.
+
+- **digital** — the biquad cascade above (`node` + slope stages). Unchanged default behaviour.
+- **analogue** — the **PATINA Moog transistor-ladder** running in an AudioWorklet
+  (`js/worklets/patina-ladder-processor.js`): Huovilainen 4-pole lowpass with tanh saturation,
+  self-oscillation (resonance > ~1.0), input drive, and thermal cutoff drift. Fixed 24 dB/oct
+  lowpass — `filter.type` and `filter.slope` do not apply (greyed out in the UI).
+
+Routing (both subgraphs stay alive; only two cut points move — see `Filter._setEngine`, idempotent
+via `_wiredEngine`):
+```
+digital:  _baseLPF → node → stages… → _outputGain
+analogue: _baseLPF →        ladder   → _outputGain
+```
+
+The ladder worklet **module is preloaded once at boot** by `AudioEngine` (`ladderReady`/`ladderLoaded`),
+so the node is created **synchronously** on first switch to analogue. If the worklet is unavailable
+(load failed / OfflineAudioContext without worklet support), the filter stays digital.
+
+Analogue-only params (shown as DRIVE + DRIFT knobs in analogue mode): `filter.drive` (0.1–12,
+default 2.0 — input gain into the tanh stage) and `filter.drift` (0–0.08, default 0.01 — thermal
+cutoff wander). Both p-lockable + LFO-assignable.
+
+**Resonance mapping**: the UI RES knob is biquad Q (0.1–20). For the ladder it maps linearly to the
+worklet's resonance 0–1.15 (`_resToLadder`), so the top of the knob reaches self-oscillation.
+
+**Engine seams** (how the rest of the chain stays engine-agnostic):
+- **Cutoff param**: `Filter.cutoffParam()` returns the ladder `cutoff` param in analogue mode, else
+  `node.frequency`. The Envelope live-keyboard path and `resolveAudioParam('filter.cutoff')` use it.
+- **Envelope sweep**: `Filter.scheduleFrequency` / `anchorFrequency` fan to `_cutoffParams()` — the
+  biquad node + slope stages (digital) or the single ladder cutoff (analogue). Envelope code unchanged.
+- **LFO → cutoff**: digital rides `.detune` (cents, exponential); the ladder has no `.detune`, so
+  `resolveLFOTargets('filter.cutoff')` returns the ladder `cutoff` param (Hz, linear). Depth is then
+  interpreted in Hz rather than cents — a known nuance, acceptable.
+- **FilterViz**: in analogue mode draws an **approximate** 4-pole (24 dB/oct) lowpass curve with a
+  resonance bump (can't read the worklet's true response), labelled `≈ LADDER 24dB/oct`.
+
+**Known limitation**: an LFO already assigned to `filter.cutoff` resolves its target at assignment
+time, so switching the engine afterwards won't re-point an existing cutoff LFO. Re-assign the cutoff
+LFO after choosing the engine.
+
 ---
 
 ## FilterViz

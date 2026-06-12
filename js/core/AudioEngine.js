@@ -15,11 +15,26 @@
  *   .fxBus            — placeholder gain node (future: real FX graph lives here)
  *   .resume()         — resumes AudioContext after user gesture (browser requirement)
  *   .setMasterVolume(0–1)
+ *   .ladderReady      — Promise resolving once the analogue ladder worklet module is loaded
+ *   .ladderLoaded     — bool, true once the ladder worklet is registered
  */
+
+const LADDER_WORKLET_PATH = 'js/worklets/patina-ladder-processor.js';
 
 export class AudioEngine {
   constructor() {
     this.context = new AudioContext();
+
+    // Preload the analogue ladder filter worklet (Filter.js engine='analogue').
+    // Fire-and-forget at boot: nothing awaits it, but by the time a user switches
+    // a track's filter to analogue (always long after boot) the module is
+    // registered, so `new AudioWorkletNode(ctx, 'patina-ladder')` is synchronous.
+    this.ladderLoaded = false;
+    this.ladderReady  = this.context.audioWorklet
+      ? this.context.audioWorklet.addModule(LADDER_WORKLET_PATH)
+          .then(() => { this.ladderLoaded = true; })
+          .catch(err => { console.warn('AudioEngine: analogue ladder worklet load failed', err); })
+      : Promise.resolve();
 
     // FX bus placeholder — passthrough for now
     this.fxBus = this.context.createGain();
