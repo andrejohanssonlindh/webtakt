@@ -229,10 +229,13 @@ Each track has two scale fields serialised in `Track.toJSON()`:
 | Trig | Detune (`osc.detune`) — only if machine supports it |
 | Synth / Machine | Machine params marked `modulatable: true` (excluding detune) |
 | Filter | `filter.cutoff`, `filter.resonance`, `filter.slope`, `base.lpf`, `base.hpf` |
-| Amp | `amp.pan` |
+| Amp | `amp.level` (tremolo VCA), `amp.pan` |
 
-`Track._resolveAudioParam(path)` handles `amp.pan` directly (returns `pannerNode.pan`),
-then delegates to `machine.resolveAudioParam` then `filter.resolveAudioParam`.
+`Track._resolveAudioParam(path)` handles `amp.level` (returns `tremGain.gain`) and `amp.pan`
+(returns `pannerNode.pan`) directly, then delegates to `machine.resolveAudioParam` then
+`filter.resolveAudioParam`. `amp.level` is the dedicated post-envelope tremolo VCA — the
+per-note ADSR owns `ampGain` with absolute automation, so the LFO rides `tremGain` (base 1.0)
+instead; pair with the LFO Bias knob for one-sided/classic tremolo.
 
 ---
 
@@ -277,10 +280,11 @@ Per-track arpeggiator UI. Lives at `js/ui/panels/ArpPanel.js`.
 | Chord selector | Drop-down of 11 chord types (same set as ChordMachine) |
 | Pattern | Up / Down / UpDown / Rand buttons |
 | RATE knob (unified) | Note gap. **Click knob center toggles MS↔BPM** (mode shown in body). MS: ms gap (1–2000ms). BPM: sweeps 1/32 grid (`bpmCount32`), shift-drag/scroll snaps to musical divisions. P-lockable + LFO-able (see below). |
+| GATE knob (unified) | Note-on length. **Click knob center toggles MS↔BPM** (`gateSyncMode`, independent of RATE's sync). MS: ms (0 = LEGATO, 90% of gap). BPM: 1/32 count (`gateBpmCount32`), always an explicit length — no LEGATO. P-lockable + LFO-able. |
 | VARIANCE knob | 0–100%: widens gaps on middle notes by ±50% × variance. P-lockable + LFO-able. |
 
 **P-lock + LFO on arp RATE / GATE / VARIANCE:**
-The RATE, GATE and VARIANCE knobs are p-lockable per step and assignable as LFO destinations, via three virtual params: `arp.rate`, `arp.gate`, `arp.variance` (see `Arpeggiator.modParamDescriptors()`). `arp.rate` modulates **in the current sync mode** — the count32 in BPM mode, the ms gap in MS mode (toggling MS↔BPM clears a rate p-lock on the selected step, since the unit changes). These are **JS-only** params (arp timing is read once at build time, not a Web Audio `AudioParam`): p-locks apply exactly (set before `buildEvents`, restored after, via the Sequencer's `js`-mode dispatch on `track.arp`); LFOs are **sample-and-hold** — sampled once per step-fire in `Sequencer._fireStep` (step modes) or once per cycle in `LiveArp` (input mode), like `trig.tone`. A fast LFO therefore steps the value per trigger rather than sweeping it continuously. The `Arp` group only appears in the LFO destination dropdown while the arp is enabled. GATE p-lock applies to chord/input modes (random mode's separate `rGate` stays live-only).
+The RATE, GATE and VARIANCE knobs are p-lockable per step and assignable as LFO destinations, via three virtual params: `arp.rate`, `arp.gate`, `arp.variance` (see `Arpeggiator.modParamDescriptors()`). `arp.rate` modulates **in the current sync mode** — the count32 in BPM mode, the ms gap in MS mode (toggling MS↔BPM clears a rate p-lock on the selected step, since the unit changes). `arp.gate` works the same way against its **own** sync (`gateSyncMode`): it maps to `gate` (ms) or `gateBpmCount32` (BPM count), and toggling MS↔BPM clears any gate p-lock on the selected step. These are **JS-only** params (arp timing is read once at build time, not a Web Audio `AudioParam`): p-locks apply exactly (set before `buildEvents`, restored after, via the Sequencer's `js`-mode dispatch on `track.arp`); LFOs are **sample-and-hold** — sampled once per step-fire in `Sequencer._fireStep` (step modes) or once per cycle in `LiveArp` (input mode), like `trig.tone`. A fast LFO therefore steps the value per trigger rather than sweeping it continuously. The `Arp` group only appears in the LFO destination dropdown while the arp is enabled. GATE p-lock applies to chord/input modes (random mode's separate `rGate` stays live-only; in BPM gate mode it shares `gateBpmCount32`).
 
 **Manual mode controls:**
 A scrollable list of steps. Each step has:
@@ -299,6 +303,7 @@ A scrollable list of steps. Each step has:
 | NOTES knob | Number of notes per arp cycle (2–8) |
 | RANGE ± knob | Semitone spread ±N around root (1–24) |
 | RATE knob (unified) | Same unified MS/BPM rate knob as Chord mode |
+| GATE knob (unified) | Note-on length via the separate `rGate` field (live-only, not p-lockable). MS 0 = LEGATO; BPM mode shares `gateBpmCount32`. |
 | VARIANCE knob | Timing jitter applied to all gaps |
 
 **Input mode controls (live keyboard-driven):**
@@ -307,7 +312,7 @@ A scrollable list of steps. Each step has:
 | Hint text | Explains the live model: hold keys to arp them; RECORD captures the output |
 | Pattern | Up / Down / UpDown / Rand buttons (same as Chord) |
 | RATE knob (unified) | Same unified MS/BPM rate knob as Chord mode |
-| GATE knob | Note-on length; LEGATO (0) = 90% of gap |
+| GATE knob (unified) | Same unified MS/BPM gate knob as Chord mode; MS 0 = LEGATO (90% of gap) |
 | VARIANCE knob | Timing jitter on middle notes |
 
 There is **no chord selector** — the keys you hold on the keyboard *are* the chord, played at their absolute pitches. The arp does **not** fan steps in input mode: `buildEvents()` returns `[]`, and `Sequencer._fireStep()` detects input mode (`arpFiresSteps = arp.enabled && mode !== 'input'`) and fires each step's voices through the **normal** (non-arp) path. Instead `Keyboard._noteOn/_noteOff` route held keys to `track.liveArp` (`js/signal/LiveArp.js`), a free-running scheduler that cycles the held set on the BPM grid (works with the transport stopped). When **RECORD** is on and the transport is playing, each fired arp note is printed into the step it lands on via `Keyboard.captureArpNote()`. The whole cycle is scheduled in one synchronous burst, so capture maps each note by its **scheduled time** (`Sequencer.stepIndexAtTime()`) — projecting forward from the last scheduled tick to the absolute step + sub-step nudge — rather than by "now" (which would pile the whole chord onto a single step). Because input mode fires steps normally, those recorded notes play back as plain notes on the next pass (no re-arping — `random`/`variance` are baked in, not re-rolled). Track switching releases all held live arps.

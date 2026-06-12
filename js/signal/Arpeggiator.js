@@ -48,6 +48,9 @@
  *   speed          number   gap between notes in ms (syncMode='ms')
  *   bpmCount32     number   integer 1/32 count (syncMode='bpm')
  *   variance       number   0–1, timing jitter on middle notes
+ *   gate           number   note-on length in ms (gateSyncMode='ms'); 0 = legato
+ *   gateSyncMode   string   'ms' | 'bpm' — gate length sync, independent of rate
+ *   gateBpmCount32 number   integer 1/32 count gate length (gateSyncMode='bpm')
  *
  *   -- manual mode --
  *   steps          Array<{semitone, syncMode, speed, bpmCount32, gate}>
@@ -103,7 +106,12 @@ export class Arpeggiator {
       speed:     150,
       bpmCount32: 4,   // 4 × 1/32 = 1/8
       variance:  0,
-      gate:      0,    // 0 = 90% of gap (legato); >0 = explicit ms
+      gate:      0,    // 0 = 90% of gap (legato); >0 = explicit ms (gateSyncMode='ms')
+      // Gate length sync (independent of rate sync): in 'bpm' mode the gate is a
+      // 1/32 count resolved at fire time, and the ms 'legato at 0' rule no longer
+      // applies (a count is always an explicit length).
+      gateSyncMode:   'ms',
+      gateBpmCount32: 4,   // 4 × 1/32 = 1/8
       // manual
       steps:     [_makeDefaultStep()],
       // random
@@ -134,10 +142,15 @@ export class Arpeggiator {
     return this._params.syncMode === 'bpm' ? 'bpmCount32' : 'speed';
   }
 
+  /** Resolve which underlying field 'arp.gate' currently maps to. */
+  _gateField() {
+    return this._params.gateSyncMode === 'bpm' ? 'gateBpmCount32' : 'gate';
+  }
+
   getParam(path) {
     switch (path) {
       case 'arp.rate':     return this._params[this._rateField()];
-      case 'arp.gate':     return this._params.gate;
+      case 'arp.gate':     return this._params[this._gateField()];
       case 'arp.variance': return this._params.variance;
       default:             return this._params[path];
     }
@@ -146,7 +159,7 @@ export class Arpeggiator {
   setParam(path, value) {
     switch (path) {
       case 'arp.rate':     this._params[this._rateField()] = value; return;
-      case 'arp.gate':     this._params.gate = value;               return;
+      case 'arp.gate':     this._params[this._gateField()] = value; return;
       case 'arp.variance': this._params.variance = value;           return;
       case 'steps':        this._params.steps = value;              return;
       default:             this._params[path] = value;
@@ -164,9 +177,13 @@ export class Arpeggiator {
     const rate = isBpm
       ? { path: 'arp.rate', label: 'Rate', min: 1, max: 64,   lfoMin: 1, lfoMax: 64 }
       : { path: 'arp.rate', label: 'Rate', min: 1, max: 2000, lfoMin: 1, lfoMax: 2000 };
+    const gateBpm = this._params.gateSyncMode === 'bpm';
+    const gate = gateBpm
+      ? { path: 'arp.gate', label: 'Gate', min: 1, max: 64,   lfoMin: 1, lfoMax: 64 }
+      : { path: 'arp.gate', label: 'Gate', min: 0, max: 2000, lfoMin: 0, lfoMax: 2000 };
     return [
       { ...rate,                                                  modulatable: true, jsOnly: true },
-      { path: 'arp.gate',     label: 'Gate', min: 0, max: 2000,  lfoMin: 0, lfoMax: 2000, modulatable: true, jsOnly: true },
+      { ...gate,                                                  modulatable: true, jsOnly: true },
       { path: 'arp.variance', label: 'Variance', min: 0, max: 1, lfoMin: 0, lfoMax: 1,    modulatable: true, jsOnly: true },
     ];
   }
@@ -216,7 +233,7 @@ export class Arpeggiator {
     const intervals = [...(ARP_CHORD_DEFS[p.chord] ?? ARP_CHORD_DEFS.major)];
     const notes     = this._applyPattern(intervals);
     const gapSec    = this._gapSec(p.syncMode, p.speed, p.bpmCount32);
-    const gateSec   = p.gate > 0 ? p.gate / 1000 : gapSec * 0.9;
+    const gateSec   = this._gateSec(gapSec);
 
     return this._spaceNotes(notes, rootNote, velocity, t0, gapSec, gateSec, p.variance);
   }
@@ -267,7 +284,7 @@ export class Arpeggiator {
     const p       = this._params;
     const ordered = this._applyPattern(heldNotes);
     const gapSec  = this._gapSec(p.syncMode, p.speed, p.bpmCount32);
-    const gateSec = p.gate > 0 ? p.gate / 1000 : gapSec * 0.9;
+    const gateSec = this._gateSec(gapSec);
 
     // _spaceNotes treats its `intervals` arg as offsets added to rootNote; passing
     // rootNote=0 with absolute notes lays them out at their true pitches.
@@ -301,7 +318,7 @@ export class Arpeggiator {
     const count   = Math.max(2, Math.min(8, Math.round(p.noteCount)));
     const range   = Math.max(1, Math.round(p.range));
     const gapSec  = this._gapSec(p.syncMode, p.speed, p.bpmCount32);
-    const gateSec = p.rGate > 0 ? p.rGate / 1000 : gapSec * 0.9;
+    const gateSec = this._gateSec(gapSec, p.rGate);
 
     const intervals = Array.from({ length: count }, () =>
       Math.round((Math.random() * 2 - 1) * range)
@@ -340,6 +357,18 @@ export class Arpeggiator {
       return Math.max(0.001, count32ToSeconds(bpmCount32, this._bpm));
     }
     return Math.max(0.001, speedMs / 1000);
+  }
+
+  /**
+   * Resolve gate (note-on length) to seconds for chord/input/random modes.
+   * BPM mode: a 1/32 count, always an explicit length. MS mode: explicit ms, or
+   * 0 → legato (90% of the note gap). `gateMs` lets random mode pass its own rGate.
+   */
+  _gateSec(gapSec, gateMs = this._params.gate) {
+    if (this._params.gateSyncMode === 'bpm') {
+      return Math.max(0.001, count32ToSeconds(this._params.gateBpmCount32, this._bpm));
+    }
+    return gateMs > 0 ? gateMs / 1000 : gapSec * 0.9;
   }
 
   // ── Serialisation ────────────────────────────────────────────────────────────

@@ -375,15 +375,16 @@ export class ArpPanel {
    * @param {() => number} acc.getCount @param {(v:number)=>void} acc.setCount
    * @returns {KnobWidget}
    */
-  _makeSyncKnob({ label, size, getMode, toggleMode, getMs, setMs, getCount, setCount, hasPLock = false, onRelease = null }) {
+  _makeSyncKnob({ label, size, getMode, toggleMode, getMs, setMs, getCount, setCount,
+                  hasPLock = false, onRelease = null, msMin = 1, msFmt = null }) {
     const isBpm = getMode() === 'bpm';
     const knob = new KnobWidget({
       label,
-      min:   1,
+      min:   isBpm ? 1   : msMin,
       max:   isBpm ? 64  : 2000,
       value: isBpm ? getCount() : getMs(),
       size,
-      fmt:   isBpm ? (v => formatCount32(v)) : (v => Math.round(v) + 'ms'),
+      fmt:   isBpm ? (v => formatCount32(v)) : (msFmt ?? (v => Math.round(v) + 'ms')),
       // Continuous in BPM mode; shift-drag/scroll snaps to musical divisions.
       snapPoints:  isBpm ? MUSICAL_SNAP_32 : null,
       centerLabel: isBpm ? 'BPM' : 'MS',
@@ -432,25 +433,39 @@ export class ArpPanel {
     });
     row.appendChild(rateKnob.el);
 
-    // ── Gate ──
+    // ── Gate (unified MS/BPM, click centre to toggle) ──
+    // Gate length has its own sync (gateSyncMode), independent of rate sync. In
+    // MS mode it shows ms (0 = LEGATO); in BPM mode it's a 1/32 count (always an
+    // explicit length, so no LEGATO). The ms value lives in the per-mode field
+    // (gate/rGate); the BPM count is the shared gateBpmCount32.
     const gatePLockable = gatePath === 'gate';
-    const gateState = gatePLockable ? this._plockState('arp.gate') : { value: arp.getParam(gatePath), hasPLock: false };
-    const gateKnob = new KnobWidget({
-      label:   'GATE',
-      min:     0,
-      max:     2000,
-      value:   gateState.value,
-      size:    64,
-      fmt:     v => v < 1 ? 'LEGATO' : Math.round(v) + 'ms',
-      onChange: v => {
-        const val = Math.max(0, Math.round(v));
-        if (gatePLockable) this._writeMod('arp.gate', val, gateKnob);
-        else arp.setParam(gatePath, val);
+    const gateState = gatePLockable
+      ? this._plockState('arp.gate')
+      : { value: arp.getParam(gatePath), hasPLock: false };
+    const setGateMs = gatePLockable
+      ? (v, knob) => this._writeMod('arp.gate', v, knob)
+      : (v)        => arp.setParam(gatePath, v);
+    const setGateCount = gatePLockable
+      ? (v, knob) => this._writeMod('arp.gate', v, knob)
+      : (v)        => arp.setParam('gateBpmCount32', v);
+    const gateKnob = this._makeSyncKnob({
+      label: 'GATE', size: 64, hasPLock: gateState.hasPLock,
+      msMin: 0,
+      msFmt: v => v < 1 ? 'LEGATO' : Math.round(v) + 'ms',
+      getMode:    () => arp.getParam('gateSyncMode'),
+      toggleMode: () => {
+        // Switching gate sync changes what arp.gate means — clear any gate p-lock
+        // on the selected step so a stale ms/count value can't apply in the wrong unit.
+        this._step?.plocks.delete('arp.gate');
+        arp.setParam('gateSyncMode', arp.getParam('gateSyncMode') === 'bpm' ? 'ms' : 'bpm');
+        this.rebuildArp();
       },
+      getMs:    () => gatePLockable && gateState.hasPLock ? gateState.value : arp.getParam(gatePath),
+      setMs:    setGateMs,
+      getCount: () => gatePLockable && gateState.hasPLock ? gateState.value : arp.getParam('gateBpmCount32'),
+      setCount: setGateCount,
       onRelease: () => { if (gatePLockable) this._emitMod(); },
     });
-    gateKnob.setHasPLock(gateState.hasPLock);
-    this._widgets.push(gateKnob);
     row.appendChild(gateKnob.el);
 
     return row;

@@ -140,12 +140,13 @@ export class ModWheel {
     const track = this.state.selectedTrack;
     const path  = track.modWheelTargets[wheelIndex];
     if (!path) return 0.5;
-    if (path === 'amp.pan') {
-      return (track.pannerNode.pan.value + 1) / 2;
-    }
     const resolved = track.resolveModWheelParam(path);
     if (!resolved) return 0.5;
-    const current = resolved.obj.getParam(path);
+    // Direct-AudioParam targets (amp.pan, amp.level) have no owning param object —
+    // read the live AudioParam value instead of obj.getParam.
+    const current = resolved.obj === null
+      ? resolved.audioParam.value
+      : resolved.obj.getParam(path);
     return Math.max(0, Math.min(1, (current - resolved.min) / (resolved.max - resolved.min)));
   }
 
@@ -166,8 +167,10 @@ export class ModWheel {
 
     const mapped = resolved.min + value * (resolved.max - resolved.min);
 
-    if (path === 'amp.pan') {
-      track.pannerNode.pan.setTargetAtTime(mapped, track.audio.context.currentTime, 0.005);
+    if (resolved.obj === null) {
+      // Direct-AudioParam targets (amp.pan, amp.level) have no owning param object
+      // — write the AudioParam smoothly to avoid zipper noise.
+      resolved.audioParam.setTargetAtTime(mapped, track.audio.context.currentTime, 0.005);
     } else {
       // setParam handles both AudioParam-backed and JS-only params correctly
       resolved.obj.setParam(path, mapped);

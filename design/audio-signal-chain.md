@@ -12,6 +12,7 @@ VoiceSlot ×8 (each slot is fully self-contained up to the shared outputGain):
         → Filter.node (+ slope stages) (BiquadFilterNode, per-slot — type/cutoff/resonance)
           → Envelope.ampGain (GainNode, per-slot ADSR gate)  ← gate AFTER filter
             → Track.outputGain (GainNode, shared — mute implemented here) ← all 8 slots sum here
+              → Track.tremGain (GainNode, shared — tremolo VCA, LFO target amp.level)
               → Track.pannerNode (StereoPannerNode, shared — pan)
                 → DelayFX.inputNode
                   → BitcrushFX.inputNode
@@ -47,6 +48,9 @@ voices stay identical. DJ-filter base-cutoff writes iterate `VoicePool.filters` 
 LFOs connect to AudioParams:
   - Filter.node.frequency / Q, _baseLPF/_baseHPF.frequency — connected to ALL 8 slot filters
   - Machine AudioParams (osc.detune, sub.level, output.level, etc.) — connected to ALL 8 slot machines
+  - Track.tremGain.gain (amp.level — single shared tremolo VCA, post-envelope so the
+    per-note ADSR automation on ampGain can't stomp it; base gain 1.0, LFO rides ± around
+    unity. Pair with LFO Bias for one-sided/classic tremolo)
   - Track.pannerNode.pan (amp.pan — single shared)
   - DelayFX / BitcrushFX / ReverbFX params — single shared
 

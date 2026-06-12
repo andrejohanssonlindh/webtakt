@@ -154,6 +154,15 @@ export class Track {
     this.outputGain = audio.context.createGain();
     this.outputGain.gain.value = 1.0;
 
+    // Tremolo VCA — a dedicated post-envelope amplitude node, the only safe LFO
+    // target for "amp level". The per-voice envelope owns ampGain via absolute
+    // scheduled automation, which would stomp any LFO added there; mute owns
+    // outputGain. This node is touched by nothing else, so the LFO (Amp → Level)
+    // can ride its gain freely. Base gain 1.0 = unity; the LFO/bias dips it for
+    // classic tremolo. See _resolveAudioParam('amp.level').
+    this.tremGain = audio.context.createGain();
+    this.tremGain.gain.value = 1.0;
+
     // Stereo panner
     this.pannerNode = audio.context.createStereoPanner();
     this.pannerNode.pan.value = 0;
@@ -170,7 +179,8 @@ export class Track {
     // Keyboard.js; free-running so it works with the transport stopped.
     this.liveArp = new LiveArp(this);
 
-    this.outputGain.connect(this.pannerNode);
+    this.outputGain.connect(this.tremGain);
+    this.tremGain.connect(this.pannerNode);
     this.pannerNode.connect(this.delayFX.inputNode);
     this.delayFX.connect(this.bitcrushFX.inputNode);
     this.bitcrushFX.connect(this.reverbFX.inputNode);
@@ -373,6 +383,7 @@ export class Track {
     // bus can be GC'd and the nodes stop pulling on the graph.
     try { this.reverbFX?.disconnect?.(); } catch (_) {}
     try { this.outputGain?.disconnect?.(); } catch (_) {}
+    try { this.tremGain?.disconnect?.(); } catch (_) {}
   }
 
   /**
@@ -433,6 +444,12 @@ export class Track {
     if (!path) return null;
     if (path === 'amp.pan') {
       return { obj: null, audioParam: this.pannerNode.pan, min: -1, max: 1 };
+    }
+    if (path === 'amp.level') {
+      // Tremolo VCA as a direct level/expression target: wheel 0→1 maps to
+      // silence→unity. (If an LFO is also on amp.level it sums additively, as with
+      // any shared param.)
+      return { obj: null, audioParam: this.tremGain.gain, min: 0, max: 1 };
     }
     const sources = [
       { obj: this.machine,     params: this.machine.getParamList()      },
@@ -516,6 +533,11 @@ export class Track {
   _resolveAudioParam(path) {
     if (path === 'amp.pan') {
       return { audioParam: this.pannerNode.pan, depthScale: 1.0 };
+    }
+    if (path === 'amp.level') {
+      // Tremolo VCA. depthScale 1.0 → LFO depth 100% swings gain by ±1.0 around
+      // unity; pair with the LFO's Bias knob for one-sided (classic) tremolo.
+      return { audioParam: this.tremGain.gain, depthScale: 1.0 };
     }
     if (path === 'trig.tone') {
       return { audioParam: null, depthScale: 24, jsOnly: true };
@@ -603,8 +625,9 @@ export class Track {
     this.bitcrushFX.fromJSON({});
     this.reverbFX.fromJSON({});
 
-    // Reset pan, tone, quantize, scale, sound name, and DJ filter
+    // Reset pan + tremolo VCA, tone, quantize, scale, sound name, and DJ filter
     this.pannerNode.pan.setTargetAtTime(0, this.audio.context.currentTime, 0.005);
+    this.tremGain.gain.setTargetAtTime(1.0, this.audio.context.currentTime, 0.005);
     this.loadedSoundName = null;
     this.trigTone      = 0;
     this.nudgeQuantize = 0;
@@ -645,7 +668,10 @@ export class Track {
       .filter(p => p.modulatable)
       .map(p => ({ path: p.path, label: p.label }));
 
-    const ampParams = [{ path: 'amp.pan', label: 'Pan' }];
+    const ampParams = [
+      { path: 'amp.level', label: 'Level' },
+      { path: 'amp.pan',   label: 'Pan' },
+    ];
 
     const delayParams = this.delayFX.getParamList()
       .filter(p => p.modulatable)
