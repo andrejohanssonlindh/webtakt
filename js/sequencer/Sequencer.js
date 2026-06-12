@@ -207,8 +207,9 @@ getVisibleSteps() {
       }
     }
     // Virtual params not in any getParamList
-    map.set('amp.pan',  'pan');
-    map.set('trig.tone', 'trig');
+    map.set('amp.pan',       'pan');
+    map.set('trig.tone',     'trig');
+    map.set('trig.velocity', 'trig');
     // Arp rate/gate/variance — js-mode: set on the arp before buildEvents() reads
     // it, restored after the voice loop via jsRestores (see _fireStep).
     map.set('arp.rate',     'js');
@@ -365,6 +366,13 @@ getVisibleSteps() {
       if (this.track._lfoDestPaths[i] === 'trig.tone') tone += lfo.getCurrentValue();
     });
 
+    // trig.velocity (shared across voices on this step)
+    let trigVel = step.plocks.has('trig.velocity') ? step.plocks.get('trig.velocity') : (this.track.trigVelocity ?? 100);
+    this.track.lfos.forEach((lfo, i) => {
+      if (this.track._lfoDestPaths[i] === 'trig.velocity') trigVel += lfo.getCurrentValue();
+    });
+    trigVel = Math.max(1, Math.min(127, Math.round(trigVel)));
+
     const arp = this.track.arp;
     // Input mode is keyboard-driven (LiveArp), NOT step-triggered — its
     // buildEvents() returns []. So steps must fire NORMALLY in input mode
@@ -438,7 +446,7 @@ getVisibleSteps() {
       if (arpFiresSteps) {
         // Arpeggiator: fan the root note into a sequence of scheduled events.
         // Build under any sampled arp-LFO offset (p-lock is already applied).
-        const events = withArpLfo(() => arp.buildEvents(finalNote, sv.velocity, time, offTime, stepLenSec));
+        const events = withArpLfo(() => arp.buildEvents(finalNote, trigVel, time, offTime, stepLenSec));
         events.forEach(ev => {
           const oscOff = ev.offTime + release;
           const voice  = this.track._pool?.nextVoice(ev.time);
@@ -472,9 +480,9 @@ getVisibleSteps() {
         machine?.syncParamsAt?.(time);
         if (hasMachinePlocks) applyMachinePlocks(machine, time);
         this._anchorVoiceCutoff(voice, envOverrides, voiceWasIdle);
-        machine?.noteOn(finalNote, sv.velocity, time, offTime);
+        machine?.noteOn(finalNote, trigVel, time, offTime);
         machine?.noteOff(oscOffTime);
-        envelope?.scheduleNote(time, offTime, { ...envOverrides, note: finalNote, velocity: sv.velocity });
+        envelope?.scheduleNote(time, offTime, { ...envOverrides, note: finalNote, velocity: trigVel });
         const ampParams = envelope?._params ?? {};
         this.track.lfos.forEach(lfo => {
           lfo.noteOn(time, offTime, { ...ampParams, ...envOverrides });
@@ -495,7 +503,7 @@ getVisibleSteps() {
           const time      = scheduledTime + (effectiveNudge * this.clock._secondsPerTick);
           const offTime   = time + (sv.length * this.clock._secondsPerTick);
           const finalNote = Math.max(0, Math.min(127, sv.note + Math.round(tone)));
-          follower.fireFollowNote(finalNote, sv.velocity, time, offTime);
+          follower.fireFollowNote(finalNote, trigVel, time, offTime);
         });
       });
     }

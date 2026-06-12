@@ -561,7 +561,8 @@ export class SynthPanel {
   }
 
   _renderMidiIn(track) {
-    new MidiInPanel().render(this._makeTabContext(track));
+    const cleanup = new MidiInPanel().render(this._makeTabContext(track));
+    if (cleanup) this._activeWidgets.push({ destroy: cleanup });
   }
 
   _renderDelay(track) {

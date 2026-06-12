@@ -33,12 +33,11 @@ export class LiveArp {
   constructor(track) {
     this.track = track;
 
-    /** Absolute MIDI notes currently held, in press order. */
+    /** Held notes in press order: [{note, velocity}] */
     this._held = [];
     /** AudioContext time the next cycle should begin. */
     this._nextCycleTime = 0;
     this._timerID = null;
-    this._velocity = 100;
     /**
      * Optional capture hook: (note, velocity, lengthTicks) => void. Set by the
      * Keyboard so each fired note can be printed into the pattern while
@@ -67,10 +66,20 @@ export class LiveArp {
    * @param {number} [velocity=100]
    */
   noteOn(midiNote, velocity = 100) {
-    if (this._held.includes(midiNote)) return;
-    this._held.push(midiNote);
-    this._velocity = velocity;
+    if (this._held.some(h => h.note === midiNote)) return;
+    this._held.push({ note: midiNote, velocity });
     if (!this.running) this._start();
+  }
+
+  /**
+   * Update the velocity of a held note live (e.g. aftertouch or re-press).
+   * No-op if the note isn't held.
+   * @param {number} midiNote
+   * @param {number} velocity
+   */
+  updateVelocity(midiNote, velocity) {
+    const entry = this._held.find(h => h.note === midiNote);
+    if (entry) entry.velocity = velocity;
   }
 
   /**
@@ -78,7 +87,7 @@ export class LiveArp {
    * @param {number} midiNote
    */
   noteOff(midiNote) {
-    const i = this._held.indexOf(midiNote);
+    const i = this._held.findIndex(h => h.note === midiNote);
     if (i >= 0) this._held.splice(i, 1);
     if (this._held.length === 0) this._stop();
   }
@@ -116,11 +125,12 @@ export class LiveArp {
     // Schedule any cycle whose start falls within the lookahead window.
     while (this._held.length > 0 &&
            this._nextCycleTime < ctx.currentTime + LOOKAHEAD_SEC) {
-      const notes = this._held.slice().sort((a, b) => a - b);
+      // Snapshot held set; sort by note for consistent ordering.
+      const held = this._held.slice().sort((a, b) => a.note - b.note);
       // Sample-and-hold any arp-rate/gate/variance LFOs once per cycle (input mode
       // has no step-fire to sample on — same limitation as the step-triggered path).
       const { events, cycleSec } =
-        this._withArpLfo(() => this.track.arp.buildInputCycle(notes, this._velocity, this._nextCycleTime));
+        this._withArpLfo(() => this.track.arp.buildInputCycle(held, this._nextCycleTime));
       events.forEach(ev => this._fireEvent(ev));
       // Advance by the cycle length so the next cycle butts up against this one.
       this._nextCycleTime += Math.max(0.01, cycleSec);

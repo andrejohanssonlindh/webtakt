@@ -144,9 +144,12 @@ export class ModWheel {
     if (!resolved) return 0.5;
     // Direct-AudioParam targets (amp.pan, amp.level) have no owning param object —
     // read the live AudioParam value instead of obj.getParam.
+    // Custom descriptors (trig.tone, trig.velocity) carry their own getParam.
     const current = resolved.obj === null
       ? resolved.audioParam.value
-      : resolved.obj.getParam(path);
+      : resolved.getParam
+        ? resolved.getParam()
+        : resolved.obj.getParam(path);
     return Math.max(0, Math.min(1, (current - resolved.min) / (resolved.max - resolved.min)));
   }
 
@@ -171,6 +174,9 @@ export class ModWheel {
       // Direct-AudioParam targets (amp.pan, amp.level) have no owning param object
       // — write the AudioParam smoothly to avoid zipper noise.
       resolved.audioParam.setTargetAtTime(mapped, track.audio.context.currentTime, 0.005);
+    } else if (resolved.setParam) {
+      // Custom descriptors (trig.tone, trig.velocity) carry their own setter.
+      resolved.setParam(mapped);
     } else {
       // setParam handles both AudioParam-backed and JS-only params correctly
       resolved.obj.setParam(path, mapped);

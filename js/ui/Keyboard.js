@@ -319,9 +319,10 @@ export class Keyboard {
     // The held key set IS the chord; LiveArp fans it out and (when recording)
     // prints each fired note into the step it lands on via captureArpNote().
     // Key-down does NOT write to a step here — the arp output is what's captured.
+    const vel     = track.trigVelocity ?? 100;
     const liveArp = track.arp?.enabled && track.arp.getParam('mode') === 'input';
     if (liveArp) {
-      track.liveArp.noteOn(midiNote, 100);
+      track.liveArp.noteOn(midiNote, vel);
     } else {
       const voice    = track._pool?.nextVoice() ?? null;
       const machine  = voice?.machine  ?? track.machine;
@@ -329,12 +330,12 @@ export class Keyboard {
       if (voice) voice.claim(time + 30);
       this._heldSlots.set(midiNote, voice);
 
-      machine?.noteOn(midiNote, 100, time);
+      machine?.noteOn(midiNote, vel, time);
       envelope.noteOn(time, midiNote);
     }
 
     // ── Fire followers (live keyboard note) ────────────────
-    this._fireFollowers(track, midiNote, 100, time);
+    this._fireFollowers(track, midiNote, vel, time);
 
     // In input-arp mode the step write happens per arp-fired note (captureArpNote),
     // not on key-down — so skip the normal record/edit step write here.
@@ -358,12 +359,12 @@ export class Keyboard {
           let voiceIndex;
           if (!step.active) {
             // First note: fill voice 0
-            step.voices[0] = { note: midiNote, velocity: 100, length: 1, nudge };
+            step.voices[0] = { note: midiNote, velocity: vel, length: 1, nudge };
             step.active = true;
             voiceIndex = 0;
           } else {
             // Subsequent notes: append a new voice
-            step.addVoice(midiNote, 100, 1, nudge);
+            step.addVoice(midiNote, vel, 1, nudge);
             voiceIndex = step.voices.length - 1;
           }
 

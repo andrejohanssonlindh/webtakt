@@ -222,6 +222,8 @@ export class Track {
 
     // Semitone transpose applied to every note on this track (+/-24)
     this.trigTone = 0;
+    // Base velocity for sequencer-fired notes (1–127); MIDI input overrides this
+    this.trigVelocity = 127;
 
     // Nudge quantize: 0 = keep recorded nudge, 1 = full quantize (nudge → 0)
     this.nudgeQuantize = 0;
@@ -250,9 +252,10 @@ export class Track {
 
     // MIDI In configuration for this track
     this.midiIn = {
-      inputId:  null,   // MIDIInput port id, or null = off
-      channel:  0,      // 0 = all channels, 1-16 = specific
-      ccMappings: [],   // [{ cc: number, param: string }]
+      inputId:       null,  // MIDIInput port id, or null = off
+      channel:       0,     // 0 = all channels, 1-16 = specific
+      noteTranspose: 0,     // semitone offset applied to incoming notes (-48..+48)
+      ccMappings:    [],    // [{ cc: number, param: string }]
     };
   }
 
@@ -482,6 +485,16 @@ export class Track {
       // any shared param.)
       return { obj: null, audioParam: this.tremGain.gain, min: 0, max: 1 };
     }
+    if (path === 'trig.tone') {
+      return { obj: this, audioParam: null, min: -24, max: 24,
+               setParam: (v) => { this.trigTone = v; },
+               getParam: () => this.trigTone };
+    }
+    if (path === 'trig.velocity') {
+      return { obj: this, audioParam: null, min: 1, max: 127,
+               setParam: (v) => { this.trigVelocity = Math.round(v); },
+               getParam: () => this.trigVelocity };
+    }
     const sources = [
       { obj: this.machine,     params: this.machine.getParamList()      },
       { obj: this.filter,      params: this.filter.getParamList()       },
@@ -574,6 +587,9 @@ export class Track {
     if (path === 'trig.tone') {
       return { audioParam: null, depthScale: 24, jsOnly: true };
     }
+    if (path === 'trig.velocity') {
+      return { audioParam: null, depthScale: 63, jsOnly: true };
+    }
     if (path === 'arp.rate' || path === 'arp.gate' || path === 'arp.variance') {
       // Arp timing is JS-only (read at build time, not an AudioParam) — sampled
       // by the Sequencer / LiveArp per fire. depthScale = half the param range.
@@ -662,6 +678,7 @@ export class Track {
     this.tremGain.gain.setTargetAtTime(1.0, this.audio.context.currentTime, 0.005);
     this.loadedSoundName = null;
     this.trigTone      = 0;
+    this.trigVelocity  = 100;
     this.nudgeQuantize = 0;
     this.scaleIndex    = 0;
     this.leadNote      = 0;
@@ -674,7 +691,7 @@ export class Track {
     this.modWheelTargets = [null, null];
 
     // Reset MIDI In
-    this.midiIn = { inputId: null, channel: 0, ccMappings: [] };
+    this.midiIn = { inputId: null, channel: 0, noteTranspose: 0, ccMappings: [] };
 
     // Tear down all LFOs and start fresh with one
     this.lfos.forEach(l => { l.clearDestination(); l.stop(); });
@@ -717,7 +734,10 @@ export class Track {
       .filter(p => p.modulatable)
       .map(p => ({ path: p.path, label: p.label }));
 
-    const trigItems = [{ path: 'trig.tone', label: 'Tone' }];
+    const trigItems = [
+      { path: 'trig.tone',     label: 'Tone' },
+      { path: 'trig.velocity', label: 'Velocity' },
+    ];
     if (detuneParam) trigItems.push({ path: 'osc.detune', label: 'Detune' });
 
     // Arp rate/gate/variance — JS-only sample-and-hold LFO targets (see LiveArp /
@@ -744,6 +764,7 @@ export class Track {
       followDelay:  this.followDelay,
       pan:          this.pannerNode.pan.value,
       trigTone:      this.trigTone,
+      trigVelocity:  this.trigVelocity,
       nudgeQuantize: this.nudgeQuantize,
       scaleIndex:    this.scaleIndex,
       leadNote:     this.leadNote,
@@ -763,7 +784,8 @@ export class Track {
       })),
       sequencer:    this.sequencer.toJSON(),
       modWheelTargets: [...this.modWheelTargets],
-      midiIn:       { ...this.midiIn, ccMappings: [...this.midiIn.ccMappings] },
+      midiIn:       { ...this.midiIn, ccMappings: [...this.midiIn.ccMappings],
+                       noteTranspose: this.midiIn.noteTranspose },
     };
   }
 
@@ -774,6 +796,7 @@ export class Track {
     this.followDelay  = obj.followDelay  ?? 0;
     this.pannerNode.pan.value = obj.pan ?? 0;
     this.trigTone      = obj.trigTone      ?? 0;
+    this.trigVelocity  = obj.trigVelocity  ?? 127;
     this.nudgeQuantize = obj.nudgeQuantize ?? 0;
     this.scaleIndex    = obj.scaleIndex    ?? 0;
     this.leadNote   = obj.leadNote   ?? 0;
@@ -828,9 +851,10 @@ export class Track {
     this.modWheelTargets = obj.modWheelTargets ?? [null, null];
 
     if (obj.midiIn) {
-      this.midiIn.inputId    = obj.midiIn.inputId    ?? null;
-      this.midiIn.channel    = obj.midiIn.channel    ?? 0;
-      this.midiIn.ccMappings = obj.midiIn.ccMappings ?? [];
+      this.midiIn.inputId       = obj.midiIn.inputId       ?? null;
+      this.midiIn.channel       = obj.midiIn.channel       ?? 0;
+      this.midiIn.noteTranspose = obj.midiIn.noteTranspose ?? 0;
+      this.midiIn.ccMappings    = obj.midiIn.ccMappings    ?? [];
     }
 
     // Restore LFOs

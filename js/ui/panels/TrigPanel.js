@@ -177,6 +177,32 @@ export class TrigPanel {
     toneKnob.setHasPLock(hasTonePLock);
     alwaysKnobsRow.appendChild(toneKnob.el);
 
+    // ── Velocity knob (track-wide base, p-lockable per step) ──
+    const hasVelPLock = hasStep && step?.plocks.has('trig.velocity');
+    const velVal      = hasVelPLock ? step.plocks.get('trig.velocity') : (track.trigVelocity ?? 127);
+    const velKnob = new KnobWidget({
+      label:    'VELOCITY',
+      min:      1,
+      max:      127,
+      value:    velVal,
+      bipolar:  false,
+      size:     64,
+      fmt:      v => Math.round(v),
+      onChange: v => {
+        const n = Math.max(1, Math.min(127, Math.round(v)));
+        if (hasStep) {
+          step.setPLock('trig.velocity', n);
+          velKnob.setHasPLock(true);
+        } else {
+          track.trigVelocity = n;
+        }
+      },
+      onRelease: () => { if (hasStep) emitStep(); },
+    });
+    velKnob.setHasPLock(hasVelPLock);
+    alwaysKnobsRow.appendChild(velKnob.el);
+    knobByPath.set('trig.velocity', velKnob);
+
     // ── Nudge knob — step-only, only visible when a step is selected ──
     if (hasStep) {
       const nudgePct = Math.round((step.nudge ?? 0) * 100);
@@ -237,7 +263,7 @@ export class TrigPanel {
     }
 
     panel.appendChild(alwaysKnobsRow);
-    activeWidgets.push(lengthKnob, chanceKnob, toneKnob);
+    activeWidgets.push(lengthKnob, chanceKnob, toneKnob, velKnob);
 
     // ── Shift buttons (always visible) ──────────────────────
     const shiftRow = document.createElement('div');

@@ -217,10 +217,11 @@ export class Envelope {
     // path, which uses noteOn/noteOff instead.
     const note = overrides['note'] ?? null;
     const vel  = (overrides['velocity'] ?? 127) / 127;
-    // velFactor 1 = no attenuation; lower velocities pull it down by velSens.
-    // velSens 0 (and the whole digital path) → always 1.0, so nothing changes.
+    // velFactor: velocity always scales amplitude (1 = full, lower vel = quieter).
+    // velSens (analogue-only) adds extra sensitivity — 0 = linear, 1 = full curve.
+    // On the digital path velSens is 0 so the formula reduces to plain vel/127.
     const velSens   = analogue ? (overrides['env.velSens'] ?? this._params['env.velSens'] ?? 0) : 0;
-    const velFactor = 1 - velSens * (1 - Math.min(Math.max(vel, 0), 1));
+    const velFactor = vel * (1 - velSens) + vel * velSens * vel;
 
     // ── Amp envelope ── (timed stages resolve sync mode → seconds)
     const a = this._stageSeconds('env', 'attack',  overrides);

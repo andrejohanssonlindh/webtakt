@@ -159,6 +159,21 @@
               }
             });
           });
+
+          // CC1 (mod wheel) from any input → MW1 on the selected track.
+          if (cc === 1 && modWheel) {
+            const norm = value / 127;
+            modWheel._wheels[0]?.setValue(norm);
+            modWheel._applyWheel(0, norm);
+          }
+        });
+
+        // Pitch bend from any input → MW1. Covers keyboards whose left wheel
+        // sends pitch bend rather than CC1 (e.g. Casio CTK-3500).
+        midiEngine.onPitchBend((_inputId, _ch, norm) => {
+          if (!modWheel) return;
+          modWheel._wheels[0]?.setValue(norm);
+          modWheel._applyWheel(0, norm);
         });
 
         // Route incoming MIDI notes to every armed track (those whose MIDI In is
@@ -173,13 +188,15 @@
             if (!cfg.inputId || cfg.inputId !== inputId) return;
             if (cfg.channel !== 0 && cfg.channel !== channel) return;
 
+            const finalNote = Math.max(0, Math.min(127, note + (cfg.noteTranspose ?? 0)));
+
             // Live-input arp mode: the held note set IS the chord — feed LiveArp,
             // which fans it out and (when recording) prints each fired note via its
             // own record hook. No direct note trigger and no recorder write here,
             // exactly as the on-screen keyboard does in this mode.
             const liveArp = track.arp?.enabled && track.arp.getParam('mode') === 'input';
             if (liveArp) {
-              track.liveArp.noteOn(note, velocity);
+              track.liveArp.noteOn(finalNote, velocity);
             } else {
               // Play note on the track that has MIDI In mapped to this port/channel
               const voice    = track._pool?.nextVoice() ?? null;
@@ -190,17 +207,18 @@
               // dropped note-off stealing the voice mid-hold.
               if (voice) voice.claim(time + 30);
               if (!track._midiInVoices) track._midiInVoices = new Map();
+              // Key original note so note-off can find the right voice slot.
               track._midiInVoices.set(note, voice);
-              machine?.noteOn(note, velocity, time);
-              envelope?.noteOn(time);
+              machine?.noteOn(finalNote, velocity, time);
+              envelope?.scheduleNote(time, time + 30, { note: finalNote, velocity });
               // Record into the playhead step (no-op unless record mode is armed)
-              midiRecorder.noteOn(track, note, velocity, ctx.currentTime);
+              midiRecorder.noteOn(track, finalNote, velocity, ctx.currentTime);
             }
 
             // Fire followers
             state.project.tracks.forEach(follower => {
               if (follower.followSource !== track.index) return;
-              follower.fireFollowNote(note, velocity, time, time + 0.5);
+              follower.fireFollowNote(finalNote, velocity, time, time + 0.5);
             });
           });
         });
@@ -214,12 +232,14 @@
             if (!cfg.inputId || cfg.inputId !== inputId) return;
             if (cfg.channel !== 0 && cfg.channel !== channel) return;
 
+            const finalNoteOff = Math.max(0, Math.min(127, note + (cfg.noteTranspose ?? 0)));
+
             // Live-input arp mode: remove the note from the held chord; LiveArp
             // stops the runner when nothing is held. No direct release or recorder
             // writeback (the arp owns both).
             const liveArp = track.arp?.enabled && track.arp.getParam('mode') === 'input';
             if (liveArp) {
-              track.liveArp.noteOff(note);
+              track.liveArp.noteOff(finalNoteOff);
               return;
             }
 

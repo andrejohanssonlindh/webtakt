@@ -273,22 +273,32 @@ export class Arpeggiator {
    * Unlike chord/random/manual the input notes are already absolute MIDI values,
    * so they are laid out directly (no rootNote offset).
    *
-   * @param {number[]} heldNotes  absolute MIDI notes, ascending
-   * @param {number}   velocity
+   * @param {{note:number,velocity:number}[]} held  held notes ascending, each with velocity
    * @param {number}   t0         AudioContext time of the first note
    * @returns {{events: Array<{note,velocity,time,offTime}>, cycleSec: number}}
    *   cycleSec — total duration of the cycle (sum of gaps), so the caller can
    *   schedule the next cycle back-to-back.
    */
-  buildInputCycle(heldNotes, velocity, t0) {
+  buildInputCycle(held, t0) {
     const p       = this._params;
-    const ordered = this._applyPattern(heldNotes);
+    const ordered = this._applyPattern(held);  // preserves {note,velocity} objects
     const gapSec  = this._gapSec(p.syncMode, p.speed, p.bpmCount32);
     const gateSec = this._gateSec(gapSec);
 
-    // _spaceNotes treats its `intervals` arg as offsets added to rootNote; passing
-    // rootNote=0 with absolute notes lays them out at their true pitches.
-    const events   = this._spaceNotes(ordered, 0, velocity, t0, gapSec, gateSec, p.variance);
+    const events   = [];
+    let   cursor   = t0;
+    for (let i = 0; i < ordered.length; i++) {
+      const { note, velocity } = ordered[i];
+      const isMiddle = i > 0 && i < ordered.length - 1;
+      let effectiveGap = gapSec;
+      if (isMiddle && p.variance > 0) {
+        effectiveGap += gapSec * p.variance * 0.5 * (Math.random() * 2 - 1);
+        effectiveGap  = Math.max(effectiveGap, 0.001);
+      }
+      events.push({ note: Math.max(0, Math.min(127, note)), velocity, time: cursor, offTime: cursor + gateSec });
+      cursor += effectiveGap;
+    }
+
     const cycleSec = ordered.length * gapSec;
     return { events, cycleSec };
   }

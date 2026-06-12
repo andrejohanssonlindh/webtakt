@@ -32,6 +32,8 @@
  *   offNoteOn(fn)
  *   onNoteOff(fn)                   — fn(inputId, ch, note); also fired for note-on vel=0
  *   offNoteOff(fn)
+ *   onPitchBend(fn)              — fn(inputId, ch, norm); norm 0–1, centre=0.5
+ *   offPitchBend(fn)
  *   sendNoteOn(outputId, ch, note, vel, audioTime, audioCtx)
  *   sendNoteOff(outputId, ch, note, audioTime, audioCtx)
  *   sendCC(outputId, ch, cc, val)
@@ -47,9 +49,10 @@ export class MidiEngine {
 
     this._access        = null;
     this._syncOutputId  = null;
-    this._ccListeners   = new Set();
-    this._noteOnListeners = new Set();
-    this._noteOffListeners = new Set();
+    this._ccListeners        = new Set();
+    this._noteOnListeners    = new Set();
+    this._noteOffListeners   = new Set();
+    this._pitchBendListeners = new Set();
     this._clock         = null;
     this._audioCtx      = null;
     this._clockTickCb   = null;
@@ -101,6 +104,12 @@ export class MidiEngine {
     } else if (type === 0x80 || (type === 0x90 && data2 === 0)) {
       // Note-off: explicit 0x80, or running-status note-on with velocity 0.
       for (const fn of this._noteOffListeners) fn(inputId, ch + 1, data1);
+    } else if (type === 0xe0) {
+      // Pitch bend: 14-bit value, LSB in data1, MSB in data2. Normalise to 0–1
+      // (centre 8192 → 0.5). fn(inputId, channel, normValue)
+      const raw  = ((data2 & 0x7f) << 7) | (data1 & 0x7f);
+      const norm = raw / 16383;
+      for (const fn of this._pitchBendListeners) fn(inputId, ch + 1, norm);
     }
   }
 
@@ -121,6 +130,10 @@ export class MidiEngine {
   onNoteOff(fn)  { this._noteOffListeners.add(fn); }
   /** @param {Function} fn */
   offNoteOff(fn) { this._noteOffListeners.delete(fn); }
+  /** @param {Function} fn  — fn(inputId, ch, normValue 0–1, centre=0.5) */
+  onPitchBend(fn)  { this._pitchBendListeners.add(fn); }
+  /** @param {Function} fn */
+  offPitchBend(fn) { this._pitchBendListeners.delete(fn); }
 
   /**
    * Schedule a note-on at audioTime (AudioContext seconds).

@@ -2905,6 +2905,102 @@ body {
   margin-top: 4px;
 }
 
+/* ── MIDI IN PANEL — two-column layout ───────────────────────── */
+
+.midi-in-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.midi-in-col--config {
+  flex: 0 0 auto;
+  min-width: 160px;
+  max-width: 220px;
+}
+
+.midi-in-col--console {
+  flex: 1 1 0;
+  min-width: 160px;
+}
+
+/* Transpose row: [−12] [value] [+12] */
+.midi-transpose-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.midi-transpose-btn {
+  font-size: 9px;
+  padding: 2px 6px;
+  flex-shrink: 0;
+}
+
+.midi-transpose-display {
+  flex: 1;
+  text-align: center;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: default;
+  user-select: none;
+}
+.midi-transpose-display:hover {
+  opacity: 0.7;
+}
+
+/* Console */
+.midi-console {
+  flex: none;
+  height: 180px;
+  min-height: 180px;
+  max-height: 180px;
+  overflow-y: auto;
+  background: var(--bg, #111);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-family: var(--font-mono, monospace);
+  font-size: 8px;
+}
+
+.midi-console::-webkit-scrollbar { width: 4px; }
+.midi-console::-webkit-scrollbar-track { background: transparent; }
+.midi-console::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.midi-console-row {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  line-height: 1.4;
+}
+
+.midi-console-ts {
+  color: var(--text-dim);
+  flex-shrink: 0;
+  font-size: 7px;
+}
+
+.midi-console-msg {
+  color: var(--text);
+}
+
+.midi-console-row--on  .midi-console-msg { color: var(--accent); }
+.midi-console-row--off .midi-console-msg { color: var(--text-dim); }
+
+.midi-console-clear {
+  font-size: 8px;
+  padding: 2px 6px;
+  margin-top: 4px;
+  align-self: flex-start;
+}
+
 /* ── CLIPBOARD (copy/paste) ───────────────────────────────── */
 
 .clip-bar {
