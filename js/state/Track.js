@@ -683,7 +683,12 @@ export class Track {
     // Reset FX
     this.delayFX.fromJSON({});
     this.bitcrushFX.fromJSON({});
+    this.chorusFX.fromJSON({});
     this.reverbFX.fromJSON({});
+
+    // Drop back to the clean digital flow: restores the biquad filter engine
+    // and disables the BBD chorus, keeping engine + chorus enable consistent.
+    this.setAnalogue(false);
 
     // Reset pan + tremolo VCA, tone, quantize, scale, sound name, and DJ filter
     this.pannerNode.pan.setTargetAtTime(0, this.audio.context.currentTime, 0.005);
