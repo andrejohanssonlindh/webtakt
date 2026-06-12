@@ -100,6 +100,31 @@ export class Keyboard {
       }
     });
 
+    // Arp input mode activated while keys are held: feed held notes into liveArp
+    // so they start arping, and release any machine voice that was playing before.
+    state.on('arpInputActive', ({ track }) => {
+      const t = this.state.project.audio.context.currentTime + 0.015;
+      const vel = track.trigVelocity ?? 100;
+      this._heldKeys.forEach(midiNote => {
+        if (typeof midiNote !== 'number') return; // skip drum keys
+        // Release any machine voice that was open on this note
+        if (this._heldSlots.has(midiNote)) {
+          const voice    = this._heldSlots.get(midiNote);
+          const machine  = voice?.machine  ?? track.machine;
+          const envelope = voice?.envelope ?? track.envelope;
+          this._heldSlots.delete(midiNote);
+          if (voice) {
+            const release = envelope?.getParam('env.release') ?? 0.3;
+            voice.claim(t + release);
+          }
+          machine?.noteOff(t);
+          envelope?.noteOff(t);
+        }
+        // Feed into liveArp
+        track.liveArp?.noteOn(midiNote, vel);
+      });
+    });
+
     // Global STOP-ALL / panic — drop all held-key state + visual highlights.
     state.on('panic', () => {
       this.state.project.tracks.forEach(t => t.liveArp?.releaseAll());
@@ -405,19 +430,25 @@ export class Keyboard {
     const liveArp = track.arp?.enabled && track.arp.getParam('mode') === 'input';
     if (liveArp) {
       track.liveArp.noteOff(midiNote);
-    } else {
-      const voice    = this._heldSlots.get(midiNote) ?? null;
+    }
+    // Always clean up any machine voice that was started before arp was enabled.
+    // If arp was toggled on mid-hold the note would otherwise stay open forever.
+    if (this._heldSlots.has(midiNote)) {
+      const voice    = this._heldSlots.get(midiNote);
       const machine  = voice?.machine  ?? track.machine;
       const envelope = voice?.envelope ?? track.envelope;
       this._heldSlots.delete(midiNote);
-
       if (voice) {
         const release = envelope.getParam('env.release') ?? 0.3;
         voice.claim(time + release);
       }
-
       machine?.noteOff(time);
       envelope.noteOff(time);
+    } else if (!liveArp) {
+      // No slot recorded — still send noteOff to the track machine directly
+      // (e.g. voices without a pool).
+      track.machine?.noteOff(time);
+      track.envelope?.noteOff(time);
     }
 
     if (this.state.recording && this._recordNoteOnTime.has(midiNote)) {

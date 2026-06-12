@@ -79,12 +79,23 @@ export class BitcrushFX {
   }
 
   _buildBitCurve(bits) {
-    const steps = Math.pow(2, Math.max(1, Math.min(16, Math.round(bits))));
-    const N = 1024;
+    const b = Math.max(1, Math.min(16, Math.round(bits)));
+    if (b >= 16) {
+      // Full resolution — bypass with a linear curve
+      const N = 256;
+      const curve = new Float32Array(N);
+      for (let i = 0; i < N; i++) curve[i] = (i / (N - 1)) * 2 - 1;
+      this._bitShaper.curve = curve;
+      return;
+    }
+    const maxLevel = Math.max(1, Math.pow(2, b - 1) - 1);  // e.g. 4-bit → 7
+    // Curve needs enough samples to represent each quantisation step cleanly.
+    // Cap at 4096 (Web Audio safe; 13+ bits are barely audible anyway).
+    const N = Math.min(4096, Math.max(256, maxLevel * 4));
     const curve = new Float32Array(N);
     for (let i = 0; i < N; i++) {
-      const x = (i / (N - 1)) * 2 - 1;  // -1 to +1
-      curve[i] = Math.round(x * (steps / 2)) / (steps / 2);
+      const x = (i / (N - 1)) * 2 - 1;
+      curve[i] = Math.round(x * maxLevel) / maxLevel;
     }
     this._bitShaper.curve = curve;
   }

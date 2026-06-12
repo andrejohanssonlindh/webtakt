@@ -38,6 +38,8 @@ export class LiveArp {
     /** AudioContext time the next cycle should begin. */
     this._nextCycleTime = 0;
     this._timerID = null;
+    /** Latest oscOffTime scheduled — used to decide if the pool needs silencing on stop. */
+    this._lastOffTime = 0;
     /**
      * Optional capture hook: (note, velocity, lengthTicks) => void. Set by the
      * Keyboard so each fired note can be printed into the pattern while
@@ -111,6 +113,11 @@ export class LiveArp {
       clearTimeout(this._timerID);
       this._timerID = null;
     }
+    // Cancel all lookahead-scheduled notes by silencing the pool immediately.
+    // Without this, notes scheduled up to LOOKAHEAD_SEC (100ms) ahead keep playing
+    // after keys are released, making the arp feel unresponsive. The pool's silence()
+    // ramps to zero in ~5ms to avoid a click.
+    this.track._pool?.silence(this._ctx.currentTime);
   }
 
   _schedule() {
@@ -183,6 +190,7 @@ export class LiveArp {
 
     const release    = track.envelope?.getParam('env.release') ?? 0.3;
     const oscOffTime = ev.offTime + release;
+    if (oscOffTime > this._lastOffTime) this._lastOffTime = oscOffTime;
 
     const voice    = track._pool?.nextVoice(ev.time) ?? null;
     const machine  = voice?.machine  ?? track.machine;

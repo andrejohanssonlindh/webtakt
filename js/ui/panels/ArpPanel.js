@@ -98,7 +98,13 @@ export class ArpPanel {
     onBtn.textContent = arp.enabled ? 'ARP ON' : 'ARP OFF';
     onBtn.addEventListener('click', () => {
       arp.enabled = !arp.enabled;
-      if (!arp.enabled) this.track.liveArp?.releaseAll();
+      if (!arp.enabled) {
+        this.track.liveArp?.releaseAll();
+      } else if (arp.getParam('mode') === 'input') {
+        // Arp just enabled in input mode — tell the keyboard so it can feed any
+        // currently-held notes into liveArp (avoids stuck voices and missed arp start).
+        this.ctx?.state?.emit('arpInputActive', { track: this.track });
+      }
       this.rebuildArp();
     });
     headerRow.appendChild(onBtn);
@@ -112,8 +118,13 @@ export class ArpPanel {
       btn.textContent = m.toUpperCase();
       btn.addEventListener('click', () => {
         arp.setParam('mode', m);
-        // Stop any free-running live arp when leaving input mode mid-hold.
-        if (m !== 'input') this.track.liveArp?.releaseAll();
+        if (m !== 'input') {
+          // Stop any free-running live arp when leaving input mode mid-hold.
+          this.track.liveArp?.releaseAll();
+        } else if (arp.enabled) {
+          // Switched into input mode while arp is on — feed any held keys into liveArp.
+          this.ctx?.state?.emit('arpInputActive', { track: this.track });
+        }
         this.rebuildArp();
       });
       modeWrap.appendChild(btn);

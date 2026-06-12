@@ -283,6 +283,7 @@ export class KnobWidget {
     let lastY    = 0;
     let downY    = 0;       // clientY at mousedown (for click-vs-drag threshold)
     let downInCenter = false;  // mousedown landed on the center hotspot
+    let lastClickTime = 0;  // timestamp of last center-click (for double-click detection)
 
     const onWheel = (e) => {
       e.preventDefault();
@@ -334,10 +335,15 @@ export class KnobWidget {
       if (!dragging) return;
       const isClick = Math.abs((e?.clientY ?? downY) - downY) <= 4;
       if (isClick && downInCenter && this.onCenterClick) {
-        // Center click (no meaningful drag) → toggle, don't fire release.
-        dragging = false;
-        this.onCenterClick();
-        return;
+        // Center double-click (no meaningful drag) → toggle, don't fire release.
+        const now = Date.now();
+        if (now - lastClickTime < 400) {
+          dragging = false;
+          lastClickTime = 0;
+          this.onCenterClick();
+          return;
+        }
+        lastClickTime = now;
       }
       if (this.onRelease) this.onRelease(this._value);
       dragging = false;
