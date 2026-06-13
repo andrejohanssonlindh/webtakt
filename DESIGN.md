@@ -101,7 +101,8 @@ js/
                           DOM lives in its own panel file (see panels/ below).
     FilterViz.js        — Canvas widget: frequency response curve + base filter + env ghost
     Oscilloscope.js     — Canvas waveform strip: time-domain display of master output with zero-crossing trigger
-    ModWheel.js         — 2 assignable mod wheels: drag or scroll (left/right screen halves → MW1/MW2)
+    ModWheel.js         — 2 assignable mod wheels: drag or scroll (left/right screen halves → MW1/MW2). Scroll travel scaled by Settings.modWheelSensitivity.
+    SettingsPanel.js    — Global-settings hover pane (⚙ cog right of WEBTAKT title) + 📖 manual placeholder button. Edits Settings (BPM grid resolution, mod-wheel sensitivity, transport keybinds, computer-keyboard layout incl. a per-key Custom editor) with continuous save + reset-to-defaults.
     Keyboard.js         — Piano keyboard (2 octaves), octave shift, live note trigger
     KnobWidget.js       — Rotary knob widget, supports bipolar, p-lock highlight, drag interaction
     ADSRWidget.js       — Visual ADSR canvas widget used in AMP and FILTER tabs
@@ -139,6 +140,7 @@ js/
     Project.js          — 8–12 tracks (dynamic), BPM, export/import JSON file. Owns a per-deck busGain (tracks route here → master fxBus). loadDeckJSON/reset for the deck layer.
     DeckManager.js      — Two-deck DJ layer: owns Project A + B (shared Clock/AudioEngine, beatmatched), constant-power crossfader on the two busGains, per-deck silence, "control" (which deck the UI edits), load/unload. See design/ui.md → Deck Tab.
     AppState.js         — Selected track/step, active tab/LFO, event bus. `.project` is a getter following the controlled deck (DeckManager).
+    Settings.js         — App-wide user prefs (NOT part of a project): BPM-sync finest grid (bpmGrid 1/32–1/128), modWheelSensitivity, transport keybinds (play/record/stopAll as event.code), keyboardLayout preset (or 'custom' + editable customLayout {lower,chromatic}). Single shared `settings` instance, continuous localStorage save, on(fn) subscribers, reset(). See design/ui.md → Settings Pane.
     SoundLibrary.js     — Sound library, two sources one list: USER sounds in localStorage (save/load/delete) + FACTORY sounds shipped as files in sounds/ (async init() fetches sounds/index.json manifest → each sound JSON). Factory merged by id only if not already present (user copy wins); flagged `factory:true`, never written to localStorage (re-fetched each load so preset fixes ship). Old persisted `seed_*` entries are migrated out on load. Regenerate factory files via tools/bake_sounds.py.
     SampleStore.js      — Sample store. load(id) resolves: in-memory cache → localStorage (WAV-base64, user imports) → shipped samples/<id>.wav (factory samples a sound references). Exports bufferToWav() for sound export.
     Scales.js           — Scale definitions (20 scales) + noteInScale() helper

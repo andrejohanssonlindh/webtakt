@@ -13,6 +13,8 @@
     <!-- TRANSPORT -->
     <div id="transport">
       <span class="transport-title">WEBTAKT</span>
+      <button id="btn-settings" class="icon-btn" title="Settings" aria-label="Settings">⚙</button>
+      <button id="btn-manual" class="icon-btn" title="Manual" aria-label="Manual">📖</button>
       <div class="sep"></div>
       <button id="btn-play" class="btn">▶ PLAY</button>
       <button id="btn-stop-all" class="btn" title="Stop transport, kill all sound, exit record">■ STOP ALL</button>
@@ -109,6 +111,9 @@
     import { ModWheel }      from './js/ui/ModWheel.js';
     import { Keyboard }      from './js/ui/Keyboard.js';
     import { Oscilloscope }  from './js/ui/Oscilloscope.js';
+    import { SettingsPanel } from './js/ui/SettingsPanel.js';
+    import { settings }      from './js/state/Settings.js';
+    import { setSnapResolution } from './js/util/BpmSync.js';
 
     // ── Boot ────────────────────────────────────────────────
     const audio    = new AudioEngine();
@@ -277,6 +282,19 @@
       document.getElementById('octave-controls'),
       state
     );
+
+    // ── Settings (global prefs: BPM grid, mod-wheel sensitivity, keybinds, layout) ──
+    // Apply the persisted finest-division snap resolution at boot, and re-render
+    // open panels whenever a setting changes (so synced knobs pick up new snaps).
+    setSnapResolution(settings.gridBase);
+    const settingsPanel = new SettingsPanel(
+      document.getElementById('btn-settings'),
+      document.getElementById('btn-manual'),
+    );
+    settings.on(() => {
+      setSnapResolution(settings.gridBase);
+      synthPanel.render();   // refresh any open synced knobs with new snap points
+    });
 
     // ── Wire clock tick → step highlight + record-mode step advance ──
     let _lastHighlight = -1;
@@ -670,16 +688,24 @@
     });
 
     // ── Keyboard shortcuts ────────────────────────────────────
+    // Transport keys are user-rebindable (Settings). Each bind is an event.code
+    // (layout-independent). play/record/stopAll map to the transport buttons.
     document.addEventListener('keydown', (e) => {
       if (e.target.tagName === 'INPUT') return;
-      if (e.code === 'Space') {
+      const kb = settings.get('keybinds');
+      if (e.code === kb.play) {
         e.preventDefault();
         btnPlay.click();
         return;
       }
-      if (e.code === 'Enter') {
+      if (e.code === kb.record) {
         e.preventDefault();
         btnRec.click();
+        return;
+      }
+      if (e.code === kb.stopAll) {
+        e.preventDefault();
+        btnStopAll.click();
         return;
       }
       // e.code is layout-independent and unaffected by Shift

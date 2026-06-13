@@ -171,7 +171,7 @@ export class DelayFX {
         modePath: 'delay.syncMode',
         msPath:   'delay.time',
         bpmPath:  'delay.bpmCount32',
-        bpmMin: 1, bpmMax: 64, bpmSnap: MUSICAL_SNAP_32,
+        bpmMin: 0.25, bpmMax: 64, bpmSnap: MUSICAL_SNAP_32,
       },
       { path: 'delay.syncMode',   label: 'Sync',     type: 'enum',   options: ['ms','bpm'], default: 'ms',  modulatable: false, plockMode: 'js', hidden: true },
       // lfoMin/lfoMax intentionally narrower than the knob range (0.001–2.0):

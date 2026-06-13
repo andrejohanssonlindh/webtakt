@@ -28,22 +28,66 @@
  */
 
 import { noteInScale } from '../state/Scales.js';
+import { settings }    from '../state/Settings.js';
 
 const WHITE_NOTES = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23];
 const BLACK_NOTES = [1, 3, -1, 6, 8, 10, -1, 13, 15, -1, 18, 20, 22, -1];
 
-// Swedish keyboard — bottom row (a–') and top row (q–¨)
-// In chromatic mode: bottom row = white keys, top row = black keys
-// In folded mode:    bottom row = in-scale notes, top row = same notes +12
-const KB_LOWER = ['a','s','d','f','g','h','j','k','l','ö','ä',"'"];
-const KB_UPPER = ['q','w','e','r','t','y','u','i','o','p','å',''];
+// Computer-keyboard → piano-key layouts. Not everyone runs QWERTY, so the
+// physical-layout map is selectable in Settings (keyboardLayout). Each preset:
+//   lower     — bottom row (white keys / folded in-scale notes), left→right
+//   upper     — top row, parallel to `lower` (folded mode +24)
+//   chromatic — top row at black-key positions, parallel to BLACK_NOTES
+//               ('' = gap or unbound)
+// `lower`/`upper` use the produced CHARACTER (event.key) so a layout only needs
+// the characters that appear on those physical keys for that user's OS layout.
+export const KB_LAYOUTS = {
+  // Swedish (the app's original default): ö ä ' / å replace ; ' \ / [.
+  swedish: {
+    label:     'Swedish',
+    lower:     ['a','s','d','f','g','h','j','k','l','ö','ä',"'"],
+    upper:     ['q','w','e','r','t','y','u','i','o','p','å',''],
+    chromatic: ['w','e','','t','y','u','','o','p','','','','',''],
+  },
+  // US / UK QWERTY.
+  qwerty: {
+    label:     'QWERTY (US/UK)',
+    lower:     ['a','s','d','f','g','h','j','k','l',';',"'",'\\'],
+    upper:     ['q','w','e','r','t','y','u','i','o','p','[',''],
+    chromatic: ['w','e','','t','y','u','','o','p','','','','',''],
+  },
+  // French AZERTY (bottom row q→a, top row a→q etc.).
+  azerty: {
+    label:     'AZERTY (French)',
+    lower:     ['q','s','d','f','g','h','j','k','l','m','ù','*'],
+    upper:     ['a','z','e','r','t','y','u','i','o','p','^',''],
+    chromatic: ['z','e','','t','y','u','','o','p','','','','',''],
+  },
+  // German QWERTZ.
+  qwertz: {
+    label:     'QWERTZ (German)',
+    lower:     ['a','s','d','f','g','h','j','k','l','ö','ä','#'],
+    upper:     ['q','w','e','r','t','z','u','i','o','p','ü',''],
+    chromatic: ['w','e','','t','z','u','','o','p','','','','',''],
+  },
+};
 
-// Chromatic mode: top-row keys at their natural positions above black keys.
-// Standard piano layout — q, r, i, å, ¨ are unused:
-//    w  e     t  y  u     o  p
-//   a  s  d  f  g  h  j  k  l  ö  ä  '
-// Indexed in parallel with BLACK_NOTES ('' = gap or unbound):
-const KB_UPPER_CHROMATIC = ['w','e','','t','y','u','','o','p','','','','',''];
+/** Dropdown label for the user-defined custom layout. */
+export const CUSTOM_LAYOUT_LABEL = 'Custom…';
+
+/**
+ * Build a full layout object ({label, lower, upper, chromatic}) from the user's
+ * editable custom rows ({lower[12], chromatic[14]}). The folded-mode `upper`
+ * row is derived from `chromatic`: its non-empty characters in slot order,
+ * padded to 12 so folded mode has a top row too.
+ */
+export function buildCustomLayout(custom) {
+  const lower     = [...(custom?.lower     ?? [])];
+  const chromatic = [...(custom?.chromatic ?? [])];
+  const upper = chromatic.filter(c => c);
+  while (upper.length < 12) upper.push('');
+  return { label: CUSTOM_LAYOUT_LABEL, lower, upper: upper.slice(0, 12), chromatic };
+}
 
 export class Keyboard {
   /**
@@ -77,6 +121,9 @@ export class Keyboard {
 
     // Ensure state has the folding flag (may not exist on first load)
     if (state.keyFolding === undefined) state.keyFolding = false;
+
+    // Rebuild the computer-key map when the user switches keyboard layout.
+    settings.on(() => { this._applyScale(); this._updateKeyLabels(); });
 
     state.on('scaleChanged',     () => { this._applyScale(); this._updateKeyLabels(); });
     state.on('trackSelected',    () => {
@@ -177,7 +224,7 @@ export class Keyboard {
   /** Returns ascending in-scale MIDI notes starting from rootNote, enough to fill both rows. */
   _getScaleNotes() {
     const notes = [];
-    for (let i = 0; i < 36 && notes.length < KB_LOWER.length; i++) {
+    for (let i = 0; i < 36 && notes.length < this._layout().lower.length; i++) {
       const midi = this._rootNote + i;
       if (this._isInScale(midi)) notes.push(midi);
     }
@@ -250,7 +297,23 @@ export class Keyboard {
     }
   }
 
+  /** True if `code` is bound to a transport action (skip it as a piano note). */
+  _isTransportKey(code) {
+    const kb = settings.get('keybinds');
+    return code === kb.play || code === kb.record || code === kb.stopAll;
+  }
+
+  /** Active computer-keyboard layout (preset, or the user's custom rows). */
+  _layout() {
+    const sel = settings.get('keyboardLayout');
+    if (sel === 'custom') return buildCustomLayout(settings.getCustomLayout());
+    return KB_LAYOUTS[sel] ?? KB_LAYOUTS.swedish;
+  }
+
   _applyChromaticMap() {
+    const KB_LOWER = this._layout().lower;
+    const KB_UPPER_CHROMATIC = this._layout().chromatic;
+
     // Bottom row → white keys in order
     for (let i = 0; i < KB_LOWER.length && i < WHITE_NOTES.length; i++) {
       const midi = this._rootNote + WHITE_NOTES[i];
@@ -286,6 +349,8 @@ export class Keyboard {
 
   _applyFoldedMap() {
     const scaleNotes = this._getScaleNotes();
+    const KB_LOWER = this._layout().lower;
+    const KB_UPPER = this._layout().upper;
 
     // Lower row → in-scale notes 0..N
     for (let i = 0; i < KB_LOWER.length && i < scaleNotes.length; i++) {
@@ -489,6 +554,11 @@ export class Keyboard {
           if (track) { this._drumNoteOn(trackIndex); return; }
         }
       }
+
+      // Don't fire a piano note for a key the user has bound to a transport
+      // action (defaults Space/Enter/Backspace never map to notes, but a custom
+      // letter bind otherwise would double-trigger).
+      if (this._isTransportKey(e.code)) return;
 
       const midi = this._keyMap.get(e.key);
       if (midi !== undefined) {

@@ -23,6 +23,8 @@
  *   destroy()  — remove global event listeners
  */
 
+import { settings } from '../state/Settings.js';
+
 export class ModWheel {
   /**
    * @param {HTMLElement} container
@@ -193,8 +195,11 @@ export class ModWheel {
   scrollControl(wheelIndex, deltaY) {
     const w = this._wheels[wheelIndex];
     if (!w) return;
-    // 300px of scroll = full range; negate so scroll-up = value increase
-    const delta = -deltaY / 300;
+    // 300px of scroll = full range at sensitivity 1.0; the user-set sensitivity
+    // scales travel (lower = calmer, higher = faster). Negate so scroll-up =
+    // value increase.
+    const sens  = settings.get('modWheelSensitivity') ?? 1.0;
+    const delta = (-deltaY / 300) * sens;
     w.setValue(w.getValue() + delta);
     this._applyWheel(wheelIndex, w.getValue());
   }

@@ -126,6 +126,26 @@ deck's own project is what EXPORT/IMPORT and localStorage save touch.
 
 ---
 
+## Settings Pane
+
+A ⚙ cog button sits immediately right of the WEBTAKT title (with a 📖 manual
+button beside it — currently a **placeholder**, tooltip only, no panel yet).
+Clicking the cog opens a floating hover pane (`js/ui/SettingsPanel.js`) holding
+all **app-wide** preferences. These are NOT part of a project — they describe how
+this browser behaves and live in `localStorage` via `js/state/Settings.js`
+(single shared `settings` instance). Every control **saves continuously on
+change** — there is no save button — and `settings.on(fn)` broadcasts so the rest
+of the app reacts live. A **RESET TO DEFAULTS** button restores factory values.
+
+| Setting | Drives |
+|---|---|
+| Synced-knob grid | `settings.bpmGrid` (1/32 / 1/64 / 1/128). The **finest** division the BPM-synced knobs snap to / can reach. Calls `BpmSync.setSnapResolution(gridBase)` which rebuilds the live `MUSICAL_SNAP_32` array with extra sub-1/32 snap targets. **Stored counts stay in 1/32 units** (`GRID_BASE` is fixed at 32) so no saved project is ever rescaled — a 1/64 note is the fractional count 0.5. FX sync knobs' `bpmMin` was lowered to 0.25 so the finer snaps are reachable when enabled. |
+| Mod-wheel sensitivity | `settings.modWheelSensitivity` (0.1–3.0×, 1 = historical 300px/full-range). `ModWheel.scrollControl` multiplies scroll travel by it. |
+| Keyboard layout | `settings.keyboardLayout` — preset name into `Keyboard.KB_LAYOUTS` (Swedish default, QWERTY, AZERTY, QWERTZ) **or `'custom'`**. Maps computer keys → piano keys for non-QWERTY users; rebuilds the keymap on change. Picking **Custom…** reveals an **EDIT KEYS** button that opens a mini-piano editor: click any white/black key, then press the physical key you want there (Backspace clears, Esc cancels). Stored in `settings.customLayout` ({lower[14], chromatic[14]} — every on-screen key is bindable, incl. the two the presets leave blank); the editor mirrors the real keyboard's geometry (black-key offsets, label near the bottom). The on-screen piano relabels live. |
+| Keybinds | `settings.keybinds.{play,record,stopAll}` — each an `event.code`. Click a keybind button then press a key to rebind (Escape cancels). Defaults: Space / Enter / Backspace. Read by index.html's transport keydown handler. |
+
+---
+
 ## Transport Controls
 
 ### PLAY / STOP ALL / REC
@@ -199,7 +219,13 @@ Each track has two scale fields serialised in `Track.toJSON()`:
 
 **UI (SCALES tab):** Scale dropdown (160 px wide, searchable) + 12-button root picker displayed side by side. A chromatic strip below shows which pitch classes are active in the current scale/root combination. Below the preview strip, a **KEYBOARD FOLD** toggle enables folded mode.
 
-**Keyboard layout (Swedish physical layout):**
+**Keyboard layout (selectable — `Settings.keyboardLayout`, default Swedish):**
+The computer-key → piano-key map is a preset chosen in the Settings pane
+(`Keyboard.KB_LAYOUTS`: Swedish / QWERTY / AZERTY / QWERTZ), or a fully
+**custom** per-key layout edited in the Settings pane (see Settings Pane above),
+so any keyboard layout is supported. Each preset defines `lower` / `upper` /
+`chromatic` key-character rows; the custom layout stores `lower`/`chromatic` and
+derives `upper`. The Swedish default:
 - Bottom row: `a s d f g h j k l ö ä '` (12 keys)
 - Top row:    `q w e r t y u i o p å ¨` (12 keys)
 - Chromatic mode: bottom row → white keys in order; top row → black keys in order.

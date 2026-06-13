@@ -23,13 +23,20 @@
  *
  * Legacy (back-compat only, consumed by divToCount32):
  *   DIV_QN / SYNC_DIVISIONS / divToSeconds(div, bpm)
+ *
+ * User-settable finest division: the snap points (`MUSICAL_SNAP_32`) gain extra
+ * sub-1/32 targets (1/64, 1/128) when the user raises the grid resolution in
+ * Settings. Stored COUNTS stay in 1/32 units (`GRID_BASE` is fixed at 32) so no
+ * saved project is ever rescaled — a 1/64 note is simply the fractional count
+ * 0.5. `setSnapResolution()` is called by index.html when the setting changes.
  */
 
 /**
- * Grid units per WHOLE note. The base resolution of the entire BPM-sync model.
- * 32 ⇒ one grid unit = one 1/32 note (the historical/stored unit). Everything
- * below — quarter-note multiplier, musical snap points, division names — is
- * derived from this, so bumping it rescales the grid in one edit.
+ * Grid units per WHOLE note. The base resolution of the stored count model.
+ * 32 ⇒ one grid unit = one 1/32 note (the historical/stored unit). The
+ * quarter-note multiplier and division names are derived from this; it stays
+ * fixed so stored counts keep their meaning across sessions. The user-facing
+ * "finer grid" setting only adds finer SNAP targets (see MUSICAL_SNAP_32).
  */
 export const GRID_BASE = 32;
 
@@ -81,19 +88,43 @@ export function count32ToSeconds(count, bpm) {
 }
 
 // Musical divisions as a fraction of a whole note → grid units (× GRID_BASE).
-// 1/32, 1/16, dotted-1/16, 1/8, dotted-1/8, 1/4, dotted-1/4, 1/2, dotted-1/2,
-// whole, 2 bars, 4 bars. Derived from GRID_BASE so they track the resolution.
+// dotted-1/16, 1/8, dotted-1/8, 1/4, dotted-1/4, 1/2, dotted-1/2,
+// whole, 2 bars, 4 bars. The fine head (1/32 and any finer 1/64, 1/128) is
+// prepended by _buildSnap() per the user's resolution setting.
 const _MUSICAL_WHOLE_FRACTIONS = [
-  1 / 32, 1 / 16, 3 / 32, 1 / 8, 3 / 16, 1 / 4, 3 / 8, 1 / 2,
+  3 / 32, 1 / 8, 3 / 16, 1 / 4, 3 / 8, 1 / 2,
   3 / 4, 1, 3 / 2, 2, 3, 4,
 ];
 
 /**
- * Musical snap points in grid units. Shift-dragging a sync knob jumps between
- * these (1/32, 1/16, dotted-1/16, 1/8, …). Derived from GRID_BASE so raising
- * the resolution keeps the same musical targets at finer counts.
+ * Build the snap-point array for a given finest division (grid units per whole
+ * note, 32/64/128). Always includes 1/32, 1/16 and every musical division
+ * above; for 64/128 it prepends 1/64 (and 1/128) as fractional 1/32 counts
+ * (1/64 → 0.5, 1/128 → 0.25). Sorted ascending.
  */
-export const MUSICAL_SNAP_32 = _MUSICAL_WHOLE_FRACTIONS.map(f => f * GRID_BASE);
+function _buildSnap(finestBase) {
+  const head = [1 / 32, 1 / 16];               // always available
+  if (finestBase >= 64)  head.unshift(1 / 64);
+  if (finestBase >= 128) head.unshift(1 / 128);
+  const fracs = [...head, ..._MUSICAL_WHOLE_FRACTIONS];
+  return fracs.map(f => f * GRID_BASE).sort((a, b) => a - b);
+}
+
+/**
+ * Musical snap points in grid units (1/32 unit). Shift-dragging a sync knob
+ * jumps between these. Mutable: `setSnapResolution()` rebuilds it when the user
+ * changes the finest-division setting. Default = 1/32 (the historical set).
+ */
+export let MUSICAL_SNAP_32 = _buildSnap(32);
+
+/**
+ * Set the finest snap division app-wide. `finestBase` is grid units per whole
+ * note (32 / 64 / 128). Reassigns the live `MUSICAL_SNAP_32` binding so every
+ * panel that imports it picks up the new targets on its next render.
+ */
+export function setSnapResolution(finestBase) {
+  MUSICAL_SNAP_32 = _buildSnap(finestBase);
+}
 
 // Clean fraction names keyed by grid-unit count (derived from GRID_BASE).
 const _COUNT32_NAME = (() => {

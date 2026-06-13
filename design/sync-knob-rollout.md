@@ -38,6 +38,20 @@
 | Amp/filter envelope times | `js/signal/Envelope.js`, `ADSRWidget.js`, `AmpPanel.js`, `FilterPanel.js`, `VoicePool.js`, `Track.js` | new feature (user-approved) | ✅ done. Per-stage MS↔BPM on A/D/R of `env.*` **and** `fenv.*` (sustain excluded). New params `<prefix>.<stage>.syncMode` + `.bpmCount32`. Resolved at note-fire (`Envelope._stageSeconds`, `count32ToSeconds`) — no write-back. BPM via `Track.onBpmChanged → VoicePool.setBpm → Envelope.setBpm`. ADSRWidget: per-stage MS/BPM tag under each timed knob; canvas plots resolved seconds; BPM-stage knob drives the 1/32 count, drag snaps it (shift → musical division). Both modes p-lockable (active param), syncMode p-lockable too. |
 | FM per-operator ADSR times | `js/machines/FMMachine.js`, `FMPanel.js`, `VoicePool.js` | follow-up — FM carries its OWN ADSR (4 ops × A/D/S/R), separate from `Envelope.js`, and was missed in the row above | ✅ done. Per-stage MS↔BPM on A/D/R of all four operators (`opN.env.{a,d,r}`; sustain excluded — it's a level, not a time). New params `opN.env.<stage>.syncMode` + `.bpmCount32`, JS-only + hidden (`plockMode:'js'`) like the existing FM env params. Resolved at note-fire (`FMMachine._stageSeconds` in `_scheduleOpADS/_scheduleOpR`, `count32ToSeconds`) — no write-back. BPM reaches the machine via the **already-existing** `Track.onBpmChanged → VoicePool.setBpm` path, extended to also call `machine.setBpm?.(bpm)` (and seed BPM in `_makeSlot` + `setMachine`). FMPanel: each op's A/D/R knob gets the click-center MS↔BPM toggle (KnobWidget `centerLabel`/`onCenterClick`/`setRange`); BPM knob drives the integer 1/32 count (shown "1/8", shift-snaps via `MUSICAL_SNAP_32`), the per-op canvas plots resolved seconds. Both modes p-lockable, syncMode too. Back-compat: legacy FM projects lack the keys → constructor defaults (`'ms'`/count 4); no `bpmDiv` migration needed (FM never had sync). Covered by `tests/tests/sync_knob.js`. |
 
+## User-settable finest grid (Settings pane)
+
+The Settings pane (`SettingsPanel`) exposes a **finest synced-knob division**
+(1/32 / 1/64 / 1/128). It deliberately does **NOT** raise `GRID_BASE` (which
+would reinterpret every stored `bpmCount32` and rescale saved projects).
+Instead `BpmSync.setSnapResolution(gridBase)` reassigns the live
+`MUSICAL_SNAP_32` array, *prepending* finer snap targets (1/64 → count 0.5,
+1/128 → 0.25) below the historical 1/32. Stored counts stay in 1/32 units. The
+FX sync knobs' `bpmMin` was lowered from 1 to 0.25 so those sub-1/32 snaps are
+reachable; integer-count knobs (LFO/arp/env) round, so the finer grid mainly
+benefits the continuous FX/LFO knobs. `MUSICAL_SNAP_32` is now an exported
+`let` (live binding) — panels read it fresh at render, so the change propagates
+without re-import.
+
 ## Notes / gotchas
 
 - **No p-lock/LFO plumbing changes needed**: `Sequencer` dispatch keys off

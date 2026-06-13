@@ -96,6 +96,220 @@ body {
   margin: 0 4px;
 }
 
+/* ── Settings / manual icon buttons (right of WEBTAKT title) ── */
+.icon-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1;
+  padding: 3px 5px;
+  margin-right: 2px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+.icon-btn:hover {
+  color: var(--accent);
+  border-color: var(--border);
+}
+.icon-btn-hint {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ── Settings pane (floating box under the cog) ── */
+.settings-pane {
+  position: fixed;
+  z-index: 1000;
+  min-width: 280px;
+  max-width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 12px;
+  font-size: 11px;
+  color: var(--text);
+}
+.settings-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+.settings-subtitle {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  margin: 12px 0 6px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.settings-label {
+  color: var(--text);
+  cursor: help;
+}
+.settings-select {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-bright);
+  border-radius: var(--radius);
+  padding: 2px 4px;
+  font-size: 11px;
+}
+.settings-slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.settings-slider-wrap input[type="range"] {
+  width: 110px;
+}
+.settings-slider-val {
+  color: var(--text-bright);
+  min-width: 36px;
+  text-align: right;
+}
+.settings-keybind-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.settings-keybind-name { color: var(--text); }
+.settings-keybind-btn {
+  min-width: 96px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-bright);
+  border-radius: var(--radius);
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.settings-keybind-btn:hover { border-color: var(--accent); }
+.settings-keybind-btn.capturing {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.settings-reset-btn {
+  width: 100%;
+  margin-top: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: var(--radius);
+  padding: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+.settings-reset-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.settings-edit-keys-btn {
+  width: 100%;
+  margin-top: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-bright);
+  border-radius: var(--radius);
+  padding: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+.settings-edit-keys-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ── Custom keyboard-layout key editor ── */
+.kb-editor-pane {
+  position: fixed;
+  z-index: 1001;
+  width: 460px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 12px;
+}
+.kb-editor-piano {
+  position: relative;
+  height: 96px;
+  margin: 8px 0 4px;
+}
+.kb-editor-white-row {
+  display: flex;
+  height: 100%;
+}
+.kb-editor-black-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;           /* black keys size as % of full piano height */
+  pointer-events: none;   /* keys re-enable it; lets gaps fall through */
+}
+.kb-editor-key {
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 0 0 var(--radius) var(--radius);
+  /* Char sits near the bottom of the key (below the black keys for whites). */
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 0 5px;
+  line-height: 1;
+  box-sizing: border-box;
+}
+.kb-editor-white {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  color: var(--text-bright);
+  align-self: stretch;
+}
+.kb-editor-black {
+  position: absolute;
+  top: 0;
+  width: 4%;          /* matches .key.black-key on the real keyboard */
+  height: 58%;        /* matches .key.black-key height */
+  background: #0c0c0c;
+  border: 1px solid var(--border);
+  border-top: none;
+  color: var(--accent);
+  pointer-events: auto;
+  z-index: 2;
+  padding-bottom: 4px;
+  font-size: 10px;
+}
+.kb-editor-key:hover { border-color: var(--accent); }
+.kb-editor-key.capturing {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 #btn-play {
   min-width: 52px;
   font-weight: 700;

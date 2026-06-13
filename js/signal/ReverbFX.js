@@ -192,7 +192,7 @@ export class ReverbFX {
         modePath: 'reverb.syncMode',
         msPath:   'reverb.predelay',
         bpmPath:  'reverb.bpmCount32',
-        bpmMin: 1, bpmMax: 32, bpmSnap: MUSICAL_SNAP_32,
+        bpmMin: 0.25, bpmMax: 32, bpmSnap: MUSICAL_SNAP_32,
       },
       { path: 'reverb.syncMode',   label: 'Sync',     type: 'enum',   options: ['ms','bpm'], default: 'ms',  modulatable: false, plockMode: 'js', hidden: true },
       { path: 'reverb.predelay',   label: 'Pre-dly',  type: 'number', min: 0,    max: 0.5,   default: 0.02, modulatable: false, plockMode: 'js', hidden: true },
