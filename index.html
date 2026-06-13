@@ -291,10 +291,10 @@
       document.getElementById('btn-settings'),
     );
 
-    // 📖 Manual: opens the overlay for whichever tab is currently active.
+    // 📖 Manual: toggles the overlay for whichever tab is currently active.
     document.getElementById('btn-manual').addEventListener('click', (e) => {
       e.stopPropagation();
-      synthPanel.openManual();
+      synthPanel.toggleManual();
     });
     settings.on(() => {
       setSnapResolution(settings.gridBase);
@@ -715,7 +715,7 @@
       }
       if (e.code === kb.manual) {
         e.preventDefault();
-        synthPanel.openManual();
+        synthPanel.toggleManual();
         return;
       }
       // e.code is layout-independent and unaffected by Shift

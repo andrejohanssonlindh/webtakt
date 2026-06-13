@@ -98,6 +98,15 @@ export class SynthPanel {
     this._manual.show(this.state.activeTab, machineType);
   }
 
+  /** Toggle the manual overlay (open if closed, close if open). */
+  toggleManual() {
+    if (this._manual.isOpen()) {
+      this._manual.hide();
+    } else {
+      this.openManual();
+    }
+  }
+
   _buildShell() {
     this.container.innerHTML = '';
 
