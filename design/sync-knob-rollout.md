@@ -10,7 +10,7 @@
 
 | Aspect | Decision |
 |---|---|
-| BPM granularity | Integer count of **1/32 notes**. Seconds = `count * (60/bpm)/8`. |
+| BPM granularity | Count of **grid units**, `GRID_BASE` units per whole note (=32 ⇒ a 1/32 note). Seconds = `count * GRID_UNIT_QN * 60/bpm`. `GRID_BASE` is the single resolution knob — everything derives from it. **FX sync knobs** sweep a `FINE_STEP` sub-grid (fractional counts) so they reach values *between* divisions; envelopes/LFO/arp stay on integer counts. |
 | Display in BPM mode | **Nearest division + 1/32 remainder**, e.g. `5` → `1/8 + 1/32`, `7` → `3/16 + 1/32`. Pure divisions show clean (`8` → `1/4`). |
 | Shift on a sync knob | **Snaps to the next musical division** (1/16, 1/8, dotted-1/8, 1/4, …) instead of fine mode. |
 | Mode toggle | **Click the knob center** (no drag) flips MS↔BPM; body shows current mode (`MS`/`BPM`). No separate buttons — saves space in cramped UIs. KnobWidget: `centerLabel`/`onCenterClick`/`setCenterLabel`; click-vs-drag threshold 4px, hotspot = body radius (size*0.35). |
@@ -22,7 +22,7 @@
 
 | File | Change | Status |
 |---|---|---|
-| `js/util/BpmSync.js` | Added `THIRTYSECOND_QN`, `count32ToSeconds(count,bpm)`, `MUSICAL_SNAP_32`, `formatCount32(count)` (→ "1/8 + 1/32"), `divToCount32(div)` for load back-compat. Kept `DIV_QN`/`SYNC_DIVISIONS`. | ✅ done |
+| `js/util/BpmSync.js` | `count32ToSeconds(count,bpm)`, `MUSICAL_SNAP_32`, `formatCount32(count)` (→ "1/8 + 1/32"), `divToCount32(div)` for load back-compat. Kept `DIV_QN`/`SYNC_DIVISIONS`. **All derived from `GRID_BASE`** (grid units per whole note, =32; one edit rescales the grid: `GRID_UNIT_QN`, snap points, division names, `divToCount32` all flow from it). `FINE_STEP`/`FINE_INCREMENT` define a sub-grid the **FX sync knobs** sweep so they land between divisions (15 sub-steps between 1/32↔1/16); `count32ToSeconds`/`formatCount32` accept fractional counts (`formatCount32` appends a `·N` fine suffix). Envelopes/LFO/arp keep integer counts. | ✅ done |
 | `js/ui/KnobWidget.js` | Added `setRange(...)`; `snapPoints` (shift snap); `centerLabel`/`onCenterClick`/`setCenterLabel` (click-center mode toggle, drawn in body). | ✅ done |
 | `js/ui/panels/FXPanel.js` | Recognises `type: 'sync'` via `_renderSync()`: one knob whose center click toggles MS/BPM (rebuilds via `renderContent()`); binds knob to ms-seconds or 32nd-count param per mode. | ✅ done |
 | `css/style.css` | Added `.fx-sync-cell` (toggle buttons removed — replaced by click-center). | ✅ done |

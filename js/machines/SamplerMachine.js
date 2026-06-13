@@ -80,6 +80,21 @@ export class SamplerMachine extends Machine {
     return this._buffer !== null;
   }
 
+  /** The loaded AudioBuffer (or null). Used by the panel's download button. */
+  getBuffer() {
+    return this._buffer;
+  }
+
+  /** Drop the loaded sample (panel RESET). Params are reset separately. */
+  clearBuffer() {
+    try { this._source?.stop(); } catch (_) {}
+    this._source    = null;
+    this._buffer    = null;
+    this.sampleId   = null;
+    this.sampleName = '';
+    this._duration  = 0;
+  }
+
   noteOn(midiNote, velocity, time) {
     if (!this._buffer) return;
 

@@ -241,7 +241,8 @@ export class VoicePool {
     // Capture canonical JSON before destroying anything — only reapply if the
     // new machine is the same type (same-type rebuild). Cross-type swaps must
     // not bleed params like output.level from the old machine onto the new one.
-    const canonicalJSON = this._slots[0].machine.toJSON();
+    const oldCanonical = this._slots[0].machine;
+    const canonicalJSON = oldCanonical.toJSON();
     const oldType = canonicalJSON.type;
 
     for (let i = 0; i < this._slots.length; i++) {
@@ -260,10 +261,43 @@ export class VoicePool {
       // so the machine must feed the filter's base-HPF entry node.
       const newMachine = makeMachine(this._context);
       newMachine.setBpm?.(this._bpm);   // tempo-synced env stages (FM)
-      if (newMachine.type === oldType) newMachine.fromJSON(canonicalJSON);
+      if (newMachine.type === oldType) {
+        newMachine.fromJSON(canonicalJSON);
+        // fromJSON restores sampleId/name but NOT the live AudioBuffer (it is
+        // "handled externally" via SampleStore). On a same-type sampler rebuild
+        // the buffer is already in memory on the old machine — carry it over so
+        // the loaded/recorded sample survives the swap without a re-decode.
+        newMachine.syncFrom?.(oldCanonical);
+      } else if (typeof newMachine.setBuffer === 'function' &&
+                 typeof oldCanonical.getBuffer === 'function') {
+        // Cross-type swap between SINGLE-buffer samplers (sampler ↔ sample-swarm):
+        // carry the loaded/recorded buffer AND the comparable settings across so
+        // they aren't lost. Detected by the shared single-buffer protocol
+        // (getBuffer/setBuffer) — the A/B wt-sampler lacks these, so it is
+        // correctly excluded.
+        const buf = oldCanonical.getBuffer();
+        if (buf) newMachine.setBuffer(buf, oldCanonical.sampleId, oldCanonical.sampleName);
+        // Carry every param the two machines have in COMMON (start/end/loopStart,
+        // speed, reverse, loop, level, …). Keys unique to either side are left at
+        // the new machine's defaults. setParam (not raw assign) so side effects
+        // like swarm spread recompute fire.
+        const newParams = newMachine.getParamList?.().map(p => p.path) ?? [];
+        for (const path of newParams) {
+          const v = oldCanonical.getParam?.(path);
+          if (v !== undefined) newMachine.setParam(path, v);
+        }
+      }
       newMachine.connect(slot._filter._baseHPF);
       slot.machine = newMachine;
     }
+  }
+
+  /**
+   * Drop the loaded sample on every slot machine that supports it (panel RESET).
+   * Param reset is handled by the caller (canonical setParam + syncParams).
+   */
+  clearSampleBuffers() {
+    for (const slot of this._slots) slot.machine.clearBuffer?.();
   }
 
   /**

@@ -4,7 +4,7 @@
  * Custom SYNTH tab for SamplerMachine.
  *
  * Layout (top→bottom):
- *   [File picker button]  [Record button]  [sample name / status]
+ *   [File picker]  [Reset]  [Record]  [WAV download]  [sample name / status]
  *   [Waveform canvas — shows loaded buffer with start/end trim handles]
  *   [Params row: Start knob, End knob, Speed knob, Reverse toggle, Loop toggle, Level knob]
  *
@@ -16,6 +16,7 @@
  */
 
 import { KnobWidget } from '../KnobWidget.js';
+import { bufferToWav } from '../../state/SampleStore.js';
 
 const WAVEFORM_H = 100; // canvas CSS height in px
 
@@ -70,12 +71,30 @@ export class SamplerPanel {
     fileLabel.appendChild(fileInput);
     topBar.appendChild(fileLabel);
 
+    // Reset button — drops the sample AND all settings back to defaults, for a
+    // clean start. (Swapping machines now carries the sample + comparable
+    // settings over; this is the explicit "start anew" escape hatch.)
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'btn sampler-reset-btn';
+    resetBtn.textContent = '↺ RESET';
+    resetBtn.title = 'Clear sample and reset all settings to defaults';
+    resetBtn.addEventListener('click', () => this._resetAll());
+    topBar.appendChild(resetBtn);
+
     // Record button
     this._recBtn = document.createElement('button');
     this._recBtn.className = 'btn sampler-rec-btn';
     this._recBtn.textContent = '⏺ REC';
     this._recBtn.addEventListener('click', () => this._toggleRecord());
     topBar.appendChild(this._recBtn);
+
+    // Download button — exports the loaded/recorded buffer as a WAV file.
+    this._dlBtn = document.createElement('button');
+    this._dlBtn.className = 'btn sampler-dl-btn';
+    this._dlBtn.textContent = '⤓ WAV';
+    this._dlBtn.title = 'Download sample as WAV';
+    this._dlBtn.addEventListener('click', () => this._downloadSample());
+    topBar.appendChild(this._dlBtn);
 
     // Sample name label
     this._nameEl = document.createElement('span');
@@ -252,6 +271,7 @@ export class SamplerPanel {
   }
 
   _drawWaveform() {
+    this._refreshDownloadBtn();
     const canvas = this._canvasEl;
     if (!canvas) return;
 
@@ -425,6 +445,57 @@ export class SamplerPanel {
         document.removeEventListener('mouseup',   onUp);
       }
     });
+  }
+
+  // ── Download ─────────────────────────────────────────────────
+
+  /** Enable the WAV button only when a buffer is present. */
+  _refreshDownloadBtn() {
+    if (this._dlBtn) this._dlBtn.disabled = !this.machine.hasBuffer;
+  }
+
+  /** Export the loaded/recorded AudioBuffer as a PCM16 WAV download. */
+  _downloadSample() {
+    const buffer = this.machine.getBuffer?.();
+    if (!buffer) return;
+    const wav  = bufferToWav(buffer);
+    const blob = new Blob([wav], { type: 'audio/wav' });
+    const url  = URL.createObjectURL(blob);
+    // Derive a .wav filename from the sample name (strip any existing ext).
+    const base = (this.machine.sampleName || 'sample').replace(/\.[^.]+$/, '');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${base}.wav`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Revoke on the next tick so the download has a chance to start.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  /**
+   * RESET: drop the sample and reset every param to its default — a clean start
+   * for when the user switched here intending to begin anew (machine swaps now
+   * carry the sample + comparable settings over, so this is the explicit escape
+   * hatch). Resets all voice slots, not just the canonical, then re-renders.
+   */
+  _resetAll() {
+    const track = this.ctx.getTrack?.();
+    // Reset every param to its SPEC default on the canonical machine.
+    for (const p of this.machine.getParamList?.() ?? []) {
+      if (p.default !== undefined) this.machine.setParam(p.path, p.default);
+    }
+    // Drop the buffer on every slot (incl. canonical), then fan the reset
+    // params to all slots.
+    if (track?._pool?.clearSampleBuffers) track._pool.clearSampleBuffers();
+    else this.machine.clearBuffer?.();   // no pool (shouldn't happen) — clear canonical
+    track?._pool?.syncParams?.();
+    this._nameEl.textContent = '(no sample)';
+    // Rebuild the WHOLE synth tab so embedding panels (e.g. SampleSwarmPanel's
+    // swarm-knob row) refresh too, not just this sampler section. Falls back to a
+    // local re-render if the host ctx doesn't expose renderContent.
+    if (this.ctx.renderContent) this.ctx.renderContent();
+    else this._render();
   }
 
   // ── File loading ─────────────────────────────────────────────

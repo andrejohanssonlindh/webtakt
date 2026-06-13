@@ -19,6 +19,20 @@
  *   resonance — 0–1.15, k-rate (> ~1.0 self-oscillates)
  *   drive     — 0.1–12, k-rate (input gain into the tanh stage)
  *   drift     — 0–0.08, k-rate (thermal cutoff wander amount)
+ *   shape     — 0–4, k-rate (filter response, see SHAPE_* below)
+ *
+ * Filter shape (Oberheim-Xpander-style pole mixing): the ladder is a 4-pole
+ * lowpass by nature (output = s4), but weighted sums of the input `x` and the
+ * four pole states s1..s4 yield other responses without leaving the Moog
+ * topology. `shape` selects the mix:
+ *   0 = LP  (s4)                         — 4-pole lowpass (default Moog)
+ *   1 = HP  (x − 4s1 + 6s2 − 4s3 + s4)   — 4-pole highpass
+ *   2 = BP  (4s2 − 8s3 + 4s4)            — band-pass
+ *   3 = Notch (HP + LP)                  — band-reject
+ *   4 = AP  (x − 8s1 + 24s2 − 32s3 + 16s4)— all-pass-ish (phase, flat-ish mag)
+ * Self-oscillation (resonance > 1) rides every shape since the feedback path is
+ * unchanged. The makeup gain stays tuned to the LP path; HP/BP/notch sit a touch
+ * quieter, which is musically fine for a character filter.
  */
 
 class PatinaLadder extends AudioWorkletProcessor {
@@ -27,7 +41,8 @@ class PatinaLadder extends AudioWorkletProcessor {
       { name: 'cutoff',    defaultValue: 1200, minValue: 10,  maxValue: 18000, automationRate: 'a-rate' },
       { name: 'resonance', defaultValue: 0.2,  minValue: 0,   maxValue: 1.15,  automationRate: 'k-rate' },
       { name: 'drive',     defaultValue: 1.0,  minValue: 0.1, maxValue: 12,    automationRate: 'k-rate' },
-      { name: 'drift',     defaultValue: 0.004,minValue: 0,   maxValue: 0.08,  automationRate: 'k-rate' }
+      { name: 'drift',     defaultValue: 0.004,minValue: 0,   maxValue: 0.08,  automationRate: 'k-rate' },
+      { name: 'shape',     defaultValue: 0,    minValue: 0,   maxValue: 4,     automationRate: 'k-rate' }
     ];
   }
   constructor() {
@@ -48,7 +63,19 @@ class PatinaLadder extends AudioWorkletProcessor {
     const res   = p.resonance[0];
     const drive = p.drive[0];
     const driftAmt = p.drift[0];
+    const shape = Math.round(p.shape[0]) | 0;
     const cut   = p.cutoff;
+
+    // Pole-mix coefficients (b0·x + b1·s1 + b2·s2 + b3·s3 + b4·s4) selecting the
+    // filter response. Computed once per block (shape is k-rate).
+    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 1;   // default: LP (s4)
+    switch (shape) {
+      case 1: b0 = 1; b1 = -4; b2 = 6;  b3 = -4;  b4 = 1;  break; // HP
+      case 2: b0 = 0; b1 = 0;  b2 = 4;  b3 = -8;  b4 = 4;  break; // BP
+      case 3: b0 = 1; b1 = -4; b2 = 6;  b3 = -4;  b4 = 2;  break; // Notch (HP+LP)
+      case 4: b0 = 1; b1 = -8; b2 = 24; b3 = -32; b4 = 16; break; // AP-ish
+      default: b0 = 0; b1 = 0; b2 = 0;  b3 = 0;   b4 = 1;  break; // LP
+    }
     const aRate = cut.length > 1;
     const sr    = sampleRate;
     const fMax  = sr * 0.45;
@@ -79,7 +106,8 @@ class PatinaLadder extends AudioWorkletProcessor {
       s3 += g * (s2 - s3);
       s4 += g * (s3 - s4);
 
-      const y = s4 * makeup;
+      // Oberheim-style pole mix selects the response (LP/HP/BP/notch/AP).
+      const y = (b0 * x + b1 * s1 + b2 * s2 + b3 * s3 + b4 * s4) * makeup;
       for (let ch = 0; ch < out.length; ch++) out[ch][i] = y;
     }
     this.s1 = s1; this.s2 = s2; this.s3 = s3; this.s4 = s4;

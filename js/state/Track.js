@@ -328,14 +328,20 @@ export class Track {
     this.sequencer?.invalidatePlockModeMap();
   }
 
+  /**
+   * Mute = silence the SEQUENCER for this track (pattern-fired notes), while
+   * leaving live keyboard / MIDI-in / arp play audible. Enforced by
+   * Sequencer._fireStep early-returning on `track.muted`; outputGain stays open
+   * so live voices still pass. (Previously mute zeroed outputGain, killing live
+   * play too.) A note already ringing when you hit mute finishes its tail —
+   * mute only blocks the NEXT sequencer step, which matches Elektron behaviour.
+   */
   mute() {
     this.muted = true;
-    this.outputGain.gain.setTargetAtTime(0, this.audio.context.currentTime, 0.01);
   }
 
   unmute() {
     this.muted = false;
-    this.outputGain.gain.setTargetAtTime(1.0, this.audio.context.currentTime, 0.01);
   }
 
   /**

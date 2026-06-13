@@ -125,12 +125,23 @@ export class FilterPanel {
     typeLbl.textContent = 'TYPE';
     const typeSel = document.createElement('select');
     typeSel.className = 'param-select';
-    ['lowpass','highpass','bandpass','notch','peaking','allpass'].forEach(opt => {
-      const o = document.createElement('option');
-      o.value = opt; o.textContent = opt;
-      if (track.filter.getParam('filter.type') === opt) o.selected = true;
-      typeSel.appendChild(o);
-    });
+    // The analogue ladder has no peaking response (it maps to LP), so 'peaking'
+    // is offered on the digital engine only. Rebuilt on engine change below.
+    const ALL_TYPES = ['lowpass','highpass','bandpass','notch','peaking','allpass'];
+    function buildTypeOptions(engine) {
+      const types = engine === 'analogue'
+        ? ALL_TYPES.filter(t => t !== 'peaking')
+        : ALL_TYPES;
+      const current = track.filter.getParam('filter.type');
+      typeSel.innerHTML = '';
+      types.forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt; o.textContent = opt;
+        if (current === opt) o.selected = true;
+        typeSel.appendChild(o);
+      });
+    }
+    buildTypeOptions(getFilterParam('filter.engine'));
     typeSel.addEventListener('change', () => {
       const newType = typeSel.value;
       writeValue(track.filter, 'filter.type', newType, true);
@@ -185,16 +196,23 @@ export class FilterPanel {
     knobByPath.set('filter.keytrack',  keytrkKnob);
 
     // Engine-dependent visibility: the analogue ladder is a fixed 24 dB/oct
-    // lowpass, so TYPE + SLOPE are N/A there; DRIVE + DRIFT are ladder-only.
+    // (4-pole) filter, so SLOPE is N/A there; DRIVE + DRIFT are ladder-only.
+    // TYPE (filter shape) IS supported on the ladder via Oberheim pole-mixing
+    // (LP/HP/BP/notch/allpass — 'peaking' has no ladder response, maps to LP).
     function applyEngineVisibility(engine) {
       const analogue = engine === 'analogue';
-      typeSel.disabled        = analogue;
-      typeRow.style.opacity   = analogue ? '0.4' : '';
       slopeKnob.el.style.opacity       = analogue ? '0.4' : '';
       slopeKnob.el.style.pointerEvents = analogue ? 'none' : '';
       driveKnob.el.style.display = analogue ? '' : 'none';
       driftKnob.el.style.display = analogue ? '' : 'none';
       keytrkKnob.el.style.display = analogue ? '' : 'none';
+      // Switching to analogue while 'peaking' is selected: the ladder has no peak
+      // response, so fall the type back to lowpass (and hide the gain knob).
+      if (analogue && track.filter.getParam('filter.type') === 'peaking') {
+        writeValue(track.filter, 'filter.type', 'lowpass', true);
+        gainKnob.el.style.display = 'none';
+      }
+      buildTypeOptions(engine);
     }
     applyEngineVisibility(getFilterParam('filter.engine'));
 

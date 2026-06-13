@@ -11,7 +11,7 @@ VoiceSlot ×8 (each slot is fully self-contained up to the shared outputGain):
       → Filter._baseLPF (BiquadFilterNode, lowpass, per-slot)
         → Filter.node (+ slope stages) (BiquadFilterNode, per-slot — type/cutoff/resonance)
           → Envelope.ampGain (GainNode, per-slot ADSR gate)  ← gate AFTER filter
-            → Track.outputGain (GainNode, shared — mute implemented here) ← all 8 slots sum here
+            → Track.outputGain (GainNode, shared) ← all 8 slots sum here
               → Track.tremGain (GainNode, shared — tremolo VCA, LFO target amp.level)
               → Track.pannerNode (StereoPannerNode, shared — pan)
                 → DelayFX.inputNode
@@ -102,9 +102,15 @@ runs after the base filters. Available on **every** track, switchable live in th
 
 - **digital** — the biquad cascade above (`node` + slope stages). Unchanged default behaviour.
 - **analogue** — the **PATINA Moog transistor-ladder** running in an AudioWorklet
-  (`js/worklets/patina-ladder-processor.js`): Huovilainen 4-pole lowpass with tanh saturation,
+  (`js/worklets/patina-ladder-processor.js`): Huovilainen 4-pole filter with tanh saturation,
   self-oscillation (resonance > ~1.0), input drive, and thermal cutoff drift. Fixed 24 dB/oct
-  lowpass — `filter.type` and `filter.slope` do not apply (greyed out in the UI).
+  (4-pole) — `filter.slope` does not apply (greyed out). **`filter.type` DOES apply**: a
+  `shape` AudioParam selects the response via Oberheim-Xpander-style pole-mixing of the four
+  ladder states (LP=s4, HP=x−4s1+6s2−4s3+s4, BP=4s2−8s3+4s4, notch=HP+LP, allpass-ish). The
+  ladder has no peaking response, so `peaking` maps to LP. `Filter._LADDER_SHAPE` maps the
+  shared `filter.type` enum → shape index; pushed on `filter.type` change and on engine switch.
+  The **TYPE dropdown hides `peaking` when engine=analogue** (FilterPanel `buildTypeOptions`);
+  switching to analogue while peaking is selected falls the type back to lowpass.
 
 Routing (both subgraphs stay alive; only two cut points move — see `Filter._setEngine`, idempotent
 via `_wiredEngine`):
@@ -132,8 +138,11 @@ worklet's resonance 0–1.15 (`_resToLadder`), so the top of the knob reaches se
 - **LFO → cutoff**: digital rides `.detune` (cents, exponential); the ladder has no `.detune`, so
   `resolveLFOTargets('filter.cutoff')` returns the ladder `cutoff` param (Hz, linear). Depth is then
   interpreted in Hz rather than cents — a known nuance, acceptable.
-- **FilterViz**: in analogue mode draws an **approximate** 4-pole (24 dB/oct) lowpass curve with a
-  resonance bump (can't read the worklet's true response), labelled `≈ LADDER 24dB/oct`.
+- **FilterViz**: in analogue mode draws an **approximate** 4-pole (24 dB/oct) curve matching the
+  selected `filter.type` (LP/HP/BP/notch/allpass via the matching biquad cascaded ×2, peaking→LP)
+  with a resonance bump (can't read the worklet's true response), labelled `≈ LADDER <SHAPE>`.
+  For **allpass** (either engine) the magnitude curve is intentionally flat (an allpass only
+  shifts phase, so Res/Q don't move the magnitude) — FilterViz labels it `ALLPASS · phase only`.
 
 **Known limitation**: an LFO already assigned to `filter.cutoff` resolves its target at assignment
 time, so switching the engine afterwards won't re-point an existing cutoff LFO. Re-assign the cutoff

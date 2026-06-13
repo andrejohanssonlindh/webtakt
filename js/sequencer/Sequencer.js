@@ -243,6 +243,14 @@ getVisibleSteps() {
   }
 
   _fireStep(step, scheduledTime) {
+    // Muted track: the SEQUENCER is silenced (pattern-fired notes — including the
+    // step-driven chord/manual/random arp, which fans out below — do not sound),
+    // while live keyboard / MIDI-in and the input-mode LiveArp still play through
+    // the open outputGain. Skip the whole fire — p-lock dispatch included — since
+    // no note will sound; p-locks apply+restore within a single fire, so skipping
+    // is self-consistent. Sequencer position still advances in tick().
+    if (this.track.muted) return;
+
     // ── P-lock dispatch ────────────────────────────────────────
     // Shared-object p-locks (filter, pan, FX) are applied here once — they sit
     // downstream of the voice pool (or the filter mirrors to every slot), so a

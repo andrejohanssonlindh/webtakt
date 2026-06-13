@@ -120,6 +120,19 @@ export class SampleSwarmMachine extends Machine {
     this.sampleName = name;
   }
 
+  /** The loaded AudioBuffer (or null). Lets other single-buffer samplers carry
+   *  it across a machine swap, and the panel download it. */
+  getBuffer() {
+    return this._buffer;
+  }
+
+  /** Drop the loaded sample (panel RESET). Params are reset separately. */
+  clearBuffer() {
+    this._buffer    = null;
+    this.sampleId   = null;
+    this.sampleName = '';
+  }
+
   get hasBuffer() {
     return this._buffer !== null;
   }

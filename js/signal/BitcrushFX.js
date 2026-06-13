@@ -88,14 +88,27 @@ export class BitcrushFX {
       this._bitShaper.curve = curve;
       return;
     }
-    const maxLevel = Math.max(1, Math.pow(2, b - 1) - 1);  // e.g. 4-bit → 7
-    // Curve needs enough samples to represent each quantisation step cleanly.
+    // Total number of output levels = 2^bits. 1-bit → 2 levels (hard sign
+    // fold), 2-bit → 4, etc. Quantise the [-1,1] input onto that many evenly
+    // spaced levels. Using `levels` (not `2^(b-1)-1`) keeps every bit depth
+    // distinct — the old maxLevel form collapsed 1-bit and 2-bit to the same
+    // curve and bottomed out at 2-bit.
+    const levels = Math.pow(2, b);              // e.g. 1-bit → 2, 4-bit → 16
+    // Quantise to `levels` evenly-spaced steps of size `step`, ROUNDING (not
+    // stretching) so amplitude is preserved: a small input stays small, a
+    // full-scale input stays full-scale. The earlier "map to [0,levels) and
+    // refill ±1" form expanded every signal toward full scale — that is what
+    // made low-bit settings jump in volume (a quiet/low note got pushed to ±1).
+    // Symmetric rounding around 0 also avoids the DC offset that bias added.
+    const step = 2 / levels;
+    // Curve needs enough samples to render each step cleanly; ~4 per level.
     // Cap at 4096 (Web Audio safe; 13+ bits are barely audible anyway).
-    const N = Math.min(4096, Math.max(256, maxLevel * 4));
+    const N = Math.min(4096, Math.max(256, levels * 4));
     const curve = new Float32Array(N);
     for (let i = 0; i < N; i++) {
-      const x = (i / (N - 1)) * 2 - 1;
-      curve[i] = Math.round(x * maxLevel) / maxLevel;
+      const x = (i / (N - 1)) * 2 - 1;          // -1 … 1
+      const q = Math.round(x / step) * step;    // nearest quantisation step
+      curve[i] = Math.max(-1, Math.min(1, q));
     }
     this._bitShaper.curve = curve;
   }

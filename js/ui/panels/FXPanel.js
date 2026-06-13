@@ -12,7 +12,7 @@
  */
 
 import { KnobWidget } from '../KnobWidget.js';
-import { formatCount32 } from '../../util/BpmSync.js';
+import { formatCount32, FINE_STEP } from '../../util/BpmSync.js';
 
 export class FXPanel {
   /**
@@ -165,7 +165,9 @@ export class FXPanel {
         renderContent();   // rebuild so the knob picks up the new range/value
       },
       onChange: v => {
-        const val = isBpm ? Math.round(v) : v;
+        // BPM mode steps on the fine sub-grid (1/FINE_STEP of a base grid unit)
+        // so the knob lands BETWEEN musical divisions, not only on integers.
+        const val = isBpm ? Math.round(v * FINE_STEP) / FINE_STEP : v;
         if (canPLock && hasStep) {
           step.setPLock(activePath, val);
           knob.setHasPLock(true);

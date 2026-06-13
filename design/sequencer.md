@@ -221,6 +221,10 @@ A **DRUM** button sits next to TAPE in the transport bar. Clicking it toggles `A
 
 **Visual:** the DRUM button gains a blue active style (`#btn-drum.drum-active`) to make the armed state obvious.
 
+## Mute
+
+Track mute (`Track.mute()`/`unmute()`, toggled from TrackRow's M dot or digit keys when drum mode is off) silences only the **sequencer** — pattern-fired notes, including the step-driven chord/manual/random arp. It is enforced by `Sequencer._fireStep` early-returning on `track.muted`; `outputGain` stays open, so **live keyboard / MIDI-in and the input-mode LiveArp remain audible** on a muted track. A note already ringing when you mute finishes its release tail — mute blocks the *next* sequencer step (Elektron-style). Sequencer-driven **follow-notes** (`Track.fireFollowNote`) also respect mute. (Previously mute zeroed `outputGain`, which silenced live play too.)
+
 ---
 
 ## Double-Click Step to Add Note

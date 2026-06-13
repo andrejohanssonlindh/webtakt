@@ -326,22 +326,24 @@ export class FilterViz {
     };
     const engine = gp('filter.engine') ?? 'digital';
 
-    // Analogue ladder: a fixed 4-pole (24 dB/oct) lowpass — type/slope don't apply.
-    // We can't read the worklet's true response, so draw an APPROXIMATION: two
-    // cascaded 2-pole lowpasses (= 4-pole) at the cutoff, with a resonance bump
-    // derived from the RES knob (Q 0.1–20 → ladder feedback toward self-osc).
-    const buildLadderCurve = (cutoff, Q) => {
+    // Analogue ladder: a fixed 4-pole (24 dB/oct) filter — slope doesn't apply,
+    // but `filter.type` now selects the response (pole-mix shape). We can't read
+    // the worklet's true response, so draw an APPROXIMATION using the matching
+    // biquad type, cascaded ×2 for the 4-pole slope, with a resonance bump from
+    // the RES knob. 'peaking' has no ladder response → drawn as lowpass.
+    const buildLadderCurve = (cutoff, Q, type) => {
       // Map biquad-Q knob to a visual resonance peak; near the top it spikes
       // (self-oscillation territory), mirroring _resToLadder in Filter.js.
       const r       = Math.max(0, Math.min(1.15, (Q - 0.1) / (20 - 0.1) * 1.15));
       const peakQ   = 0.5 + r * 9;   // resonance height of the per-stage biquad
+      const vizType = (type === 'peaking') ? 'lowpass' : type;
       const pts = [];
       for (let i = 0; i <= N; i++) {
         const t   = i / N;
         const hz  = FREQ_MIN * Math.pow(FREQ_MAX / FREQ_MIN, t);
         // 4-pole = (one resonant 2-pole) × (one gentle 2-pole) for the extra slope.
-        const mag = _evalBiquad('lowpass', cutoff, peakQ, SR, hz)
-                  * _evalBiquad('lowpass', cutoff, 0.7071, SR, hz);
+        const mag = _evalBiquad(vizType, cutoff, peakQ, SR, hz)
+                  * _evalBiquad(vizType, cutoff, 0.7071, SR, hz);
         const db  = Math.max(DB_MIN, Math.min(DB_MAX, _magToDb(mag)));
         pts.push({ x: pad.l + t * cw, y: pad.t + (1 - (db - DB_MIN) / (DB_MAX - DB_MIN)) * ch });
       }
@@ -349,7 +351,7 @@ export class FilterViz {
     };
 
     const mainCurve = engine === 'analogue'
-      ? buildLadderCurve(mainCutoff, mainQ)
+      ? buildLadderCurve(mainCutoff, mainQ, mainType)
       : buildSlopedCurve(mainType, mainCutoff, mainQ, mainGain);
 
     // Fill under main filter
@@ -385,7 +387,19 @@ export class FilterViz {
       ctx.fillStyle = 'rgba(232,160,32,0.55)';
       ctx.font = '7px "JetBrains Mono",monospace';
       ctx.textAlign = 'left';
-      ctx.fillText('≈ LADDER 24dB/oct', pad.l + 3, pad.t + 9);
+      const shapeTag = (mainType === 'peaking' ? 'lowpass' : mainType).toUpperCase();
+      ctx.fillText(`≈ LADDER ${shapeTag}`, pad.l + 3, pad.t + 9);
+    }
+
+    // ── Allpass note: an allpass is flat in MAGNITUDE (it only shifts phase),
+    // so the curve sits at 0 dB and Res/Q don't move it. Label it so the flat
+    // line isn't read as a bug.
+    if (mainType === 'allpass') {
+      ctx.fillStyle = 'rgba(232,160,32,0.55)';
+      ctx.font = '7px "JetBrains Mono",monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText('ALLPASS · phase only (flat mag)', w - pad.r - 3, pad.t + 9);
+      ctx.textAlign = 'left';
     }
 
     // ── Env ghost ────────────────────────────────────────────

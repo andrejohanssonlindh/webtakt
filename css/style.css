@@ -2506,6 +2506,21 @@ body {
   animation: pulse-rec 0.8s ease-in-out infinite alternate;
 }
 
+.sampler-dl-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
+.sampler-dl-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.sampler-reset-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+}
+
 @keyframes pulse-rec {
   from { opacity: 1; }
   to   { opacity: 0.5; }

@@ -48,6 +48,18 @@ function _resToLadder(q) {
   return Math.max(0, Math.min(1.15, t * 1.15));
 }
 
+// Map the UI `filter.type` (shared with the digital biquad) onto the analogue
+// ladder worklet's `shape` param (pole-mix index). The ladder has no peaking
+// response, so 'peaking' falls back to lowpass (the ladder's native shape).
+const _LADDER_SHAPE = {
+  lowpass:  0,
+  highpass: 1,
+  bandpass: 2,
+  notch:    3,
+  allpass:  4,
+  peaking:  0,
+};
+
 // Short glide used to reach the note-on cutoff without a coefficient-step click
 // (see scheduleFrequency baseCut anchor).
 const ANCHOR_GLIDE = 0.0015;
@@ -221,6 +233,7 @@ export class Filter {
       this._ladder.parameters.get('resonance').setValueAtTime(_resToLadder(this._params['filter.resonance']), t);
       this._ladder.parameters.get('drive').setValueAtTime(this._params['filter.drive'], t);
       this._ladder.parameters.get('drift').setValueAtTime(this._params['filter.drift'], t);
+      this._ladder.parameters.get('shape').setValueAtTime(_LADDER_SHAPE[this._params['filter.type']] ?? 0, t);
     } else {
       // base → node → … → output ; detach ladder.
       if (this._ladder) {
@@ -295,6 +308,11 @@ export class Filter {
       case 'filter.type':
         this.node.type = value;
         for (const { biquad } of this._stages) biquad.type = value;
+        // The analogue ladder mirrors the same type via its pole-mix `shape`.
+        if (this._ladder) {
+          const shape = _LADDER_SHAPE[value] ?? 0;
+          this._ladder.parameters.get('shape').setValueAtTime(shape, t);
+        }
         break;
       case 'filter.cutoff':
         // Write both engines so the inactive one stays in sync for a later switch.

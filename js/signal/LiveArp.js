@@ -186,7 +186,9 @@ export class LiveArp {
    */
   _fireEvent(ev) {
     const track = this.track;
-    if (track.muted) return;
+    // NB: no `track.muted` gate here — the live arp is driven by held keys /
+    // MIDI-in (Keyboard.js only), i.e. live play, which stays audible on a muted
+    // track. Mute silences the SEQUENCER, not live input. See Track.mute().
 
     const release    = track.envelope?.getParam('env.release') ?? 0.3;
     const oscOffTime = ev.offTime + release;
