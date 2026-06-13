@@ -47,6 +47,7 @@ export const DEFAULTS = Object.freeze({
     play:    'Space',
     record:  'Enter',
     stopAll: 'Backspace',
+    manual:  'KeyM',
   },
   keyboardLayout: 'swedish',
   // Seeded from the Swedish preset; the Custom editor overwrites per key.

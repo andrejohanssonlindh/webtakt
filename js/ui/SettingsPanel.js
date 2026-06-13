@@ -34,6 +34,7 @@ const KEYBIND_ACTIONS = [
   { id: 'play',    label: 'Play / Stop' },
   { id: 'record',  label: 'Record' },
   { id: 'stopAll', label: 'Stop All (panic)' },
+  { id: 'manual',  label: 'Manual' },
 ];
 
 /** Human label for an event.code (e.g. "Space", "Enter", "KeyR" → "R"). */
@@ -48,24 +49,16 @@ function codeLabel(code) {
 
 export class SettingsPanel {
   /**
-   * @param {HTMLElement} cogBtn   — the ⚙ button
-   * @param {HTMLElement} manualBtn — the 📖 button (placeholder)
+   * @param {HTMLElement} cogBtn — the ⚙ button
    */
-  constructor(cogBtn, manualBtn) {
+  constructor(cogBtn) {
     this.cogBtn    = cogBtn;
-    this.manualBtn = manualBtn;
     this._open     = false;
     this._capturing = null;   // action id currently waiting for a key, or null
 
     this._buildPane();
 
     cogBtn.addEventListener('click', (e) => { e.stopPropagation(); this.toggle(); });
-
-    // Manual is a placeholder for now — just acknowledge the click.
-    manualBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this._flashManualHint();
-    });
 
     // Close on outside click / Escape (but not while capturing a keybind).
     this._outsideClick = (e) => {
@@ -366,14 +359,6 @@ export class SettingsPanel {
       this._keyCaptureHandler = null;
     }
     this._keyCapture = null;
-  }
-
-  _flashManualHint() {
-    // Lightweight placeholder feedback until the real manual lands.
-    const prev = this.manualBtn.title;
-    this.manualBtn.title = 'Manual — coming soon';
-    this.manualBtn.classList.add('icon-btn-hint');
-    setTimeout(() => { this.manualBtn.classList.remove('icon-btn-hint'); this.manualBtn.title = prev; }, 1200);
   }
 
   // ── Small DOM helpers ──────────────────────────────────────

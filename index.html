@@ -713,6 +713,11 @@
         btnStopAll.click();
         return;
       }
+      if (e.code === kb.manual) {
+        e.preventDefault();
+        synthPanel.openManual();
+        return;
+      }
       // e.code is layout-independent and unaffected by Shift
       const digitMatch = e.code.match(/^Digit(\d)$/);
       const num = digitMatch ? parseInt(digitMatch[1]) : NaN;
