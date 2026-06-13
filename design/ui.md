@@ -48,6 +48,17 @@ Behaviour is context-sensitive based on whether a step is selected:
 
 The PASTE button shows an amber highlight when the clipboard contains data. The clipboard persists across tab and track switches within the session.
 
+### In-App Manual (Tier 1, per-tab help)
+
+The 📖 transport button toggles **manual mode**. While on, a small **?** help button appears at the end of the voice tab bar (`SynthPanel._helpBtn`). Clicking it opens `ManualOverlay` (`js/ui/manual.js`) — a centered modal showing the **currently active tab's** section: a one-paragraph blurb plus a `<dl>` of control → description rows. Close via the ✕, an outside click, or Esc.
+
+Content is **centralized** in `js/ui/manual.js` — *not* scattered as `description` fields on individual components. Two registries:
+
+- **`MANUAL_CONTENT`** — keyed by tab name; one `{ title, blurb, items: [[name, desc], …] }` entry per tab.
+- **`MACHINE_MANUAL`** — keyed by machine type (`track.machine.type`). The SYNTH tab is machine-dependent, so when its `?` opens, `SynthPanel` passes the loaded machine's type; the overlay shows the matching `MACHINE_MANUAL` entry if present, else falls back to the generic `synth` entry in `MANUAL_CONTENT`.
+
+Tabs/machines without an entry render a "not yet documented" placeholder, so the affordance ships incrementally. Currently documented tabs: **MACHINE, SOUNDS, SCALES, TRIG, ARP, FILTER, AMP, LFO, MIDI, MIXER, DECK, DELAY, CRUSH, CHORUS, REVERB** — plus a generic **SYNTH** fallback. Per-machine `MACHINE_MANUAL` entries cover: `synth, bass, chord, wavetable, swarm, fm, karplus, marimba, comb, strings, moogish` (melodic), `kick.silk, kick.hard, snare, hihat, clapp, cymbal, wood, transient, noise` (digital drums), `kick.analogue, snare.analogue, hihat.analogue, cymbal.analogue, tom.analogue, clapp.analogue` (Patina analogue drums), `sampler, wt-sampler, sample-swarm` (samplers). MidiMachine has no SYNTH-tab params and falls back to the generic entry gracefully.
+
 ### P-Lock Knob Pattern
 
 When a step is selected, knobs in SYNTH/FILTER/AMP write to `step.plocks` instead of track params.
