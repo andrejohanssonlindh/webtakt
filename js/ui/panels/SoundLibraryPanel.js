@@ -180,9 +180,9 @@ export class SoundLibraryPanel {
 
     actions.appendChild(previewBtn);
     actions.appendChild(loadBtn);
-    actions.appendChild(editBtn);
+    if (!sound.factory) actions.appendChild(editBtn);
     actions.appendChild(exportBtn);
-    actions.appendChild(delBtn);
+    if (!sound.factory) actions.appendChild(delBtn);
     card.appendChild(actions);
 
     return card;

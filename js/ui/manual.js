@@ -2,9 +2,11 @@
  * manual.js
  * ---------
  * Tier-1 in-app manual. Content lives here, centralized and keyed by tab name,
- * NOT scattered as `description` fields across every component. Each panel's
- * header carries a `?` help button (injected by SynthPanel) that opens the
- * ManualOverlay scrolled to that tab's section.
+ * NOT scattered as `description` fields across every component. The 📖 button
+ * in the transport bar opens the overlay for the active tab.
+ *
+ * MAINTENANCE RULE: if you add, remove, or change controls in any panel or
+ * machine, update the matching entry in MANUAL_CONTENT or MACHINE_MANUAL here.
  *
  * To document a tab, add an entry to MANUAL_CONTENT below:
  *
