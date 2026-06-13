@@ -117,6 +117,11 @@ body {
   color: var(--accent);
   border-color: var(--accent);
 }
+.icon-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
 
 /* ── Settings pane (floating box under the cog) ── */
 .settings-pane {
@@ -619,6 +624,7 @@ body {
   background: var(--step-plock);
   box-shadow: 0 0 4px var(--step-plock);
 }
+
 
 .fx-toggle-wrap.has-plock {
   position: relative;
@@ -2529,6 +2535,98 @@ body {
 
 .modal-input:focus {
   border-color: var(--accent);
+}
+
+/* ─── MANUAL OVERLAY (Tier-1 in-app help) ──────────────── */
+
+.manual-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: none;            /* toggled to flex by ManualOverlay.show() */
+  align-items: center;
+  justify-content: center;
+  z-index: 9100;
+}
+
+.manual-box {
+  background: var(--surface-2);
+  border: 1px solid var(--accent-dim);
+  border-radius: 4px;
+  padding: 18px 22px 22px;
+  width: min(560px, 90vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+}
+
+.manual-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.manual-title {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.manual-close {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: color 0.1s, border-color 0.1s;
+}
+.manual-close:hover {
+  color: var(--accent);
+  border-color: var(--border);
+}
+
+.manual-blurb {
+  color: var(--text-bright);
+  font-size: 11px;
+  line-height: 1.6;
+  margin-bottom: 14px;
+}
+
+.manual-empty {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-style: italic;
+}
+
+.manual-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 14px;
+  row-gap: 9px;
+  margin: 0;
+}
+
+.manual-list dt {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  padding-top: 1px;
+}
+
+.manual-list dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.55;
 }
 
 /* ─── SOUND LIBRARY PANEL ──────────────────────────────── */

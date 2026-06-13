@@ -289,8 +289,13 @@
     setSnapResolution(settings.gridBase);
     const settingsPanel = new SettingsPanel(
       document.getElementById('btn-settings'),
-      document.getElementById('btn-manual'),
     );
+
+    // 📖 Manual: opens the overlay for whichever tab is currently active.
+    document.getElementById('btn-manual').addEventListener('click', (e) => {
+      e.stopPropagation();
+      synthPanel.openManual();
+    });
     settings.on(() => {
       setSnapResolution(settings.gridBase);
       synthPanel.render();   // refresh any open synced knobs with new snap points

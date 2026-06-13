@@ -31,6 +31,7 @@ import { AmpPanel }             from './panels/AmpPanel.js';
 import { FXPanel }              from './panels/FXPanel.js';
 import { SoundsPanel }          from './panels/SoundsPanel.js';
 import { MachinePickerPanel, MACHINE_GROUPS, MACHINE_DEFS } from './panels/MachinePickerPanel.js';
+import { ManualOverlay }        from './manual.js';
 
 export class SynthPanel {
   /**
@@ -61,6 +62,10 @@ export class SynthPanel {
     // Clipboard: { type: 'step'|'machine', data: object }
     this._clipboard = null;
 
+    // In-app manual (Tier 1): 📖 transport button opens the overlay for the
+    // currently active tab. No modal mode — just a direct open.
+    this._manual = new ManualOverlay();
+
     this._buildShell();
 
     state.on('trackSelected', () => this.render());
@@ -85,6 +90,12 @@ export class SynthPanel {
   /** Sample store of the controlled deck (so sampler tabs hit the right store). */
   get sampleStore() {
     return this.state.project?.sampleStore ?? this._sampleStore;
+  }
+
+  /** Open the manual overlay for the currently active tab. */
+  openManual() {
+    const machineType = this.state.selectedTrack?.machine?.type;
+    this._manual.show(this.state.activeTab, machineType);
   }
 
   _buildShell() {
