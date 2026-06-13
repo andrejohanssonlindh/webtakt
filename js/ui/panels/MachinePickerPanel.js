@@ -130,6 +130,24 @@ export class MachinePickerPanel {
           renderContent();
         });
 
+        // Preview button: auditions the machine's default sound on the track
+        // without committing the swap (snapshot/restore). Samplers have no
+        // default buffer, so they are not previewable.
+        if (def.type !== 'sampler' && def.type !== 'wt-sampler'
+            && def.type !== 'sample-swarm' && def.type !== 'midi') {
+          // A <span> (not a nested <button>) — nested buttons are invalid HTML.
+          const prev = document.createElement('span');
+          prev.className   = 'machine-card-preview';
+          prev.textContent = '▶';
+          prev.title       = `Preview ${def.label} (C4)`;
+          prev.setAttribute('role', 'button');
+          prev.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._preview(def.type, track, state);
+          });
+          btn.appendChild(prev);
+        }
+
         grid.appendChild(btn);
         allCards.push({ el: btn, def, colEl: col });
       });
@@ -152,5 +170,36 @@ export class MachinePickerPanel {
         if (cards[0]?.colEl) cards[0].colEl.style.display = anyVisible ? '' : 'none';
       });
     });
+  }
+
+  /**
+   * Audition a machine type's default sound on the track without committing
+   * the swap. Snapshots track state, swaps to the machine type (default
+   * params), plays a one-shot C4, then restores the snapshot after the
+   * release tail. Mirrors SoundsPanel's preview, minus the sampler buffer
+   * path (machine defaults never carry a buffer).
+   */
+  _preview(type, track, state) {
+    const audio    = state.project.audio;
+    const ctxAudio = audio?.context;
+    if (!ctxAudio) return;
+
+    const snapshot = track.toJSON();
+    track.setMachine(type);
+
+    const time    = ctxAudio.currentTime + 0.015;
+    const offTime = time + 0.5;
+    const release = track.envelope._params['env.release'] ?? 0.3;
+
+    track.machine.noteOn(60, 100, time);
+    track.envelope.noteOn(time);
+    track.machine.noteOff(offTime);
+    track.envelope.noteOff(offTime);
+
+    const restoreDelay = (offTime - ctxAudio.currentTime + release + 0.05) * 1000;
+    setTimeout(() => {
+      track.envelope.noteOff(ctxAudio.currentTime);
+      setTimeout(() => track.fromJSON(snapshot), (release + 0.05) * 1000);
+    }, restoreDelay);
   }
 }

@@ -1712,6 +1712,7 @@ body {
 }
 
 .machine-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1723,6 +1724,32 @@ body {
   cursor: pointer;
   text-align: left;
   transition: border-color 0.1s, background 0.1s;
+}
+
+.machine-card-preview {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  line-height: 1;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--accent-dim);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: color 0.1s, border-color 0.1s, background 0.1s;
+}
+
+.machine-card-preview:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--surface-3);
 }
 
 .machine-card:hover {
@@ -2658,13 +2685,14 @@ body {
 }
 
 .sl-card-btn-preview {
-  border-color: transparent;
-  color: var(--text-dim);
+  border-color: var(--accent-dim);
+  color: var(--accent);
 }
 
 .sl-card-btn-preview:hover {
   border-color: var(--accent);
   color: var(--accent);
+  background: var(--surface-3);
 }
 
 .sl-card-btn-del {

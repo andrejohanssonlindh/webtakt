@@ -8,7 +8,7 @@ The panel header has two zones in a single row:
 
 | Tab | Content |
 |---|---|
-| MACHINE | Search input + grouped grid (Drums / Melodic / Sampler) of all machine types; click to swap machine on the selected track |
+| MACHINE | Search input + grouped grid (Drums / Melodic / Sampler) of all machine types; click to swap machine on the selected track. Each non-sampler/non-MIDI card has a hover-only **▶ preview** corner button that auditions that machine's default sound (C4) on the track via snapshot/restore, without committing the swap. |
 | SOUNDS | Sound library: save/load named snapshots (machine + signal chain). Tag filter chips + scrollable list. |
 | SCALES | Scale dropdown + root note picker (12 buttons) + chromatic preview strip |
 | TRIG | Note display, REMOVE NOTE, RESET TRIG, condition/chance/length/nudge/detune/tone knobs. NUDGE is only shown when a step is selected. QUANTIZE knob (0–100%), **NOTE FOLLOW** dropdown, and **FLW DLY** knob (0–500ms) are shown when no step is selected. |
