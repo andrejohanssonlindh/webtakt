@@ -390,11 +390,11 @@ getVisibleSteps() {
     };
 
     const arp = this.track.arp;
-    // Input mode is keyboard-driven (LiveArp), NOT step-triggered — its
-    // buildEvents() returns []. So steps must fire NORMALLY in input mode
-    // (this is also how recorded input-arp notes play back). Only chord/manual/
-    // random fan a step through the arp.
-    const arpFiresSteps = !!(arp?.enabled && arp.getParam('mode') !== 'input');
+    // Input modes ('input' / 'input-manual') are keyboard-driven (LiveArp), NOT
+    // step-triggered — their buildEvents() returns []. So steps must fire NORMALLY
+    // in those modes (this is also how recorded input-arp notes play back). Only
+    // chord/manual/random fan a step through the arp.
+    const arpFiresSteps = !!(arp?.enabled && !arp.isLiveInputMode());
 
     // ── Arp rate/gate/variance LFO (sample-and-hold) ────────────────────────
     // Arp timing is plain JS read once at build time, not an AudioParam, so an

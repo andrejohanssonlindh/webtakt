@@ -277,8 +277,14 @@ export class Envelope {
    * keytrack is skipped. Live playing uses a fixed velocity, so velocity scaling
    * is intentionally not applied here — only keytrack and RC curves carry over.
    */
-  noteOn(time, note = null) {
+  noteOn(time, note = null, { skipAttack = false } = {}) {
     const analogue = this._isAnalogue();
+    // A short ramp used when skipAttack is set: jump (almost) straight to the
+    // sustain level rather than replaying attack→decay, but over a few ms so the
+    // jump from the current value doesn't click. Used when a held note is handed
+    // back from the arp — the chord was already sounding, so re-attacking it
+    // would be wrong.
+    const JUMP = 0.008;
     // Amp
     const a = this._stageSeconds('env', 'attack');
     const d = this._stageSeconds('env', 'decay');
@@ -286,13 +292,18 @@ export class Envelope {
 
     const g = this.ampGain.gain;
     g.cancelScheduledValues(time);
-    g.setValueAtTime(0, time);
-    if (analogue) {
-      this._rcSegment(g, time,     a, 1.0);
-      this._rcSegment(g, time + a, d, s);
+    if (skipAttack) {
+      g.setValueAtTime(g.value, time);
+      g.linearRampToValueAtTime(s, time + JUMP);
     } else {
-      g.linearRampToValueAtTime(1.0, time + a);
-      g.linearRampToValueAtTime(s,   time + a + d);
+      g.setValueAtTime(0, time);
+      if (analogue) {
+        this._rcSegment(g, time,     a, 1.0);
+        this._rcSegment(g, time + a, d, s);
+      } else {
+        g.linearRampToValueAtTime(1.0, time + a);
+        g.linearRampToValueAtTime(s,   time + a + d);
+      }
     }
 
     // Filter
@@ -313,13 +324,18 @@ export class Envelope {
 
       const freq = this._filter.cutoffParam();
       freq.cancelScheduledValues(time);
-      freq.setValueAtTime(baseCut, time);
-      if (analogue) {
-        this._rcSegment(freq, time,      fa, peakCut);
-        this._rcSegment(freq, time + fa, fd, sustainCut);
+      if (skipAttack) {
+        freq.setValueAtTime(freq.value, time);
+        freq.linearRampToValueAtTime(sustainCut, time + JUMP);
       } else {
-        freq.linearRampToValueAtTime(peakCut,    time + fa);
-        freq.linearRampToValueAtTime(sustainCut, time + fa + fd);
+        freq.setValueAtTime(baseCut, time);
+        if (analogue) {
+          this._rcSegment(freq, time,      fa, peakCut);
+          this._rcSegment(freq, time + fa, fd, sustainCut);
+        } else {
+          freq.linearRampToValueAtTime(peakCut,    time + fa);
+          freq.linearRampToValueAtTime(sustainCut, time + fa + fd);
+        }
       }
     }
   }

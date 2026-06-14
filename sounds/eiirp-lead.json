@@ -1,0 +1,99 @@
+{
+  "id": "seed_eiirp_lead",
+  "name": "EIIRP Lead",
+  "tags": [
+    "lead",
+    "keys",
+    "analogue",
+    "patina",
+    "radiohead"
+  ],
+  "machine": {
+    "type": "moogish",
+    "params": {
+      "osc1.waveform": "saw",
+      "osc1.octave": 0,
+      "osc1.detune": -3,
+      "osc1.level": 0.7,
+      "osc2.waveform": "pulse",
+      "osc2.octave": 0,
+      "osc2.detune": 5,
+      "osc2.level": 0.22,
+      "osc3.waveform": "triangle",
+      "osc3.octave": -1,
+      "osc3.detune": 0,
+      "osc3.level": 0.0,
+      "sub.level": 0.0,
+      "noise.level": 0.04,
+      "drift": 0.22,
+      "hum": 0.0,
+      "humFreq": 50,
+      "output.level": 0.82
+    }
+  },
+  "filter": {
+    "params": {
+      "filter.engine": "analogue",
+      "filter.type": "lowpass",
+      "filter.cutoff": 950,
+      "filter.resonance": 2.8,
+      "filter.gain": 0,
+      "filter.envAmount": 0.22,
+      "filter.drive": 1.9,
+      "filter.drift": 0.008,
+      "filter.keytrack": 0.5,
+      "base.lpf": 20000,
+      "base.hpf": 40
+    }
+  },
+  "envelope": {
+    "params": {
+      "env.attack": 0.003,
+      "env.decay": 2.1,
+      "env.sustain": 0.7,
+      "env.release": 0.35,
+      "fenv.attack": 0.005,
+      "fenv.decay": 0.8,
+      "fenv.sustain": 0.35,
+      "fenv.release": 1.9,
+      "env.velSens": 0.75
+    }
+  },
+  "delayFX": {
+    "params": {
+      "delay.time": 0.375,
+      "delay.feedback": 0.22,
+      "delay.wet": 0.12
+    },
+    "enabled": true
+  },
+  "bitcrushFX": {
+    "params": {
+      "crush.bits": 16,
+      "crush.rate": 1.0,
+      "crush.wet": 0
+    },
+    "enabled": false
+  },
+  "chorusFX": {
+    "params": {
+      "chorus.mix": 0.25,
+      "chorus.rate": 0.5,
+      "chorus.depth": 0.25
+    },
+    "enabled": false
+  },
+  "reverbFX": {
+    "params": {
+      "reverb.decay": 2.2,
+      "reverb.predelay": 0.02,
+      "reverb.damp": 6500.0,
+      "reverb.wet": 0.28
+    },
+    "enabled": true
+  },
+  "analogue": true,
+  "lfos": [],
+  "pan": 0,
+  "trigTone": 0
+}

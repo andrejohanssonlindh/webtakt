@@ -107,6 +107,42 @@ export class SynthPanel {
     }
   }
 
+  /**
+   * Toggle the arp on/off for the selected track (keybind entry point). Mirrors
+   * the ArpPanel ON/OFF button, including the input-mode hand-off so live-held
+   * keys aren't left stuck. Refreshes the panel if the ARP tab is showing.
+   */
+  toggleArp() {
+    const track = this.state.selectedTrack;
+    const arp = track?.arp;
+    if (!arp) return;
+    arp.enabled = !arp.enabled;
+    if (!arp.enabled) {
+      const wasInput = arp.isLiveInputMode();
+      track.liveArp?.releaseAll();
+      if (wasInput) this.state.emit('arpInputInactive', { track });
+    } else if (arp.isLiveInputMode()) {
+      this.state.emit('arpInputActive', { track });
+    }
+    if (this.state.activeTab === 'arp') this._renderContent();
+  }
+
+  /**
+   * Toggle one FX bypass on the selected track (keybind entry point). `which` is
+   * the FX field name on Track: 'chorusFX' | 'delayFX' | 'bitcrushFX' | 'reverbFX'.
+   * Mirrors the fx-bar ON/OFF button and keeps the bar + tab in sync.
+   */
+  toggleFx(which) {
+    const fx = this.state.selectedTrack?.[which];
+    if (!fx?.setEnabled) return;
+    fx.setEnabled(!fx.enabled);
+    this._fxBar?.querySelectorAll('.fx-toggle-wrap').forEach(wrap => wrap._updateState?.());
+    if (this.state.activeTab === 'delay' || this.state.activeTab === 'crush' ||
+        this.state.activeTab === 'chorus' || this.state.activeTab === 'reverb') {
+      this._renderContent();
+    }
+  }
+
   _buildShell() {
     this.container.innerHTML = '';
 
@@ -140,11 +176,12 @@ export class SynthPanel {
     this._fxBar = document.createElement('div');
     this._fxBar.className = 'fx-bar';
 
+    // Order matches keybinds C V B N → Crush / Rev / Delay / Chorus (left→right).
     const fxDefs = [
-      { tab: 'delay',  label: 'DLY',    getFx: () => this.state.selectedTrack?.delayFX },
       { tab: 'crush',  label: 'CRUSH',  getFx: () => this.state.selectedTrack?.bitcrushFX },
-      { tab: 'chorus', label: 'CHORUS', getFx: () => this.state.selectedTrack?.chorusFX },
       { tab: 'reverb', label: 'REV',    getFx: () => this.state.selectedTrack?.reverbFX },
+      { tab: 'delay',  label: 'DLY',    getFx: () => this.state.selectedTrack?.delayFX },
+      { tab: 'chorus', label: 'CHORUS', getFx: () => this.state.selectedTrack?.chorusFX },
     ];
 
     fxDefs.forEach(({ tab, label, getFx }) => {

@@ -126,10 +126,34 @@ export class Keyboard {
     settings.on(() => { this._applyScale(); this._updateKeyLabels(); });
 
     state.on('scaleChanged',     () => { this._applyScale(); this._updateKeyLabels(); });
-    state.on('trackSelected',    () => {
-      // Release any held live-input arp on every track so a track switch mid-hold
-      // can't leave an arp free-running with no key to stop it.
-      this.state.project.tracks.forEach(t => t.liveArp?.releaseAll());
+    state.on('trackSelected',    ({ prevTrack }) => {
+      // If the previous track had hold on, leave the latched notes ringing —
+      // the voice pool slots are already claimed and will decay naturally.
+      // We just abandon _heldSlots (the slots keep the voices alive) and clear
+      // the keyboard's tracking state so the new track starts clean.
+      // For live-arp input mode on the prev track, we DO stop the arp runner
+      // (it would otherwise loop forever with no key to stop it).
+      if (prevTrack?.held) {
+        // Don't send noteOffs — latched notes keep sounding through their pool slots.
+        // Just abandon _heldSlots; the voices are already claimed and will decay.
+        this._heldSlots.clear();
+      }
+      // Stop any free-running live-arp schedulers on track switch — but for held
+      // tracks, don't silence the pool (that would cut the notes). Use a targeted
+      // stop instead of releaseAll().
+      this.state.project.tracks.forEach(t => {
+        if (!t.liveArp) return;
+        if (t.held) {
+          // Stop the scheduler loop only — let already-scheduled notes finish.
+          if (t.liveArp._timerID !== null) {
+            clearTimeout(t.liveArp._timerID);
+            t.liveArp._timerID = null;
+          }
+          t.liveArp._held = [];
+        } else {
+          t.liveArp.releaseAll();
+        }
+      });
       this._heldKeys.clear();
       this._keyToNote.clear();
       this.keyboardEl.querySelectorAll('.key.held').forEach(k => k.classList.remove('held'));
@@ -172,6 +196,30 @@ export class Keyboard {
       });
     });
 
+    // Arp input mode deactivated (turned off or mode switched away) while keys
+    // are held: the live arp has already been released by the panel — re-trigger
+    // each still-held note as a plain sustained machine voice so the chord keeps
+    // sounding under the fingers, exactly as if it had just been pressed without
+    // the arp. Mirror of arpInputActive (the inverse path). Skips notes that
+    // somehow already have an open slot, to avoid stacking a second voice.
+    state.on('arpInputInactive', ({ track }) => {
+      const t = this.state.project.audio.context.currentTime + 0.015;
+      const vel = track.trigVelocity ?? 100;
+      this._heldKeys.forEach(midiNote => {
+        if (typeof midiNote !== 'number') return; // skip drum keys
+        if (this._heldSlots.has(midiNote)) return; // already sounding
+        const voice    = track._pool?.nextVoice() ?? null;
+        const machine  = voice?.machine  ?? track.machine;
+        const envelope = voice?.envelope ?? track.envelope;
+        if (voice) voice.claim(t + 30);
+        this._heldSlots.set(midiNote, voice);
+        machine?.noteOn(midiNote, vel, t);
+        // The chord was already sounding under the arp — skip the attack/decay and
+        // settle straight to the sustain level so handing it back is seamless.
+        envelope?.noteOn(t, midiNote, { skipAttack: true });
+      });
+    });
+
     // Global STOP-ALL / panic — drop all held-key state + visual highlights.
     state.on('panic', () => {
       this.state.project.tracks.forEach(t => t.liveArp?.releaseAll());
@@ -181,6 +229,14 @@ export class Keyboard {
       this._heldKeys.clear();
       this._keyToNote.clear();
       this.keyboardEl.querySelectorAll('.key.held').forEach(k => k.classList.remove('held'));
+    });
+
+    // Hold mode: when turned off, flush all latched notes by running real note-offs
+    // for everything still in _heldKeys. Snapshot first since _noteOff mutates the set.
+    state.on('holdModeChanged', ({ holdMode }) => {
+      if (!holdMode) {
+        [...this._heldKeys].forEach(note => this._noteOff(note));
+      }
     });
   }
 
@@ -297,10 +353,15 @@ export class Keyboard {
     }
   }
 
-  /** True if `code` is bound to a transport action (skip it as a piano note). */
+  /**
+   * True if `code` is bound to ANY app shortcut (transport, manual, arp, FX, …).
+   * Such keys are handled globally in index.html, so the piano must not also fire
+   * a note for them. Checking the whole keybinds object means new binds are
+   * reserved automatically without editing this list.
+   */
   _isTransportKey(code) {
     const kb = settings.get('keybinds');
-    return code === kb.play || code === kb.record || code === kb.stopAll;
+    return Object.values(kb).includes(code);
   }
 
   /** Active computer-keyboard layout (preset, or the user's custom rows). */
@@ -410,7 +471,7 @@ export class Keyboard {
     // prints each fired note into the step it lands on via captureArpNote().
     // Key-down does NOT write to a step here — the arp output is what's captured.
     const vel     = track.trigVelocity ?? 100;
-    const liveArp = track.arp?.enabled && track.arp.getParam('mode') === 'input';
+    const liveArp = track.arp?.enabled && track.arp.isLiveInputMode();
     if (liveArp) {
       track.liveArp.noteOn(midiNote, vel);
     } else {
@@ -481,6 +542,7 @@ export class Keyboard {
 
   async _noteOff(midiNote) {
     if (!this._heldKeys.has(midiNote)) return;
+    if (this.state.holdMode) return;   // latch: suppress release until hold turns off
     this._heldKeys.delete(midiNote);
 
     const keyEl = this.keyboardEl.querySelector(`.key[data-note="${midiNote}"]`);
@@ -492,7 +554,7 @@ export class Keyboard {
     const track = this.state.selectedTrack;
     const time  = ctx.currentTime + 0.015;
 
-    const liveArp = track.arp?.enabled && track.arp.getParam('mode') === 'input';
+    const liveArp = track.arp?.enabled && track.arp.isLiveInputMode();
     if (liveArp) {
       track.liveArp.noteOff(midiNote);
     }

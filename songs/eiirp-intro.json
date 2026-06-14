@@ -1,0 +1,259 @@
+{
+  "version": 1,
+  "bpm": 124,
+  "trackCount": 2,
+  "tracks": [
+    {
+      "index": 0,
+      "muted": false,
+      "followSource": null,
+      "followDelay": 0,
+      "pan": -0.2,
+      "trigTone": 0,
+      "trigVelocity": 127,
+      "nudgeQuantize": 0,
+      "scaleIndex": 0,
+      "leadNote": 0,
+      "djFilter": 0,
+      "analogue": true,
+      "machine": {
+        "type": "moogish",
+        "params": {
+          "osc1.waveform": "saw",
+          "osc1.octave": 0,
+          "osc1.detune": -3,
+          "osc1.level": 0.7,
+          "osc2.waveform": "pulse",
+          "osc2.octave": 0,
+          "osc2.detune": 5,
+          "osc2.level": 0.22,
+          "osc3.waveform": "triangle",
+          "osc3.octave": -1,
+          "osc3.detune": 0,
+          "osc3.level": 0.0,
+          "sub.level": 0.0,
+          "noise.level": 0.04,
+          "drift": 0.22,
+          "hum": 0.0,
+          "humFreq": 50,
+          "output.level": 0.72
+        }
+      },
+      "filter": {
+        "params": {
+          "filter.engine": "analogue",
+          "filter.type": "lowpass",
+          "filter.cutoff": 950,
+          "filter.resonance": 2.8,
+          "filter.gain": 0,
+          "filter.envAmount": 0.22,
+          "filter.drive": 1.9,
+          "filter.drift": 0.008,
+          "filter.keytrack": 0.5,
+          "base.lpf": 20000,
+          "base.hpf": 40
+        }
+      },
+      "envelope": {
+        "params": {
+          "env.attack": 0.003,
+          "env.decay": 2.1,
+          "env.sustain": 0.7,
+          "env.release": 0.35,
+          "fenv.attack": 0.005,
+          "fenv.decay": 0.8,
+          "fenv.sustain": 0.35,
+          "fenv.release": 1.9,
+          "env.velSens": 0.75
+        }
+      },
+      "delayFX": {
+        "params": { "delay.time": 0.375, "delay.feedback": 0.22, "delay.wet": 0.12 },
+        "enabled": true
+      },
+      "bitcrushFX": {
+        "params": { "crush.bits": 16, "crush.rate": 1.0, "crush.wet": 0 },
+        "enabled": false
+      },
+      "chorusFX": {
+        "params": { "chorus.mix": 0.25, "chorus.rate": 0.5, "chorus.depth": 0.25 },
+        "enabled": false
+      },
+      "reverbFX": {
+        "params": { "reverb.decay": 2.2, "reverb.predelay": 0.02, "reverb.damp": 6500.0, "reverb.wet": 0.28 },
+        "enabled": true
+      },
+      "arp": { "enabled": false, "mode": "up", "rate": 0.25, "octaves": 1 },
+      "lfos": [],
+      "modWheelTargets": [],
+      "midiIn": { "channel": 0, "noteEnabled": false, "ccMappings": [], "noteTranspose": 0 },
+      "sequencer": {
+        "stepCount": 32,
+        "pageOffset": 0,
+        "steps": [
+          { "index": 0,  "active": true,  "voices": [{"note":60,"velocity":108,"length":7.8,"nudge":0},{"note":64,"velocity":98,"length":7.8,"nudge":0},{"note":67,"velocity":95,"length":7.8,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 1,  "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 2,  "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 3,  "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 4,  "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 5,  "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 6,  "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 7,  "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+
+          { "index": 8,  "active": true,  "voices": [{"note":61,"velocity":106,"length":7.8,"nudge":0},{"note":65,"velocity":96,"length":7.8,"nudge":0},{"note":68,"velocity":95,"length":7.8,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 9,  "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 10, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 11, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 12, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 13, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 14, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 15, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+
+          { "index": 16, "active": true,  "voices": [{"note":63,"velocity":106,"length":7.8,"nudge":0},{"note":67,"velocity":96,"length":7.8,"nudge":0},{"note":70,"velocity":95,"length":7.8,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 17, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 18, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 19, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 20, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 21, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 22, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 23, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+
+          { "index": 24, "active": true,  "voices": [{"note":60,"velocity":108,"length":7.8,"nudge":0},{"note":64,"velocity":98,"length":7.8,"nudge":0},{"note":67,"velocity":95,"length":7.8,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 25, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 26, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 27, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 28, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 29, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 30, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 31, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}}
+        ]
+      }
+    },
+    {
+      "index": 1,
+      "muted": false,
+      "followSource": null,
+      "followDelay": 0,
+      "pan": 0.2,
+      "trigTone": 0,
+      "trigVelocity": 127,
+      "nudgeQuantize": 0,
+      "scaleIndex": 0,
+      "leadNote": 0,
+      "djFilter": 0,
+      "analogue": true,
+      "machine": {
+        "type": "moogish",
+        "params": {
+          "osc1.waveform": "saw",
+          "osc1.octave": 0,
+          "osc1.detune": 3,
+          "osc1.level": 0.65,
+          "osc2.waveform": "pulse",
+          "osc2.octave": 0,
+          "osc2.detune": -4,
+          "osc2.level": 0.22,
+          "osc3.waveform": "triangle",
+          "osc3.octave": -1,
+          "osc3.detune": 0,
+          "osc3.level": 0.0,
+          "sub.level": 0.0,
+          "noise.level": 0.03,
+          "drift": 0.25,
+          "hum": 0.0,
+          "humFreq": 50,
+          "output.level": 0.78
+        }
+      },
+      "filter": {
+        "params": {
+          "filter.engine": "analogue",
+          "filter.type": "lowpass",
+          "filter.cutoff": 1100,
+          "filter.resonance": 2.2,
+          "filter.gain": 0,
+          "filter.envAmount": 0.18,
+          "filter.drive": 1.6,
+          "filter.drift": 0.008,
+          "filter.keytrack": 0.6,
+          "base.lpf": 20000,
+          "base.hpf": 40
+        }
+      },
+      "envelope": {
+        "params": {
+          "env.attack": 0.005,
+          "env.decay": 1.6,
+          "env.sustain": 0.65,
+          "env.release": 0.5,
+          "fenv.attack": 0.006,
+          "fenv.decay": 0.7,
+          "fenv.sustain": 0.3,
+          "fenv.release": 2.2,
+          "env.velSens": 0.7
+        }
+      },
+      "delayFX": {
+        "params": { "delay.time": 0.375, "delay.feedback": 0.25, "delay.wet": 0.15 },
+        "enabled": true
+      },
+      "bitcrushFX": {
+        "params": { "crush.bits": 16, "crush.rate": 1.0, "crush.wet": 0 },
+        "enabled": false
+      },
+      "chorusFX": {
+        "params": { "chorus.mix": 0.25, "chorus.rate": 0.5, "chorus.depth": 0.25 },
+        "enabled": false
+      },
+      "reverbFX": {
+        "params": { "reverb.decay": 2.4, "reverb.predelay": 0.02, "reverb.damp": 6200.0, "reverb.wet": 0.3 },
+        "enabled": true
+      },
+      "arp": { "enabled": false, "mode": "up", "rate": 0.25, "octaves": 1 },
+      "lfos": [],
+      "modWheelTargets": [],
+      "midiIn": { "channel": 0, "noteEnabled": false, "ccMappings": [], "noteTranspose": 0 },
+      "sequencer": {
+        "stepCount": 32,
+        "pageOffset": 0,
+        "steps": [
+          { "index": 0,  "active": true,  "voices": [{"note":72,"velocity":112,"length":3.8,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 1,  "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 2,  "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 3,  "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 4,  "active": true,  "voices": [{"note":70,"velocity":102,"length":1.8,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 5,  "active": true,  "voices": [{"note":67,"velocity":98,"length":1.8,"nudge":0}],  "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 6,  "active": true,  "voices": [{"note":65,"velocity":95,"length":1.8,"nudge":0}],  "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 7,  "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+
+          { "index": 8,  "active": true,  "voices": [{"note":72,"velocity":110,"length":3.8,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 9,  "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 10, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 11, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 12, "active": true,  "voices": [{"note":72,"velocity":100,"length":1.8,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 13, "active": true,  "voices": [{"note":70,"velocity":97,"length":1.8,"nudge":0}],  "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 14, "active": true,  "voices": [{"note":68,"velocity":94,"length":1.8,"nudge":0}],  "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 15, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+
+          { "index": 16, "active": true,  "voices": [{"note":70,"velocity":110,"length":3.8,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 17, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 18, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 19, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 20, "active": true,  "voices": [{"note":72,"velocity":105,"length":1.8,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 21, "active": true,  "voices": [{"note":70,"velocity":100,"length":1.8,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 22, "active": true,  "voices": [{"note":67,"velocity":96,"length":1.8,"nudge":0}],  "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 23, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+
+          { "index": 24, "active": true,  "voices": [{"note":72,"velocity":112,"length":5.8,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 25, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 26, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 27, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 28, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 29, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 30, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}},
+          { "index": 31, "active": false, "voices": [{"note":60,"velocity":100,"length":1,"nudge":0}], "retrigger":null,"condition":{"type":"always"},"chance":100,"plocks":{}}
+        ]
+      }
+    }
+  ]
+}

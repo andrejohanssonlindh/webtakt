@@ -26,6 +26,8 @@
       <span id="bpm-display">120</span>
       <input id="bpm-slider" type="range" min="20" max="300" value="120" step="1" />
       <div class="transport-right">
+        <button id="btn-hold" class="btn">HOLD</button>
+        <div class="sep"></div>
         <button id="btn-clear-notes" class="btn">CLR NOTES</button>
         <button id="btn-clear-track" class="btn">CLR TRACK</button>
         <button id="btn-clear-notes-all" class="btn">CLR NOTES ALL</button>
@@ -199,7 +201,7 @@
             // which fans it out and (when recording) prints each fired note via its
             // own record hook. No direct note trigger and no recorder write here,
             // exactly as the on-screen keyboard does in this mode.
-            const liveArp = track.arp?.enabled && track.arp.getParam('mode') === 'input';
+            const liveArp = track.arp?.enabled && track.arp.isLiveInputMode();
             if (liveArp) {
               track.liveArp.noteOn(finalNote, velocity);
             } else {
@@ -239,10 +241,12 @@
 
             const finalNoteOff = Math.max(0, Math.min(127, note + (cfg.noteTranspose ?? 0)));
 
+            if (track.held) return;   // hold active on this track — suppress note-off
+
             // Live-input arp mode: remove the note from the held chord; LiveArp
             // stops the runner when nothing is held. No direct release or recorder
             // writeback (the arp owns both).
-            const liveArp = track.arp?.enabled && track.arp.getParam('mode') === 'input';
+            const liveArp = track.arp?.enabled && track.arp.isLiveInputMode();
             if (liveArp) {
               track.liveArp.noteOff(finalNoteOff);
               return;
@@ -343,9 +347,20 @@
     const btnPlay    = document.getElementById('btn-play');
     const btnStopAll = document.getElementById('btn-stop-all');
     const btnRec     = document.getElementById('btn-rec');
+    const btnHold    = document.getElementById('btn-hold');
     const bpmSlider  = document.getElementById('bpm-slider');
     const bpmDisplay = document.getElementById('bpm-display');
     let playing = false;
+
+    // ── HOLD ─────────────────────────────────────────────────
+    // Toggles hold on the SELECTED TRACK. Each track has its own hold state so
+    // switching tracks reflects that track's hold. The button syncs on toggle,
+    // track-switch, and holdModeChanged events.
+    const _syncHoldBtn = () => btnHold.classList.toggle('active', state.holdMode);
+    const _toggleHold  = () => { state.setHoldMode(!state.holdMode); _syncHoldBtn(); };
+    btnHold.addEventListener('click', _toggleHold);
+    state.on('trackSelected',   _syncHoldBtn);
+    state.on('holdModeChanged', _syncHoldBtn);
 
     btnPlay.addEventListener('click', () => {
       audio.resume();
@@ -373,6 +388,9 @@
       audio.resume();
       decks.silenceAll();
       if (state.recording) state.setRecording(false);
+      state.project.tracks.forEach(t => t.setHold(false));
+      btnHold.classList.remove('active');
+      state.emit('holdModeChanged', { holdMode: false });  // re-render TrackRow H badges
       state.emit('panic', {});
       playing = false;
       btnPlay.textContent = '▶ PLAY';
@@ -497,6 +515,8 @@
       synthPanel.render();
       trackRow.render();
       _updatePageCounter();
+      // Re-sync hold button in case resetTrack() cleared a track's hold state.
+      _syncHoldBtn();
     }
 
     document.getElementById('btn-clear-notes').addEventListener('click', () => {
@@ -716,6 +736,28 @@
       if (e.code === kb.manual) {
         e.preventDefault();
         synthPanel.toggleManual();
+        return;
+      }
+      if (e.code === kb.hold) {
+        e.preventDefault();
+        _toggleHold();
+        return;
+      }
+      // Selected-track toggles: arp + the four FX bypasses.
+      if (e.code === kb.arp) {
+        e.preventDefault();
+        synthPanel.toggleArp();
+        return;
+      }
+      const fxKey = {
+        [kb.fxChorus]: 'chorusFX',
+        [kb.fxDelay]:  'delayFX',
+        [kb.fxCrush]:  'bitcrushFX',
+        [kb.fxReverb]: 'reverbFX',
+      }[e.code];
+      if (fxKey) {
+        e.preventDefault();
+        synthPanel.toggleFx(fxKey);
         return;
       }
       // e.code is layout-independent and unaffected by Shift

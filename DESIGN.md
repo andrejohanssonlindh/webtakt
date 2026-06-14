@@ -129,10 +129,10 @@ js/
       MachinePickerPanel.js   — MACHINE tab: searchable grouped machine card grid. Owns canonical MACHINE_GROUPS / MACHINE_DEFS (re-exported by SynthPanel for back-compat).
       SoundsPanel.js          — SOUNDS tab: wraps SoundLibraryPanel + preview/restore logic
       SoundLibraryPanel.js    — SOUNDS tab content: tag filter chips + scrollable sound card list; per-card preview/load/edit/export(⤓)/delete. Export downloads the sound JSON + referenced sample .wav(s) for committing to sounds/+samples/.
-      ArpPanel.js             — ARP tab: arpeggiator mode/rate/variance controls (Chord/Manual/Random/Input)
+      ArpPanel.js             — ARP tab: arpeggiator mode/rate/variance controls. Modes on two rows: Chord/Manual/Random (step-triggered) and Input/Input-Manual (live keyboard-driven)
   signal/
-    Arpeggiator.js      — Per-track arpeggiator: Chord / Manual / Random / Input modes; BPM-sync; variance. Chord/Manual/Random are step-triggered (Sequencer._fireStep). Input is keyboard-driven (see LiveArp.js): the held keys ARE the chord, played at absolute pitch; steps do not trigger it. RATE/GATE/VARIANCE are p-lockable + LFO-able via virtual params arp.rate/arp.gate/arp.variance (JS-only: p-lock exact, LFO sample-and-hold per fire — arp timing isn't an AudioParam).
-    LiveArp.js          — Free-running scheduler for Arpeggiator 'input' mode. Fed key on/off by Keyboard.js AND by MIDI In (index.html note handlers route to track.liveArp when arp mode is 'input'); cycles the held notes ahead-of-time on the BPM grid (own setTimeout loop so it works with transport stopped). When recording, prints each fired note into the playing step via Keyboard.captureArpNote() — no re-arping on playback. Owned by Track.
+    Arpeggiator.js      — Per-track arpeggiator: Chord / Manual / Random / Input / Input-Manual modes; BPM-sync; variance. Chord/Manual/Random are step-triggered (Sequencer._fireStep). Input modes are keyboard-driven (see LiveArp.js): the held keys drive the arp at absolute pitch; steps do not trigger them — isLiveInputMode() gates all call sites. 'input' fans the held key set as a chord (reuses chord controls); 'input-manual' runs the MANUAL step list (semitone offset + per-step rate/gate) relative to each held key. RATE/GATE/VARIANCE are p-lockable + LFO-able via virtual params arp.rate/arp.gate/arp.variance (JS-only: p-lock exact, LFO sample-and-hold per fire — arp timing isn't an AudioParam).
+    LiveArp.js          — Free-running scheduler for the Arpeggiator input modes ('input' / 'input-manual'). Fed key on/off by Keyboard.js AND by MIDI In (index.html note handlers route to track.liveArp when arp.isLiveInputMode()); cycles the held notes ahead-of-time on the BPM grid via arp.buildInputCycle() (own setTimeout loop so it works with transport stopped). When recording, prints each fired note into the playing step via Keyboard.captureArpNote() — no re-arping on playback. Owned by Track.
   util/
     BpmSync.js          — Shared BPM-sync utility. Unified sync-knob model: 1/32-note integer counts (count32ToSeconds, MUSICAL_SNAP_32, formatCount32, divToCount32). Used by DelayFX, ReverbFX, LFO, Arpeggiator. Legacy DIV_QN/SYNC_DIVISIONS/divToSeconds kept for load back-compat.
   state/
@@ -140,7 +140,7 @@ js/
     Project.js          — 8–12 tracks (dynamic), BPM, export/import JSON file. Owns a per-deck busGain (tracks route here → master fxBus). loadDeckJSON/reset for the deck layer.
     DeckManager.js      — Two-deck DJ layer: owns Project A + B (shared Clock/AudioEngine, beatmatched), constant-power crossfader on the two busGains, per-deck silence, "control" (which deck the UI edits), load/unload. See design/ui.md → Deck Tab.
     AppState.js         — Selected track/step, active tab/LFO, event bus. `.project` is a getter following the controlled deck (DeckManager).
-    Settings.js         — App-wide user prefs (NOT part of a project): BPM-sync finest grid (bpmGrid 1/32–1/128), modWheelSensitivity, transport keybinds (play/record/stopAll as event.code), keyboardLayout preset (or 'custom' + editable customLayout {lower,chromatic}). Single shared `settings` instance, continuous localStorage save, on(fn) subscribers, reset(). See design/ui.md → Settings Pane.
+    Settings.js         — App-wide user prefs (NOT part of a project): BPM-sync finest grid (bpmGrid 1/32–1/128), modWheelSensitivity, keybinds (play/record/stopAll/manual + selected-track toggles arp/fxChorus/fxDelay/fxCrush/fxReverb, each an event.code), keyboardLayout preset (or 'custom' + editable customLayout {lower,chromatic}). All binds handled in index.html keydown; the arp/fx binds toggle that effect on the selected track via SynthPanel.toggleArp()/toggleFx(). Single shared `settings` instance, continuous localStorage save, on(fn) subscribers, reset(). See design/ui.md → Settings Pane.
     SoundLibrary.js     — Sound library, two sources one list: USER sounds in localStorage (save/load/delete) + FACTORY sounds shipped as files in sounds/ (async init() fetches sounds/index.json manifest → each sound JSON). Factory merged by id only if not already present (user copy wins); flagged `factory:true`, never written to localStorage (re-fetched each load so preset fixes ship). Old persisted `seed_*` entries are migrated out on load. Regenerate factory files via tools/bake_sounds.py.
     SampleStore.js      — Sample store. load(id) resolves: in-memory cache → localStorage (WAV-base64, user imports) → shipped samples/<id>.wav (factory samples a sound references). Exports bufferToWav() for sound export.
     Scales.js           — Scale definitions (20 scales) + noteInScale() helper
@@ -178,7 +178,7 @@ AppState  (.project getter → DeckManager.activeProject)
                     ├── Filter (Track.filter === pool slot-0 filter; canonical for UI/sequencer)
                     ├── StereoPannerNode (pannerNode — owned directly by Track)
                     ├── Arpeggiator (intercepts Sequencer triggers when enabled; Input mode is keyboard-driven instead)
-                    ├── LiveArp (drives Arpeggiator 'input' mode from held keyboard keys; free-running)
+                    ├── LiveArp (drives Arpeggiator input modes from held keyboard keys; free-running)
                     └── LFO (×N, at least 1; machine-param LFOs connect to all 4 slot machines)
 
 AudioEngine

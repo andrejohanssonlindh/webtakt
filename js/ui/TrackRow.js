@@ -34,7 +34,8 @@ export class TrackRow {
     this._rafId    = null;
 
     this._build();
-    state.on('trackSelected', () => this.render());
+    state.on('trackSelected',   () => this.render());
+    state.on('holdModeChanged', () => this.render());
     this._startGlowLoop();
   }
 
@@ -111,6 +112,7 @@ export class TrackRow {
         <span class="track-type">${track.machine?.type ?? '—'}</span>
         ${soundLine}
         <span class="mute-dot ${track.muted ? 'active' : ''}">M</span>
+        <span class="hold-dot ${track.held ? 'active' : ''}">H</span>
         ${track.followSource !== null ? `<span class="follow-ind">→${track.followSource + 1}</span>` : ''}
       `;
     });

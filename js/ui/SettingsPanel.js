@@ -31,10 +31,17 @@ const EDITOR_BLACK = [1, 3, -1, 6, 8, 10, -1, 13, 15, -1, 18, 20, 22, -1];
 const EDITOR_WHITE = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23];
 
 const KEYBIND_ACTIONS = [
-  { id: 'play',    label: 'Play / Stop' },
-  { id: 'record',  label: 'Record' },
-  { id: 'stopAll', label: 'Stop All (panic)' },
-  { id: 'manual',  label: 'Manual' },
+  { id: 'play',     label: 'Play / Stop' },
+  { id: 'record',   label: 'Record' },
+  { id: 'stopAll',  label: 'Stop All (panic)' },
+  { id: 'manual',   label: 'Manual' },
+  { id: 'hold',     label: 'Hold (latch notes)' },
+  { id: 'arp',      label: 'Arp on/off (sel. track)' },
+  // FX keys in fx-bar left→right order: C=Crush, V=Reverb, B=Delay, N=Chorus
+  { id: 'fxCrush',  label: 'Crush on/off (sel. track)' },
+  { id: 'fxReverb', label: 'Reverb on/off (sel. track)' },
+  { id: 'fxDelay',  label: 'Delay on/off (sel. track)' },
+  { id: 'fxChorus', label: 'Chorus on/off (sel. track)' },
 ];
 
 /** Human label for an event.code (e.g. "Space", "Enter", "KeyR" → "R"). */
@@ -54,7 +61,8 @@ export class SettingsPanel {
   constructor(cogBtn) {
     this.cogBtn    = cogBtn;
     this._open     = false;
-    this._capturing = null;   // action id currently waiting for a key, or null
+    this._capturing = null;        // action id currently waiting for a key, or null
+    this._conflictWarning = null;  // set after a rebind that cleared a clash
 
     this._buildPane();
 
@@ -171,6 +179,12 @@ export class SettingsPanel {
 
     // ── Keybinds ─────────────────────────────────────────────
     p.appendChild(this._subtitle('KEYBINDS'));
+    if (this._conflictWarning) {
+      const warn = document.createElement('div');
+      warn.className = 'settings-keybind-conflict';
+      warn.textContent = '⚠ ' + this._conflictWarning;
+      p.appendChild(warn);
+    }
     KEYBIND_ACTIONS.forEach(({ id, label }) => {
       const row = document.createElement('div');
       row.className = 'settings-keybind-row';
@@ -204,12 +218,25 @@ export class SettingsPanel {
   // ── Keybind capture ────────────────────────────────────────
   _startCapture(action) {
     this._stopCapture();
+    this._conflictWarning = null;
     this._capturing = action;
     this._render();
     this._captureHandler = (e) => {
       e.preventDefault();
       e.stopPropagation();
       if (e.code === 'Escape') { this._stopCapture(); this._render(); return; }
+
+      // Check if this key is already used by another action — if so, clear it
+      // there first and note what happened so we can show a warning.
+      const kb = settings.get('keybinds');
+      const clash = KEYBIND_ACTIONS.find(a => a.id !== action && kb[a.id] === e.code);
+      if (clash) {
+        settings.setKeybind(clash.id, '');
+        this._conflictWarning = `"${codeLabel(e.code)}" was unbound from "${clash.label}"`;
+      } else {
+        this._conflictWarning = null;
+      }
+
       settings.setKeybind(action, e.code);
       this._stopCapture();
       this._render();

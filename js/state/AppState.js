@@ -67,6 +67,23 @@ export class AppState {
   }
 
   /**
+   * Hold is per-track. `holdMode` reads the selected track's held flag so
+   * index.html and Keyboard can check a single property. `setHoldMode` writes
+   * to the selected track and emits 'holdModeChanged' so the button + TrackRow
+   * can update. Keyboard listens to flush held notes when hold turns off.
+   */
+  get holdMode() {
+    return this.selectedTrack?.held ?? false;
+  }
+
+  setHoldMode(on) {
+    const track = this.selectedTrack;
+    if (!track) return;
+    track.setHold(on);
+    this.emit('holdModeChanged', { holdMode: on, track });
+  }
+
+  /**
    * The active Project. When a DeckManager is attached this follows the
    * controlled deck (so the whole UI re-points on "take control"); otherwise
    * it's the fixed boot project.
@@ -89,9 +106,10 @@ export class AppState {
 
   /** @param {number} index */
   selectTrack(index) {
+    const prevTrack = this.selectedTrack;
     this.selectedTrackIndex = index;
     this.selectedStepIndex  = -1;  // clear step selection on track change
-    this.emit('trackSelected', { index, track: this.selectedTrack });
+    this.emit('trackSelected', { index, track: this.selectedTrack, prevTrack });
     this.emit('stepSelected',  { index: -1, step: null });
   }
 

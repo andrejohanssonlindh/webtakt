@@ -21,6 +21,12 @@
  *              the held key set IS the chord. When RECORD is on, the held notes are
  *              captured into the sequencer steps (handled by Keyboard.js) so playback
  *              re-fires them through the arp without holding keys.
+ *   'input-manual' — LIVE keyboard-driven version of 'manual'. Same per-step list
+ *              (semitone offset + per-step rate + gate) as manual mode, but the root
+ *              is the live-held key instead of a sequencer step. Step 1 is the held
+ *              key; later steps are relative semitone moves. With a chord held, the
+ *              step figure runs from each held note in parallel (all at once). Driven
+ *              by LiveArp like 'input'; the sequencer does NOT trigger it.
  *
  * Chord mode: trig length comes from the step voice length (same as a normal note).
  * Manual mode: per-step gate override in ms; 0 = use base step length.
@@ -39,7 +45,7 @@
  * Parameters (flat object, serialisable)
  * ───────────────────────────────────────
  *   enabled        boolean  false
- *   mode           string   'chord' | 'manual' | 'random'
+ *   mode           string   'chord' | 'manual' | 'random' | 'input' | 'input-manual'
  *
  *   -- chord mode --
  *   chord          string   chord type key (see CHORD_DEFS)
@@ -192,6 +198,15 @@ export class Arpeggiator {
     this._bpm = bpm;
   }
 
+  /**
+   * True when the current mode is keyboard-driven (LiveArp), i.e. notes come from
+   * live-held keys rather than a sequencer step: 'input' or 'input-manual'.
+   */
+  isLiveInputMode() {
+    const m = this._params.mode;
+    return m === 'input' || m === 'input-manual';
+  }
+
   /** Add a manual step at the end. */
   addManualStep() {
     this._params.steps.push(_makeDefaultStep());
@@ -219,9 +234,9 @@ export class Arpeggiator {
       case 'chord':  return this._buildChordEvents(rootNote, velocity, triggerTime, stepLengthSec);
       case 'manual': return this._buildManualEvents(rootNote, velocity, triggerTime, stepLengthSec);
       case 'random': return this._buildRandomEvents(rootNote, velocity, triggerTime, stepLengthSec);
-      // 'input' is keyboard-driven (LiveArp) — steps do not trigger it. A step
-      // recorded while in input mode plays its captured notes as a normal multi-
-      // voice step (the arp does not re-fan it).
+      // 'input' / 'input-manual' are keyboard-driven (LiveArp) — steps do not
+      // trigger them. A step recorded while in an input mode plays its captured
+      // notes as a normal multi-voice step (the arp does not re-fan it).
       default:       return [];
     }
   }
@@ -280,6 +295,10 @@ export class Arpeggiator {
    *   schedule the next cycle back-to-back.
    */
   buildInputCycle(held, t0) {
+    if (this._params.mode === 'input-manual') {
+      return this._buildInputManualCycle(held, t0);
+    }
+
     const p       = this._params;
     const ordered = this._applyPattern(held);  // preserves {note,velocity} objects
     const gapSec  = this._gapSec(p.syncMode, p.speed, p.bpmCount32);
@@ -300,6 +319,51 @@ export class Arpeggiator {
     }
 
     const cycleSec = ordered.length * gapSec;
+    return { events, cycleSec };
+  }
+
+  /**
+   * Input-manual cycle: the manual step list (semitone offset + per-step rate +
+   * gate) played relative to the LIVE-held keys instead of a sequencer root.
+   * Step 1's offset (usually 0) is the held key itself; subsequent steps are
+   * relative semitone moves, exactly like manual mode. With several keys held the
+   * step pattern runs from EACH held note in PARALLEL (all starting together), so
+   * a chord arps every tone simultaneously rather than one note at a time.
+   *
+   * @param {{note:number,velocity:number}[]} held  held notes, each with velocity
+   * @param {number} t0  AudioContext time of the first note
+   * @returns {{events: Array<{note,velocity,time,offTime}>, cycleSec: number}}
+   */
+  _buildInputManualCycle(held, t0) {
+    const p     = this._params;
+    const roots = held.slice().sort((a, b) => a.note - b.note);
+
+    // Resolve the step list into a timeline once (offset-from-t0 + gate), since
+    // every held root runs the SAME steps. Each root then plays this timeline in
+    // PARALLEL (all starting at t0), so holding a chord arps every note together
+    // rather than queueing one note's whole figure before the next.
+    const slots = [];
+    let   offset = 0;
+    for (const step of p.steps) {
+      const gapSec  = this._gapSec(step.syncMode, step.speed, step.bpmCount32);
+      // No step length to inherit in live input — gate 0 falls back to legato
+      // (90% of this step's own gap), mirroring the chord/input gate rule.
+      const gateSec = step.gate > 0 ? step.gate / 1000 : gapSec * 0.9;
+      slots.push({ semitone: Math.round(step.semitone), at: offset, gateSec });
+      offset += gapSec;
+    }
+
+    const events = [];
+    for (const { note: rootNote, velocity } of roots) {
+      for (const slot of slots) {
+        const note = Math.max(0, Math.min(127, rootNote + slot.semitone));
+        const time = t0 + slot.at;
+        events.push({ note, velocity, time, offTime: time + slot.gateSec });
+      }
+    }
+
+    // One root's figure defines the cycle length — they all share it (parallel).
+    const cycleSec = Math.max(0.001, offset);
     return { events, cycleSec };
   }
 

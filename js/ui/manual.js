@@ -202,8 +202,10 @@ export const MANUAL_CONTENT = {
            'a melodic sequence. Toggle it on/off without losing settings; pick a ' +
            'mode to control where the notes come from.',
     items: [
-      ['ARP ON / ARP OFF', 'Enables or disables the arpeggiator. Turning it off ' +
-                 'releases any held voices immediately without clearing the settings.'],
+      ['ARP ON / ARP OFF', 'Enables or disables the arpeggiator without clearing the ' +
+                 'settings. In INPUT mode, turning it off while you are still holding ' +
+                 'keys hands the chord straight back to the keyboard, so the held ' +
+                 'notes keep sounding as plain sustained voices.'],
       ['Mode: CHORD', 'Arpeggiate from a built-in chord type. Select the chord shape ' +
                  'and a pattern (Up / Down / UpDown / Random) to determine the order ' +
                  'the notes play.'],
@@ -217,6 +219,11 @@ export const MANUAL_CONTENT = {
       ['Mode: INPUT', 'Live keyboard-driven mode. Hold keys to form the chord and the ' +
                  'arpeggiator plays those held pitches. The held keys are the chord — ' +
                  'no step needed. Enable RECORD to capture what you play into the pattern.'],
+      ['Mode: INPUT MANUAL', 'Live keyboard-driven version of MANUAL. The custom step ' +
+                 'sequence (per-step semitone offset, RATE and GATE) plays relative to ' +
+                 'the key you hold instead of a sequencer step: step 1 is the held note, ' +
+                 'later steps are semitone moves from it. Hold a chord and the figure ' +
+                 'runs from each held note at the same time. RECORD captures it too.'],
       ['PATTERN', 'Direction the arp traverses its notes: Up, Down, UpDown, or Random.'],
       ['RATE', 'How fast the arp fires notes. Click the knob centre to toggle ' +
                  'MS↔BPM mode. In BPM mode it snaps to musical divisions (e.g. 1/8, ' +

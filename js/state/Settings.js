@@ -13,8 +13,10 @@
  *                        fractional count 0.5). See js/util/BpmSync.js.
  *   modWheelSensitivity — scroll → mod-wheel travel multiplier (0.1–3.0, 1 = the
  *                        historical 300px-per-full-range feel). Lower = calmer.
- *   keybinds           — { play, record, stopAll }: each an `event.code` string
- *                        (layout-independent). Bound in index.html transport.
+ *   keybinds           — { play, record, stopAll, manual, arp, fxChorus, fxDelay,
+ *                        fxCrush, fxReverb }: each an `event.code` string
+ *                        (layout-independent). Handled in index.html keydown. The
+ *                        arp/fx binds toggle that effect on the SELECTED track.
  *   keyboardLayout     — preset name for the on-screen piano's computer-key map
  *                        (see Keyboard.js KB_LAYOUTS). 'swedish' is the default.
  *                        The special value 'custom' uses `customLayout` instead.
@@ -48,6 +50,14 @@ export const DEFAULTS = Object.freeze({
     record:  'Enter',
     stopAll: 'Backspace',
     manual:  'KeyM',
+    hold:     'KeyX',
+    // Selected-track toggles: arp on/off + the four FX bypass toggles.
+    // Key order matches the fx-bar left→right: C=Crush, V=Reverb, B=Delay, N=Chorus.
+    arp:      'KeyZ',
+    fxCrush:  'KeyC',
+    fxReverb: 'KeyV',
+    fxDelay:  'KeyB',
+    fxChorus: 'KeyN',
   },
   keyboardLayout: 'swedish',
   // Seeded from the Swedish preset; the Custom editor overwrites per key.
@@ -107,7 +117,7 @@ class Settings {
     this._emit();
   }
 
-  /** Set one transport keybind by action name ('play'|'record'|'stopAll'). */
+  /** Set one keybind by action name (any key in DEFAULTS.keybinds). */
   setKeybind(action, code) {
     this._data.keybinds = { ...this._data.keybinds, [action]: code };
     this._save();

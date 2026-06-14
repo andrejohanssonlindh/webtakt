@@ -32,6 +32,9 @@ export class ArpPanel {
    *                          rate/gate/variance knobs (arp.rate/gate/variance).
    */
   constructor(container, track, rebuildArp, ctx = null) {
+    // _mount is the real tab content element (.panel-content). this.container is
+    // re-pointed to a per-render flex-column root inside it (see _render).
+    this._mount     = container;
     this.container  = container;
     this.track      = track;
     this.rebuildArp = rebuildArp;
@@ -84,8 +87,18 @@ export class ArpPanel {
   }
 
   _render() {
-    this.container.innerHTML = '';
+    this._mount.innerHTML = '';
     this._widgets = [];
+
+    // The arp tab lives inside .panel-content, which is a WRAPPING flex row — not
+    // a column. Render everything into a single full-size flex-column root so the
+    // header/mode rows stay fixed and the mode body (.arp-body, flex:1) gets a
+    // bounded height and actually scrolls. All _render* helpers append to
+    // this.container, so point it at the root for the duration of the render.
+    const root = document.createElement('div');
+    root.className = 'arp-root';
+    this._mount.appendChild(root);
+    this.container = root;
 
     const arp = this.track.arp;
 
@@ -99,8 +112,12 @@ export class ArpPanel {
     onBtn.addEventListener('click', () => {
       arp.enabled = !arp.enabled;
       if (!arp.enabled) {
+        const wasInput = arp.isLiveInputMode();
         this.track.liveArp?.releaseAll();
-      } else if (arp.getParam('mode') === 'input') {
+        // Arp turned off in an input mode: hand any still-held keys back to the
+        // keyboard so the chord keeps sounding as plain sustained voices.
+        if (wasInput) this.ctx?.state?.emit('arpInputInactive', { track: this.track });
+      } else if (arp.isLiveInputMode()) {
         // Arp just enabled in input mode — tell the keyboard so it can feed any
         // currently-held notes into liveArp (avoids stuck voices and missed arp start).
         this.ctx?.state?.emit('arpInputActive', { track: this.track });
@@ -109,36 +126,46 @@ export class ArpPanel {
     });
     headerRow.appendChild(onBtn);
 
-    const modeWrap = document.createElement('div');
-    modeWrap.className = 'arp-mode-wrap';
-
-    ['chord', 'manual', 'random', 'input'].forEach(m => {
-      const btn = document.createElement('button');
-      btn.className = 'arp-mode-btn' + (arp.getParam('mode') === m ? ' active' : '');
-      btn.textContent = m.toUpperCase();
-      btn.addEventListener('click', () => {
-        arp.setParam('mode', m);
-        if (m !== 'input') {
-          // Stop any free-running live arp when leaving input mode mid-hold.
-          this.track.liveArp?.releaseAll();
-        } else if (arp.enabled) {
-          // Switched into input mode while arp is on — feed any held keys into liveArp.
-          this.ctx?.state?.emit('arpInputActive', { track: this.track });
-        }
-        this.rebuildArp();
+    // Mode selector: sequencer-driven modes on the top row, the two live
+    // keyboard-driven (input) modes on a second row below.
+    const isInputMode = m => m === 'input' || m === 'input-manual';
+    const pickMode = m => {
+      arp.setParam('mode', m);
+      if (!isInputMode(m)) {
+        // Stop any free-running live arp when leaving an input mode mid-hold.
+        this.track.liveArp?.releaseAll();
+      } else if (arp.enabled) {
+        // Switched into an input mode while arp is on — feed any held keys into liveArp.
+        this.ctx?.state?.emit('arpInputActive', { track: this.track });
+      }
+      this.rebuildArp();
+    };
+    const makeModeRow = (modes, labels = {}, extraClass = '') => {
+      const wrap = document.createElement('div');
+      wrap.className = 'arp-mode-wrap' + (extraClass ? ' ' + extraClass : '');
+      modes.forEach(m => {
+        const btn = document.createElement('button');
+        btn.className = 'arp-mode-btn' + (arp.getParam('mode') === m ? ' active' : '');
+        btn.textContent = labels[m] ?? m.toUpperCase();
+        btn.addEventListener('click', () => pickMode(m));
+        wrap.appendChild(btn);
       });
-      modeWrap.appendChild(btn);
-    });
+      return wrap;
+    };
 
-    headerRow.appendChild(modeWrap);
+    headerRow.appendChild(makeModeRow(['chord', 'manual', 'random']));
     this.container.appendChild(headerRow);
+    this.container.appendChild(
+      makeModeRow(['input', 'input-manual'], { 'input-manual': 'INPUT MANUAL' }, 'arp-mode-wrap-input')
+    );
 
     // ── Mode content ────────────────────────────────────────────────────────
     const mode = arp.getParam('mode');
-    if (mode === 'chord')  this._renderChord();
-    if (mode === 'manual') this._renderManual();
-    if (mode === 'random') this._renderRandom();
-    if (mode === 'input')  this._renderInput();
+    if (mode === 'chord')        this._renderChord();
+    if (mode === 'manual')       this._renderManual();
+    if (mode === 'random')       this._renderRandom();
+    if (mode === 'input')        this._renderInput();
+    if (mode === 'input-manual') this._renderInputManual();
   }
 
   // ── Chord mode ─────────────────────────────────────────────────────────────
@@ -235,6 +262,14 @@ export class ArpPanel {
   }
 
   // ── Manual mode ────────────────────────────────────────────────────────────
+
+  // ── Input-manual mode (live keyboard-driven manual) ──────────────────────────
+  // Same per-step editor as manual mode, but the steps play relative to the
+  // live-held key(s) instead of a sequencer root. Reuses _renderManual directly
+  // (no hint — the behaviour is documented in the in-app manual).
+  _renderInputManual() {
+    this._renderManual();
+  }
 
   _renderManual() {
     const arp  = this.track.arp;

@@ -156,6 +156,7 @@ export class Track {
     this.audio   = audio;
     this.clock   = clock;
     this.muted   = false;
+    this.held    = false;   // true while keyboard/MIDI note-offs are suppressed for this track
     this.followSource = null;
 
     // The node this track's FX chain feeds into. Defaults to the shared master
@@ -191,8 +192,9 @@ export class Track {
     // Arpeggiator — schedules note fans from Sequencer triggers
     this.arp = new Arpeggiator();
 
-    // Live (keyboard-driven) arp runner for arp mode 'input'. Fed key on/off by
-    // Keyboard.js; free-running so it works with the transport stopped.
+    // Live (keyboard-driven) arp runner for the input arp modes ('input' /
+    // 'input-manual'). Fed key on/off by Keyboard.js; free-running so it works
+    // with the transport stopped.
     this.liveArp = new LiveArp(this);
 
     this.outputGain.connect(this.tremGain);
@@ -342,6 +344,10 @@ export class Track {
 
   unmute() {
     this.muted = false;
+  }
+
+  setHold(on) {
+    this.held = !!on;
   }
 
   /**
@@ -707,8 +713,9 @@ export class Track {
     this.leadNote      = 0;
     this.applyDJFilter(0);
 
-    // Reset mute
+    // Reset mute + hold
     if (this.muted) this.unmute();
+    if (this.held)  this.setHold(false);
     this.followSource = null;
     this.followDelay  = 0;
     this.modWheelTargets = [null, null];

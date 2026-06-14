@@ -209,6 +209,16 @@ body {
   border-color: var(--accent);
   color: var(--accent);
 }
+.settings-keybind-conflict {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: #c8a04a;
+  background: rgba(200, 160, 74, 0.1);
+  border-left: 2px solid #c8a04a;
+  padding: 4px 6px;
+  margin-bottom: 4px;
+  border-radius: 2px;
+}
 .settings-reset-btn {
   width: 100%;
   margin-top: 12px;
@@ -545,6 +555,24 @@ body {
 .mute-dot.active {
   color: var(--danger);
   background: rgba(192, 57, 43, 0.15);
+}
+
+.hold-dot {
+  position: absolute;
+  bottom: 3px;
+  left: 4px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-dim);
+  line-height: 1.2;
+  opacity: 0;
+  transition: opacity 0.1s, color 0.1s;
+  pointer-events: none;
+}
+
+.hold-dot.active {
+  opacity: 1;
+  color: var(--accent);
 }
 
 .follow-ind {
@@ -3444,9 +3472,39 @@ body {
   color: var(--text);
 }
 
+/* Full-size flex-column root for the ARP tab. .panel-content is a wrapping flex
+   ROW, so without this the arp body never gets a bounded height and can't scroll
+   (the last knob ends up clipped off the bottom). flex-basis:100% claims a full
+   row; min-height:0 lets the inner .arp-body shrink and scroll. */
+.arp-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 100%;
+  min-height: 0;
+  align-self: stretch;
+  /* Cancel .panel-content's padding so the header row's own padding controls
+     spacing (the panel-content padding would otherwise double up). */
+  margin: -10px -12px;
+}
+
 .arp-mode-wrap {
   display: flex;
   gap: 3px;
+  align-items: center;
+}
+
+/* Second mode row: the two live keyboard-driven (input) modes, below the header.
+   Aligns under the top row and is separated by the same border as the header.
+   align-items:center + the buttons' own padding keeps them at natural height —
+   without it the flex column parent stretches them to fill its full height. */
+.arp-mode-wrap-input {
+  padding: 4px 8px 6px;
+  border-bottom: 1px solid var(--border);
+  /* Indent so the buttons line up under the top-row mode buttons (past the
+     ARP ON/OFF button + its gap). */
+  padding-left: 78px;
+  flex-shrink: 0;
+  align-items: center;
 }
 
 .arp-mode-btn {
