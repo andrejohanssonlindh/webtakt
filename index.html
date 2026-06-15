@@ -719,6 +719,12 @@
       const kb = settings.get('keybinds');
       if (e.code === kb.play) {
         e.preventDefault();
+        // Capture-Play: when on, blur whatever button/control has focus first so
+        // the browser's native "Space activates the focused element" never also
+        // fires alongside our play/stop toggle. Off = leave focus untouched.
+        if (settings.get('capturePlay') && document.activeElement?.blur) {
+          document.activeElement.blur();
+        }
         btnPlay.click();
         return;
       }
@@ -748,6 +754,17 @@
         synthPanel.toggleArp();
         return;
       }
+      // On-screen keyboard octave shift (mirrors OCT+/OCT-).
+      if (e.code === kb.octaveUp) {
+        e.preventDefault();
+        keyboard.shiftOctave(+1);
+        return;
+      }
+      if (e.code === kb.octaveDown) {
+        e.preventDefault();
+        keyboard.shiftOctave(-1);
+        return;
+      }
       // FX binds 1–4: toggle whichever FX block the SELECTED track maps each bind
       // to (assigned per-track in the FX pane). Unassigned binds do nothing.
       const fxBindNum = { [kb.fx1]: 1, [kb.fx2]: 2, [kb.fx3]: 3, [kb.fx4]: 4 }[e.code];
@@ -756,16 +773,31 @@
         synthPanel.toggleFxBind(fxBindNum);
         return;
       }
-      // e.code is layout-independent and unaffected by Shift
+      // Track digit shortcuts. e.code is layout-independent and unaffected by
+      // Shift, so 1–N work the same on every keyboard layout:
+      //   Shift + digit → select (switch to) that track
+      //   Alt   + digit → jump to that pattern page on the current track
+      //   bare  digit   → mute / unmute that track (skipped in drum mode, where
+      //                   digits finger-drum — handled in Keyboard.js)
       const digitMatch = e.code.match(/^Digit(\d)$/);
       const num = digitMatch ? parseInt(digitMatch[1]) : NaN;
-      if (!isNaN(num) && e.shiftKey) {
-        // Shift+1..N → jump to that page on the current track
+      if (isNaN(num)) return;
+      if (e.shiftKey) {
+        // Shift+1..N → select that track
+        if (num >= 1 && num <= state.project.tracks.length) {
+          e.preventDefault();
+          state.selectTrack(num - 1);
+        }
+        return;
+      }
+      if (e.altKey) {
+        // Alt+1..N → jump to that page on the current track
         e.preventDefault();
         _goToPage(num - 1);
         return;
       }
-      if (!isNaN(num) && num >= 1 && num <= state.project.tracks.length && !e.shiftKey && !state.drumMode) {
+      if (num >= 1 && num <= state.project.tracks.length && !state.drumMode) {
+        // bare digit → mute / unmute
         const track = state.project.tracks[num - 1];
         track.muted ? track.unmute() : track.mute();
         trackRow.render();

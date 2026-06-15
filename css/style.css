@@ -219,6 +219,23 @@ body {
   margin-bottom: 4px;
   border-radius: 2px;
 }
+.settings-keybind-note {
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border-left: 2px solid var(--border);
+  padding: 5px 7px;
+  margin-top: 8px;
+  border-radius: 2px;
+}
+.settings-keybind-note b { color: var(--text); font-weight: 700; }
+.settings-checkbox {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
 .settings-reset-btn {
   width: 100%;
   margin-top: 12px;
@@ -2154,6 +2171,16 @@ body {
   opacity: 0.3;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+/* FILL PAGE heading above the note-division fill buttons. The -4px bottom
+   margin pulls its button row closer than the panel's default 10px gap so the
+   label visually groups with its buttons. */
+.trig-fill-label {
+  font-size: 9px;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+  margin-bottom: -4px;
 }
 
 .trig-knobs-row {

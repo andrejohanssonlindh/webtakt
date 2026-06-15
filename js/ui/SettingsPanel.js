@@ -9,8 +9,11 @@
  * preference (see js/state/Settings.js):
  *   - BPM grid: finest synced-knob division (1/32 / 1/64 / 1/128)
  *   - Mod-wheel scroll sensitivity (slider)
- *   - Keybinds: click a row then press a key to rebind play / record / stop-all
  *   - Keyboard layout: computer-key → piano-key preset (QWERTY / AZERTY / …)
+ *   - Capture Play key + CapsLock=lowercase toggles (checkboxes)
+ *   - Keybinds: click a row then press a key to rebind (play / record / stop-all /
+ *     manual / hold / arp / octave ± / fx1–4)
+ *   - Track number keys reference (fixed: bare=mute, Shift=select, Alt=page)
  *   - RESET TO DEFAULTS
  *
  * Every control writes straight to `settings` on change — there is no save
@@ -37,6 +40,8 @@ const KEYBIND_ACTIONS = [
   { id: 'manual',   label: 'Manual' },
   { id: 'hold',     label: 'Hold (latch notes)' },
   { id: 'arp',      label: 'Arp on/off (sel. track)' },
+  { id: 'octaveUp',   label: 'Keyboard octave +' },
+  { id: 'octaveDown', label: 'Keyboard octave −' },
   // Four generic FX binds. Each track assigns these to FX blocks in the FX pane;
   // the key toggles the assigned block on the selected track. Defaults C/V/B/N.
   { id: 'fx1',      label: 'FX bind 1 (sel. track)' },
@@ -178,6 +183,18 @@ export class SettingsPanel {
       }
     }
 
+    // ── Behaviour toggles ────────────────────────────────────
+    p.appendChild(this._toggle(
+      'Capture Play key',
+      'Space always plays/stops, even when a button has focus (no double-action).',
+      'capturePlay',
+    ));
+    p.appendChild(this._toggle(
+      'CapsLock = lowercase',
+      'Treat CapsLock-uppercased letters as their lowercase bind (A behaves as a).',
+      'capsNormalizeKeys',
+    ));
+
     // ── Keybinds ─────────────────────────────────────────────
     p.appendChild(this._subtitle('KEYBINDS'));
     if (this._conflictWarning) {
@@ -202,6 +219,16 @@ export class SettingsPanel {
       row.appendChild(btn);
       p.appendChild(row);
     });
+
+    // ── Track number keys (fixed, not rebindable) ────────────
+    const note = document.createElement('div');
+    note.className = 'settings-keybind-note';
+    note.innerHTML =
+      '<b>Number keys 1–N</b><br>' +
+      '· <b>1–N</b> — mute / unmute track<br>' +
+      '· <b>Shift + 1–N</b> — select track<br>' +
+      '· <b>Alt + 1–N</b> — jump to page';
+    p.appendChild(note);
 
     // ── Reset ────────────────────────────────────────────────
     const reset = document.createElement('button');
@@ -410,6 +437,18 @@ export class SettingsPanel {
     l.textContent = label;
     if (hint) l.title = hint;
     row.appendChild(l);
+    return row;
+  }
+
+  /** A labelled checkbox row bound to a boolean setting `key`. */
+  _toggle(label, hint, key) {
+    const row = this._row(label, hint);
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'settings-checkbox';
+    cb.checked = !!settings.get(key);
+    cb.addEventListener('change', () => settings.set(key, cb.checked));
+    row.appendChild(cb);
     return row;
   }
 

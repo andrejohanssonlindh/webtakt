@@ -148,6 +148,8 @@ export const MANUAL_CONTENT = {
       ['KEYBOARD FOLD', 'When ON, the keyboard\'s a–\' / q–¨ rows map only to ' +
                  'in-scale notes in ascending order, skipping any out-of-scale ' +
                  'semitones. Makes playing in-key natural without thinking about it.'],
+      ['OCT+ / OCT-', 'Shift the playable octave up/down. Bindable to keys in ' +
+                 'Settings (default ↑ / ↓).'],
     ],
   },
 
@@ -180,6 +182,12 @@ export const MANUAL_CONTENT = {
                  '"—" means always. Enables evolving, non-looping patterns.'],
       ['◀ SHIFT / SHIFT ▶', 'Rotate all steps in the pattern one position left or ' +
                  'right. The step that falls off one end wraps to the other.'],
+      ['FILL PAGE (1/16 · 1/8 · 1/4 · 1/2)', 'Quick drum-fill. Stamps C4 onto the ' +
+                 'current page at a note division: 1/16 = every step, 1/8 = every ' +
+                 '2nd, 1/4 = every 4th (four-on-the-floor), 1/2 = every 8th. Pressing ' +
+                 'a button again clears those steps only if all of them are already ' +
+                 'active — otherwise it just fills the missing ones. So fill 1/16 ' +
+                 'then 1/4 leaves notes on every step except the quarter-note hits.'],
       ['QUANTIZE', 'No-step view only. Pulls nudged steps back toward the grid ' +
                  '(0% = leave nudges as-is, 100% = snap all nudges to zero). ' +
                  'Useful for tidying a live-recorded pattern.'],

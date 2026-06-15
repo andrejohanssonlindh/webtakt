@@ -181,7 +181,7 @@ The right side of the middle row holds a `#track-nav` panel:
 - Darker bg, dim border, 55% opacity. has-note/has-data borders preserved desaturated.
 - Fully interactive — click, dblclick, p-lock all work normally.
 
-**Keyboard shortcut**: `Shift+1` through `Shift+4` jump directly to pages 1–4, including inactive pages.
+**Keyboard shortcut**: `Alt+1` through `Alt+N` jump directly to pages 1–N, including inactive pages. (Was `Shift+digit`; Shift+digit is now track-select — see design/ui.md → Settings Pane → Track number keys.)
 
 **Step highlight**: clock callback converts absolute step index to visible cell index. Off-page → `highlightStep(-1)`.
 
@@ -210,9 +210,9 @@ A **REC** button sits next to PLAY in the transport bar. Clicking it toggles `Ap
 A **DRUM** button sits next to TAPE in the transport bar. Clicking it toggles `AppState.drumMode`.
 
 **Behaviour when drum mode is ON:**
-- Computer digit keys `1`–`N` (up to the current track count) trigger a note on that track number at **C4 (MIDI 60)** without changing the selected track.
-- The normal mute shortcut (digit keys 1–N = toggle mute) is suspended.
-- `Shift+1..N` page-jump still works as usual (Shift takes priority).
+- **Bare** digit keys `1`–`N` (up to the current track count) trigger a note on that track number at **C4 (MIDI 60)** without changing the selected track.
+- The normal mute shortcut (bare digit 1–N = toggle mute) is suspended.
+- `Shift+1..N` (track-select) and `Alt+1..N` (page-jump) still work — Keyboard.js skips digit finger-drumming when Shift or Alt is held, so the modifier shortcuts take priority.
 - Notes are fired live via the track's VoicePool — self-enveloping drum machines (kick/snare/hihat) will ignore noteOff, melodic machines will sustain until the key is released.
 - When REC is also active, drum key presses write C4 into the step currently playing on **that track's own sequencer** (using each track's own `pageOffset` and `_stepIndex`). Nudge and gate length are recorded exactly as with the piano keyboard. This lets you finger-drum multiple tracks simultaneously while the sequencer rolls.
 - Each track's `Sequencer.lastScheduledTime` stores the AudioContext time of its most recently scheduled tick — used to compute nudge offset for drum recording.
@@ -236,3 +236,20 @@ In `StepGrid`, double-clicking a step cell:
 4. Selects the step so the TRIG tab updates
 
 Useful for drum tracks where you want to quickly add hits at the track's established pitch.
+
+---
+
+## Fill Page (TRIG tab)
+
+A **FILL PAGE** button row in `TrigPanel` (always visible, under the SHIFT buttons) stamps **C4 (MIDI 60)** onto the **currently visible page** (`Sequencer.getVisibleSteps()`, 16 cells) at a chosen note division. On a 16-step page at 1/16 resolution:
+
+| Button | Interval | Result |
+|---|---|---|
+| 1/16 | every step | all 16 — e.g. a constant hi-hat |
+| 1/8  | every 2nd  | steps 0,2,4,… |
+| 1/4  | every 4th  | steps 0,4,8,12 — four-on-the-floor |
+| 1/2  | every 8th  | steps 0,8 |
+
+**Toggle rule:** the target steps are every `interval`-th cell on the page. If **all** of them are already `active`, the press **clears** them (sets `active=false`, leaves a placeholder C4 voice so they can be re-activated). Otherwise it **fills** only the inactive targets (already-active steps are left untouched). So fill 1/16 then fill 1/4 clears just the quarter-note steps, leaving notes on every other step ("all but the 4th"). Each fill stamps a single `{note:60, velocity:100, length:1, nudge:0}` voice.
+
+Operates on the visible page exactly as the grid shows it (it does **not** clip to `stepCount` — matching the double-click handler, which also lets you activate out-of-range cells). Emits `stepChanged` with `stepIndex:-1` and re-renders, so the grid refreshes and step selection clears.

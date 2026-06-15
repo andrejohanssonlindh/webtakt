@@ -679,8 +679,10 @@ export class Keyboard {
       if (e.repeat) return;
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
 
-      // Drum mode: digit keys 1–N trigger that track at C4
-      if (this.state.drumMode && !e.shiftKey) {
+      // Drum mode: bare digit keys 1–N trigger that track at C4. Shift/Alt+digit
+      // are reserved for track-select / page-jump (handled globally), so don't
+      // finger-drum when a modifier is held.
+      if (this.state.drumMode && !e.shiftKey && !e.altKey) {
         const m = e.code.match(/^Digit(\d)$/);
         if (m) {
           const trackIndex = parseInt(m[1]) - 1;
@@ -694,11 +696,12 @@ export class Keyboard {
       // letter bind otherwise would double-trigger).
       if (this._isTransportKey(e.code)) return;
 
-      const midi = this._keyMap.get(e.key);
+      const key  = this._normKey(e.key);
+      const midi = this._keyMap.get(key);
       if (midi !== undefined) {
         // Remember which note this physical key fired, so key-up releases the
         // same note even if the octave/scale changed while it was held.
-        this._keyToNote.set(e.key, midi);
+        this._keyToNote.set(key, midi);
         this._noteOn(midi);
       }
     });
@@ -706,7 +709,7 @@ export class Keyboard {
     document.addEventListener('keyup', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
 
-      if (this.state.drumMode && !e.shiftKey) {
+      if (this.state.drumMode && !e.shiftKey && !e.altKey) {
         const m = e.code.match(/^Digit(\d)$/);
         if (m) {
           const trackIndex = parseInt(m[1]) - 1;
@@ -717,12 +720,26 @@ export class Keyboard {
 
       // Release the exact note this key fired at key-down, falling back to the
       // current map for keys pressed before this tracking existed.
-      const midi = this._keyToNote.get(e.key) ?? this._keyMap.get(e.key);
+      const key  = this._normKey(e.key);
+      const midi = this._keyToNote.get(key) ?? this._keyMap.get(key);
       if (midi !== undefined) {
-        this._keyToNote.delete(e.key);
+        this._keyToNote.delete(key);
         this._noteOff(midi);
       }
     });
+  }
+
+  /**
+   * Normalise a produced character for keymap lookup. With capsNormalizeKeys on
+   * (default), a CapsLock-uppercased single letter (e.g. "A") is lowered to "a"
+   * so the piano keeps working with CapsLock on. With it off, the character is
+   * passed through unchanged so an uppercase key can be bound independently.
+   * Only single letters A–Z are folded — symbols/digits are left alone.
+   */
+  _normKey(key) {
+    if (!settings.get('capsNormalizeKeys')) return key;
+    if (key.length === 1 && key >= 'A' && key <= 'Z') return key.toLowerCase();
+    return key;
   }
 
   /** Fire a note on a specific track at C4 (drum finger-drumming). */
@@ -924,6 +941,17 @@ export class Keyboard {
       stepIndex:  visIdx >= 0 && visIdx < 16 ? visIdx : absStep,
       step,
     });
+  }
+
+  /**
+   * Shift the on-screen keyboard octave by `delta` (clamped 0–8) and rebuild.
+   * Mirrors the OCT+/OCT- buttons; called from the global octave keybinds.
+   */
+  shiftOctave(delta) {
+    const next = Math.max(0, Math.min(8, this.octave + delta));
+    if (next === this.octave) return;
+    this.octave = next;
+    this._build();
   }
 
   /** Toggle keyboard folding on/off. Called from the SCALES tab. */

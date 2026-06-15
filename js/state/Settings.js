@@ -13,12 +13,23 @@
  *                        fractional count 0.5). See js/util/BpmSync.js.
  *   modWheelSensitivity — scroll → mod-wheel travel multiplier (0.1–3.0, 1 = the
  *                        historical 300px-per-full-range feel). Lower = calmer.
- *   keybinds           — { play, record, stopAll, manual, hold, arp, fx1, fx2,
- *                        fx3, fx4 }: each an `event.code` string (layout-
- *                        independent). Handled in index.html keydown. arp toggles
- *                        the arp; fx1..fx4 are four generic FX binds, each toggling
- *                        whatever FX block the SELECTED track maps it to (assigned
- *                        per track in the FX pane — see Track._fxBinds).
+ *   keybinds           — { play, record, stopAll, manual, hold, arp, octaveUp,
+ *                        octaveDown, fx1, fx2, fx3, fx4 }: each an `event.code`
+ *                        string (layout-independent). Handled in index.html
+ *                        keydown. arp toggles the arp; octaveUp/octaveDown shift
+ *                        the on-screen keyboard octave; fx1..fx4 are four generic
+ *                        FX binds, each toggling whatever FX block the SELECTED
+ *                        track maps it to (assigned per track in the FX pane —
+ *                        see Track._fxBinds). Track keys (not rebindable):
+ *                          digit 1–N        → mute / unmute that track
+ *                          Shift + digit    → select (switch to) that track
+ *                          Alt   + digit    → jump to that pattern page
+ *   capturePlay        — when true (default), the Play/Stop key (Space) is handled
+ *                        globally and blurs the focused control first, so it never
+ *                        also re-clicks a focused button. Off = native behaviour.
+ *   capsNormalizeKeys  — when true (default), CapsLock-uppercased letters match
+ *                        their lowercase bind (A behaves as a) for piano + letter
+ *                        shortcuts. Off = case-sensitive (A can be bound separately).
  *   keyboardLayout     — preset name for the on-screen piano's computer-key map
  *                        (see Keyboard.js KB_LAYOUTS). 'swedish' is the default.
  *                        The special value 'custom' uses `customLayout` instead.
@@ -56,6 +67,9 @@ export const DEFAULTS = Object.freeze({
     // Selected-track toggles: arp on/off + the four FX bypass toggles.
     // Key order matches the fx-bar left→right: C=Crush, V=Reverb, B=Delay, N=Chorus.
     arp:      'KeyZ',
+    // On-screen keyboard octave shift (mirrors the OCT+/OCT- buttons).
+    octaveUp:   'ArrowUp',
+    octaveDown: 'ArrowDown',
     // Four generic FX binds. Each track assigns these to specific FX blocks
     // (FX pipeline pane) — pressing the key toggles the assigned block on the
     // SELECTED track only. Defaults keep the old C/V/B/N keys.
@@ -64,6 +78,8 @@ export const DEFAULTS = Object.freeze({
     fx3:      'KeyB',
     fx4:      'KeyN',
   },
+  capturePlay:       true,
+  capsNormalizeKeys: true,
   keyboardLayout: 'swedish',
   // Seeded from the Swedish preset; the Custom editor overwrites per key.
   // Full width: 14 white slots + 14 black slots so every on-screen key is

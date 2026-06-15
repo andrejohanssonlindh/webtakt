@@ -307,6 +307,58 @@ export class TrigPanel {
     shiftRow.appendChild(shiftFwd);
     panel.appendChild(shiftRow);
 
+    // ── Fill page (always visible) ──────────────────────────
+    // Quick drum-fill helper: stamp C4 onto the visible page at a note-division
+    // interval. On a 16-step page (1/16 resolution): 1/16 = every step, 1/8 =
+    // every 2nd, 1/4 = every 4th (four-on-the-floor), 1/2 = every 8th.
+    // Toggle rule: if EVERY target step is already active, the press clears them
+    // all; otherwise it fills any that are missing. So fill-all then fill-1/4
+    // clears just the quarter-note steps, leaving the rest — exactly the
+    // "all but the 4th" behaviour.
+    const FILL_NOTE = 60; // C4, matching drum-mode finger-drumming
+    const fillDivs  = [
+      { label: '1/16', interval: 1 },
+      { label: '1/8',  interval: 2 },
+      { label: '1/4',  interval: 4 },
+      { label: '1/2',  interval: 8 },
+    ];
+
+    const fillLabel = document.createElement('span');
+    fillLabel.className = 'trig-fill-label label';
+    fillLabel.textContent = 'FILL PAGE';
+    panel.appendChild(fillLabel);
+
+    const fillRow = document.createElement('div');
+    fillRow.className = 'trig-btn-row';
+    fillDivs.forEach(({ label, interval }) => {
+      const b = document.createElement('button');
+      b.className = 'btn';
+      b.textContent = label;
+      b.addEventListener('click', () => {
+        const pageSteps = track.sequencer.getVisibleSteps();
+        // Target steps = every `interval`-th step on the page (0-based).
+        const targets = [];
+        for (let i = 0; i < pageSteps.length; i += interval) targets.push(pageSteps[i]);
+        const allActive = targets.every(s => s.active);
+        targets.forEach(s => {
+          if (allActive) {
+            // Clear: deactivate (keep a placeholder voice so re-activation works).
+            s.active = false;
+            s.voices = [{ note: s.voices[0]?.note ?? FILL_NOTE, velocity: 100, length: 1, nudge: 0 }];
+          } else if (!s.active) {
+            // Fill: stamp a single C4 voice. Leave already-active steps untouched.
+            s.active = true;
+            s.voices = [{ note: FILL_NOTE, velocity: 100, length: 1, nudge: 0 }];
+          }
+        });
+        // Page-level change — clear step selection and refresh grid + panel.
+        state.emit('stepChanged', { trackIndex: state.selectedTrackIndex, stepIndex: -1, step: null });
+        renderContent();
+      });
+      fillRow.appendChild(b);
+    });
+    panel.appendChild(fillRow);
+
     // ── No-step section: QUANTIZE knob + Note Follow ────────
     if (!hasStep) {
       const noStepRow = document.createElement('div');
