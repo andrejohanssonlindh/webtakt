@@ -5,17 +5,17 @@
  * FX on/off toggles, click-to-select). Extracted from SynthPanel.
  *
  * Receives the standard panel context (see SynthPanel._makeTabContext):
- *   { container, activeWidgets, knobByPath, state, fxBar }
+ *   { container, activeWidgets, knobByPath, state }
  *
- * fxBar is the SynthPanel header FX bar element, kept in sync when a strip's
- * FX toggle changes the selected track.
+ * Toggling a strip's FX on/off emits `fxEnabledChanged`; SynthPanel listens for
+ * that to refresh the header chain mini-outline.
  */
 
 import { KnobWidget } from '../KnobWidget.js';
 
 export class MixerPanel {
   render(ctx) {
-    const { container, activeWidgets, knobByPath, state, fxBar } = ctx;
+    const { container, activeWidgets, knobByPath, state } = ctx;
     const tracks = state.project.tracks;
 
     const wrapper = document.createElement('div');
@@ -124,11 +124,8 @@ export class MixerPanel {
           e.stopPropagation();
           fx.setEnabled(!fx.enabled);
           update();
-          // Keep the header FX bar in sync when this is the selected track
-          if (i === state.selectedTrackIndex && fxBar) {
-            fxBar.querySelectorAll('._updateState').forEach(el => el._updateState?.());
-            fxBar.querySelectorAll('[data-fxtab]').forEach(wrap => wrap._updateState?.());
-          }
+          // Keep the header chain mini-outline in sync (it listens for this).
+          state.emit?.('fxEnabledChanged', { trackIndex: i });
         });
         fxToggles.appendChild(btn);
       });

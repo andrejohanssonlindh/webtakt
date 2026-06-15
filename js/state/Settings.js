@@ -13,10 +13,12 @@
  *                        fractional count 0.5). See js/util/BpmSync.js.
  *   modWheelSensitivity — scroll → mod-wheel travel multiplier (0.1–3.0, 1 = the
  *                        historical 300px-per-full-range feel). Lower = calmer.
- *   keybinds           — { play, record, stopAll, manual, arp, fxChorus, fxDelay,
- *                        fxCrush, fxReverb }: each an `event.code` string
- *                        (layout-independent). Handled in index.html keydown. The
- *                        arp/fx binds toggle that effect on the SELECTED track.
+ *   keybinds           — { play, record, stopAll, manual, hold, arp, fx1, fx2,
+ *                        fx3, fx4 }: each an `event.code` string (layout-
+ *                        independent). Handled in index.html keydown. arp toggles
+ *                        the arp; fx1..fx4 are four generic FX binds, each toggling
+ *                        whatever FX block the SELECTED track maps it to (assigned
+ *                        per track in the FX pane — see Track._fxBinds).
  *   keyboardLayout     — preset name for the on-screen piano's computer-key map
  *                        (see Keyboard.js KB_LAYOUTS). 'swedish' is the default.
  *                        The special value 'custom' uses `customLayout` instead.
@@ -54,10 +56,13 @@ export const DEFAULTS = Object.freeze({
     // Selected-track toggles: arp on/off + the four FX bypass toggles.
     // Key order matches the fx-bar left→right: C=Crush, V=Reverb, B=Delay, N=Chorus.
     arp:      'KeyZ',
-    fxCrush:  'KeyC',
-    fxReverb: 'KeyV',
-    fxDelay:  'KeyB',
-    fxChorus: 'KeyN',
+    // Four generic FX binds. Each track assigns these to specific FX blocks
+    // (FX pipeline pane) — pressing the key toggles the assigned block on the
+    // SELECTED track only. Defaults keep the old C/V/B/N keys.
+    fx1:      'KeyC',
+    fx2:      'KeyV',
+    fx3:      'KeyB',
+    fx4:      'KeyN',
   },
   keyboardLayout: 'swedish',
   // Seeded from the Swedish preset; the Custom editor overwrites per key.
@@ -89,6 +94,19 @@ class Settings {
         const saved = JSON.parse(raw);
         Object.assign(data, saved);
         data.keybinds = { ...DEFAULTS.keybinds, ...(saved.keybinds ?? {}) };
+        // Migrate the legacy per-effect FX binds (fxCrush/fxReverb/fxDelay/
+        // fxChorus) to the four generic binds (fx1..fx4) if the user had rebound
+        // them and the new keys aren't set. Keeps their chosen keys; the new
+        // binds are now assignable to any FX per track (see Track._fxBinds).
+        const legacy = { fx1: 'fxCrush', fx2: 'fxReverb', fx3: 'fxDelay', fx4: 'fxChorus' };
+        for (const [now, old] of Object.entries(legacy)) {
+          if (saved.keybinds && saved.keybinds[old] != null && saved.keybinds[now] == null) {
+            data.keybinds[now] = saved.keybinds[old];
+          }
+        }
+        for (const old of ['fxCrush', 'fxReverb', 'fxDelay', 'fxChorus']) {
+          delete data.keybinds[old];
+        }
         data.customLayout = {
           lower:     [...(saved.customLayout?.lower     ?? DEFAULTS.customLayout.lower)],
           chromatic: [...(saved.customLayout?.chromatic ?? DEFAULTS.customLayout.chromatic)],

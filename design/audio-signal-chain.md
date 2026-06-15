@@ -14,9 +14,9 @@ VoiceSlot ×8 (each slot is fully self-contained up to the shared outputGain):
             → Track.outputGain (GainNode, shared) ← all 8 slots sum here
               → Track.tremGain (GainNode, shared — tremolo VCA, LFO target amp.level)
               → Track.pannerNode (StereoPannerNode, shared — pan)
-                → DelayFX.inputNode
-                  → BitcrushFX.inputNode
-                    → ReverbFX.inputNode
+                → [FX pipeline — REORDERABLE, default delay → crush → chorus → reverb]
+                    DelayFX.inputNode / BitcrushFX.inputNode /
+                    ChorusFX.inputNode / ReverbFX.inputNode
                       → Project.busGain (GainNode, per-deck — crossfader/silence)
                         → AudioEngine.fxBus (GainNode)
                           → AudioEngine.masterGain
@@ -26,6 +26,63 @@ VoiceSlot ×8 (each slot is fully self-contained up to the shared outputGain):
 A track's FX-chain tail connects to its Project's `busGain` (passed to `Track` as
 the optional 4th constructor arg, defaulting to `AudioEngine.fxBus` for back-compat).
 This per-deck sub-bus is what the DECK tab's crossfader rides — see Deck Buses below.
+
+### Reorderable FX pipeline
+
+The per-track FX chain order is **data-driven and user-customisable** (FX pipeline
+pane — see `design/fx.md`). `Track._fxOrder` is an array of block ids
+(`['delay','crush','chorus','reverb']` by default); `Track._fxBlocks` maps id →
+FX instance. `Track.setFXOrder(order)` rebuilds the graph via `_rewireFXChain()`,
+which disconnects `pannerNode` + every block output and reconnects them in order:
+`pannerNode → block[0] → … → block[n] → busGain`. Every FX implements the same
+block interface (`inputNode` / `outputNode` / `connect()` / `disconnect()`), so
+reordering is pure rewiring. Upstream (`outputGain → tremGain → pannerNode`) and
+the output bus are fixed; only the FX blocks reorder.
+
+`setFXOrder` cleans the order: unknown ids are dropped and duplicates removed.
+**Added instances** missing from the list are appended (never orphan an `fxN`
+node), but **base blocks** missing from the list stay out — the user can remove a
+base block from the chain (it leaves the signal path). Order persists in
+`Track.toJSON().fxOrder`; legacy projects without it keep the default chain. P-lock
+/ LFO / mod-wheel routing target AudioParams by path and are unaffected by order.
+
+#### Multiple FX instances
+
+Beyond the base four, the user can **add N instances of any effect**
+(`Track.addFX(type)`), including new types — distortion, compressor, phaser, a
+post-sum **FX filter** (`FXFilter`, paraphonic; the per-voice poly filter is
+untouched), and a live auto-gain **normalizer** (`NormalizerFX` — an `AnalyserNode`
+taps the signal and an rAF loop scales a `GainNode` toward a target RMS, so it
+auto-levels whatever reaches it as the upstream chain changes). Added instances
+get ids `fxN` and are wrapped in an **`FXInstance`
+proxy** (`js/signal/FXInstance.js`) that namespaces their param paths
+(`fx5.reverb.wet`) so duplicates never collide. The proxy forwards the audio
+graph interface (inputNode/outputNode/connect/disconnect) and rewrites paths in
+getParamList/setParam/getParam/resolveAudioParam (incl. nested `sync` descriptor
+refs). The base four keep **bare** paths (`reverb.wet`) for back-compat.
+
+Path → owner resolution funnels through `Track.fxObjForPath(path)`: a `fxN.`
+prefix → that instance; a base type prefix → the base block. The Sequencer's
+p-lock dispatch (`_resolveParamOwner`, `_buildPlockModeMap`), `getAssignableParams`,
+`_resolveAudioParam`, `resolveModWheelParam`, and the MIDI-CC mapper all go
+through it, so namespaced FX params p-lock / LFO-assign / CC-map like any other.
+
+`removeFX(id)` removes a block from the chain. An **added instance** is fully torn
+down: detached from the graph, its p-locks cleared from every step, any LFO and
+any FX bind pointed at it dropped, then deleted from the registry. A **base block**
+is only detached from `_fxOrder` — it stays registered (bare paths intact for
+back-compat) and can be re-added with its original id via `reattachBaseFX(id)`
+(surfaced in the "+ ADD FX" menu as "(re-add)"). Added instances serialise to
+`Track.toJSON().fxInstances` (`[{id,type,params,enabled}]`) and are rebuilt by
+`_restoreFXInstances` (preserving ids so namespaced paths still resolve) before
+`setFXOrder` is applied. Carried through SoundLibrary and machine copy/paste too.
+
+**FX binds.** `Track._fxBinds` maps each of the four global FX keybinds (1–4) to a
+block id (or null), persisted in `toJSON().fxBinds`. `setFXBind(n,id)` /
+`getFXBindFor(id)` / `toggleFXBind(n)` enforce a 1:1 block↔bind mapping; binds
+pointing at a vanished block are dropped on load. `toggleFXBind(n)` flips the
+assigned block's `enabled` — the per-track wiring behind the `fx1..fx4` keys (see
+design/fx.md → FX binds).
 
 Each slot's Envelope drives ITS OWN Filter.node.frequency (per-voice filter envelope) —
 no cross-slot races on a shared frequency param.

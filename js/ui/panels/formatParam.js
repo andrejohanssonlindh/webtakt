@@ -17,6 +17,32 @@
  * @returns {string}
  */
 export function formatParam(p, v) {
+  // Added-FX-instance params arrive namespaced (e.g. 'fx5.phaser.rate'), so the
+  // new FX types match on the path SUFFIX to cover both bare and prefixed forms.
+  // Phaser
+  if (p.path.endsWith('phaser.rate'))     return v.toFixed(2) + 'Hz';
+  if (p.path.endsWith('phaser.depth'))    return Math.round(v * 100) + '%';
+  if (p.path.endsWith('phaser.feedback')) return Math.round(v * 100) + '%';
+  if (p.path.endsWith('phaser.wet'))      return Math.round(v * 100) + '%';
+  // Distortion
+  if (p.path.endsWith('dist.drive'))      return 'x' + v.toFixed(1);
+  if (p.path.endsWith('dist.tone'))       return Math.round(v) + 'Hz';
+  if (p.path.endsWith('dist.wet'))        return Math.round(v * 100) + '%';
+  // Compressor
+  if (p.path.endsWith('comp.threshold'))  return Math.round(v) + 'dB';
+  if (p.path.endsWith('comp.ratio'))      return v.toFixed(1) + ':1';
+  if (p.path.endsWith('comp.attack'))     return Math.round(v * 1000) + 'ms';
+  if (p.path.endsWith('comp.release'))    return Math.round(v * 1000) + 'ms';
+  if (p.path.endsWith('comp.makeup'))     return '+' + v.toFixed(1) + 'dB';
+  if (p.path.endsWith('comp.wet'))        return Math.round(v * 100) + '%';
+  // FX filter
+  if (p.path.endsWith('fxfilt.cutoff'))    return Math.round(v) + 'Hz';
+  if (p.path.endsWith('fxfilt.resonance')) return v.toFixed(1);
+  // Normalizer
+  if (p.path.endsWith('norm.target'))     return v.toFixed(2);
+  if (p.path.endsWith('norm.range'))      return Math.round(v * 100) + '%';
+  if (p.path.endsWith('norm.speed'))      return Math.round(v * 100) + '%';
+
   if (p.path === 'filter.cutoff')    return Math.round(v) + 'Hz';
   if (p.path === 'filter.resonance') return v.toFixed(1);
   if (p.path === 'filter.gain')      return (v >= 0 ? '+' : '') + v.toFixed(1) + 'dB';

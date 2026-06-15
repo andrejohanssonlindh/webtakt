@@ -28,8 +28,9 @@ import { MidiInPanel }          from './panels/MidiInPanel.js';
 import { MixerPanel }           from './panels/MixerPanel.js';
 import { DeckPanel }            from './panels/DeckPanel.js';
 import { AmpPanel }             from './panels/AmpPanel.js';
-import { FXPanel }              from './panels/FXPanel.js';
+import { FXPipelinePanel, TYPE_GLYPH } from './panels/FXPipelinePanel.js';
 import { SoundsPanel }          from './panels/SoundsPanel.js';
+import { FXLibrary }            from '../state/FXLibrary.js';
 import { MachinePickerPanel, MACHINE_GROUPS, MACHINE_DEFS } from './panels/MachinePickerPanel.js';
 import { ManualOverlay }        from './manual.js';
 
@@ -53,6 +54,9 @@ export class SynthPanel {
     this.audioContext = audioContext ?? null;
     this.midiEngine   = midiEngine   ?? null;
 
+    // Global FX-pipeline preset store (localStorage; shared across all tracks).
+    this.fxLibrary    = new FXLibrary();
+
     this._activeWidgets = [];
     // path → KnobWidget, rebuilt each time the content area renders
     this._knobByPath    = new Map();
@@ -70,6 +74,9 @@ export class SynthPanel {
 
     state.on('trackSelected', () => this.render());
     state.on('tabChanged',    () => this.render());
+    // A block's enabled flag was toggled (FX pane, mixer, or keybind) — refresh
+    // the header chain mini-outline so bypassed blocks dim/undim in sync.
+    state.on('fxEnabledChanged', () => this._renderFXChainOutline());
     state.on('lfoChanged',    () => { if (state.activeTab === 'lfo') this._renderContent(); });
     state.on('stepSelected',  () => { this._renderPLockTabIndicators(); this._renderContent(); });
     // stepChanged: re-render only on trig tab (note display + button state must update).
@@ -92,10 +99,21 @@ export class SynthPanel {
     return this.state.project?.sampleStore ?? this._sampleStore;
   }
 
-  /** Open the manual overlay for the currently active tab. */
+  /**
+   * Open the manual overlay for the currently active tab. On the FX tab, if a
+   * block is selected its OWN manual entry is shown (keyed by FX type); with no
+   * block selected, the FX-pane overview is shown. Lets each FX card surface its
+   * own docs — select the card, hit the manual key; deselect (click it again) for
+   * the pane overview.
+   */
   openManual() {
-    const machineType = this.state.selectedTrack?.machine?.type;
-    this._manual.show(this.state.activeTab, machineType);
+    const track = this.state.selectedTrack;
+    const machineType = track?.machine?.type;
+    let fxType = null;
+    if (this.state.activeTab === 'fx' && this.state.fxSelectedBlockId && track) {
+      fxType = track.getFXType(this.state.fxSelectedBlockId);
+    }
+    this._manual.show(this.state.activeTab, machineType, fxType);
   }
 
   /** Toggle the manual overlay (open if closed, close if open). */
@@ -128,19 +146,68 @@ export class SynthPanel {
   }
 
   /**
-   * Toggle one FX bypass on the selected track (keybind entry point). `which` is
-   * the FX field name on Track: 'chorusFX' | 'delayFX' | 'bitcrushFX' | 'reverbFX'.
-   * Mirrors the fx-bar ON/OFF button and keeps the bar + tab in sync.
+   * Toggle the FX block that the selected track maps to FX bind `n` (1–4), the
+   * generic FX keybind entry point. Each track assigns the four binds to its own
+   * blocks in the FX pane, so the same key hits a different effect per track. A
+   * no-op when the bind is unassigned. Keeps the header outline + FX tab in sync.
+   * @param {number} n
    */
-  toggleFx(which) {
-    const fx = this.state.selectedTrack?.[which];
-    if (!fx?.setEnabled) return;
-    fx.setEnabled(!fx.enabled);
-    this._fxBar?.querySelectorAll('.fx-toggle-wrap').forEach(wrap => wrap._updateState?.());
-    if (this.state.activeTab === 'delay' || this.state.activeTab === 'crush' ||
-        this.state.activeTab === 'chorus' || this.state.activeTab === 'reverb') {
-      this._renderContent();
-    }
+  toggleFxBind(n) {
+    const track = this.state.selectedTrack;
+    const fx = track?.toggleFXBind(n);
+    if (!fx) return;
+    this._renderFXChainOutline();             // bypassed blocks dim in the outline
+    // The FX pane shows per-block ON/OFF — re-render it if it's the active tab.
+    if (this.state.activeTab === 'fx') this._renderContent();
+  }
+
+  /**
+   * (Re)build the header FX chain mini-outline: the selected track's FX in chain
+   * order as clickable glyph icons (bypassed blocks dimmed). Click an icon →
+   * open the FX pane with that block selected. The FX button itself is preserved
+   * by _buildShell; this only repopulates the icon row after it.
+   */
+  _renderFXChainOutline() {
+    const out = this._fxOutline;
+    if (!out) return;
+    out.innerHTML = '';
+    const track = this.state.selectedTrack;
+    if (!track) return;
+
+    track.getFXOrder().forEach((id) => {
+      const type = track.getFXType(id);
+      const fx   = track.getFXBlock(id);
+      const on   = fx?.enabled ?? false;
+
+      const icon = document.createElement('button');
+      icon.className = 'fx-chain-icon' + (on ? '' : ' off');
+      icon.textContent = TYPE_GLYPH[type] ?? '●';
+      icon.title = `${type}${on ? '' : ' (bypassed)'} — click to edit, double-click to toggle`;
+      // Single click → open the FX pane with this block selected. Double click →
+      // toggle the block's ON/OFF in place. The single click navigates (which
+      // re-renders the header and destroys this button), so we can't rely on the
+      // browser's `dblclick` pairing — instead we defer the single-click action
+      // and cancel it if a second click lands inside the double-click window.
+      icon.addEventListener('click', () => {
+        if (this._fxIconClickTimer) {
+          // Second click → it's a double-click: cancel the pending navigation and
+          // toggle this block instead.
+          clearTimeout(this._fxIconClickTimer);
+          this._fxIconClickTimer = null;
+          fx?.setEnabled?.(!fx.enabled);
+          this._renderFXChainOutline();        // refresh this row's dimming
+          if (this.state.activeTab === 'fx') this._renderContent();
+          this.state.emit('fxEnabledChanged', { trackIndex: this.state.selectedTrackIndex });
+          return;
+        }
+        this._fxIconClickTimer = setTimeout(() => {
+          this._fxIconClickTimer = null;
+          this.state.fxSelectedBlockId = id;   // FX pane selects this block inline
+          this.state.setTab('fx');
+        }, 220);
+      });
+      out.appendChild(icon);
+    });
   }
 
   _buildShell() {
@@ -176,53 +243,31 @@ export class SynthPanel {
     this._fxBar = document.createElement('div');
     this._fxBar.className = 'fx-bar';
 
-    // Order matches keybinds C V B N → Crush / Rev / Delay / Chorus (left→right).
-    const fxDefs = [
-      { tab: 'crush',  label: 'CRUSH',  getFx: () => this.state.selectedTrack?.bitcrushFX },
-      { tab: 'reverb', label: 'REV',    getFx: () => this.state.selectedTrack?.reverbFX },
-      { tab: 'delay',  label: 'DLY',    getFx: () => this.state.selectedTrack?.delayFX },
-      { tab: 'chorus', label: 'CHORUS', getFx: () => this.state.selectedTrack?.chorusFX },
-    ];
+    // FX pipeline button — leftmost in the FX bar, opens the FX pipeline
+    // customizer. Single button (no on/off), styled like a tab.
+    const fxPipeWrap = document.createElement('div');
+    fxPipeWrap.className = 'fx-toggle-wrap fx-pipe-wrap';
+    fxPipeWrap.dataset.fxtab = 'fx';
+    const fxPipeBtn = document.createElement('button');
+    fxPipeBtn.className = 'fx-pipe-btn';
+    fxPipeBtn.textContent = 'FX';
+    fxPipeBtn.title = 'FX pipeline — reorder the effect chain';
+    fxPipeBtn.addEventListener('click', () => this.state.setTab('fx'));
+    fxPipeWrap.appendChild(fxPipeBtn);
+    fxPipeWrap._updateState = () => {
+      fxPipeWrap.classList.toggle('fx-active-tab', this.state.activeTab === 'fx');
+    };
+    this._fxBar.appendChild(fxPipeWrap);
 
-    fxDefs.forEach(({ tab, label, getFx }) => {
-      const wrap = document.createElement('div');
-      wrap.className = 'fx-toggle-wrap';
-      wrap.dataset.fxtab = tab;
-
-      const nameBtn = document.createElement('button');
-      nameBtn.className = 'fx-toggle-name';
-      nameBtn.textContent = label;
-
-      const onOffBtn = document.createElement('button');
-      onOffBtn.className = 'fx-toggle-onoff';
-
-      const updateState = () => {
-        const fx = getFx();
-        const on = fx?.enabled ?? false;
-        onOffBtn.textContent = on ? 'ON' : 'OFF';
-        onOffBtn.classList.toggle('on', on);
-        wrap.classList.toggle('fx-active-tab', this.state.activeTab === tab);
-      };
-
-      nameBtn.addEventListener('click', () => {
-        this.state.setTab(tab);
-      });
-
-      onOffBtn.addEventListener('click', () => {
-        const fx = getFx();
-        if (!fx) return;
-        fx.setEnabled(!fx.enabled);
-        updateState();
-      });
-
-      wrap.appendChild(nameBtn);
-      wrap.appendChild(onOffBtn);
-      this._fxBar.appendChild(wrap);
-
-      // Store updater so render() can refresh on track change
-      wrap._updateState = updateState;
-      updateState();
-    });
+    // Chain mini-outline — a compact, read-at-a-glance row of the track's FX in
+    // chain order. The dedicated CRUSH/REV/DLY/CHORUS tabs + on/off buttons were
+    // retired; editing and bypassing now live in the FX pane. Each icon here is
+    // a fast jump: click → open the FX pane with that block selected. Built by
+    // _renderFXChainOutline (rebuilt on every render + order/enable change).
+    this._fxOutline = document.createElement('div');
+    this._fxOutline.className = 'fx-chain-outline';
+    this._fxBar.appendChild(this._fxOutline);
+    this._renderFXChainOutline();
 
     header.appendChild(this._fxBar);
 
@@ -259,9 +304,12 @@ export class SynthPanel {
     this._tabBar.querySelectorAll('.tab-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.tab === this.state.activeTab);
     });
+    // Only the FX-pipe button remains as a `.fx-toggle-wrap` (its active-tab
+    // highlight). The per-FX toggles were replaced by the chain mini-outline.
     this._fxBar.querySelectorAll('.fx-toggle-wrap').forEach(wrap => {
       wrap._updateState?.();
     });
+    this._renderFXChainOutline();
     this._updateClipButtons();
     this._renderPLockTabIndicators();
     this._renderContent();
@@ -272,15 +320,17 @@ export class SynthPanel {
    * `data-tab` / `data-fxtab` key, or null if the path has no home tab.
    */
   _tabForPLockPath(path) {
+    // All FX params — base four ('delay.'/'crush.'/'chorus.'/'reverb.') and added
+    // instances ('fxN.<type>.<param>') — are edited in the FX pipeline pane now,
+    // so they all light the FX button.
+    if (/^fx\d+\./.test(path))                                return 'fx';
+    if (path.startsWith('delay.')  || path.startsWith('crush.') ||
+        path.startsWith('chorus.') || path.startsWith('reverb.')) return 'fx';
     if (path.startsWith('filter.') || path.startsWith('fenv.') ||
         path === 'base.lpf' || path === 'base.hpf')          return 'filter';
     if (path.startsWith('env.') || path === 'amp.pan')        return 'amp';
     if (path.startsWith('arp.'))                              return 'arp';
     if (path.startsWith('lfo.'))                              return 'lfo';
-    if (path.startsWith('delay.'))                            return 'delay';
-    if (path.startsWith('crush.'))                            return 'crush';
-    if (path.startsWith('chorus.'))                           return 'chorus';
-    if (path.startsWith('reverb.'))                           return 'reverb';
     if (path === 'trig.tone' || path === 'osc.detune')        return 'trig';
     // Everything else is a machine param → SYNTH tab.
     return 'synth';
@@ -345,6 +395,10 @@ export class SynthPanel {
           bitcrushFX: track.bitcrushFX.toJSON(),
           chorusFX:   track.chorusFX.toJSON(),
           reverbFX:   track.reverbFX.toJSON(),
+          fxOrder:    track.getFXOrder(),
+          fxInstances: track.getFXOrder()
+            .filter(id => track.isFXRemovable(id) && !track.isFXBase(id))
+            .map(id => track.getFXBlock(id).toJSON()),
           analogue:   track.analogue,
           lfos:       track.lfos.map((lfo, i) => ({
             ...lfo.toJSON(),
@@ -397,6 +451,8 @@ export class SynthPanel {
       track.bitcrushFX.fromJSON(d.bitcrushFX ?? {});
       track.chorusFX.fromJSON(d.chorusFX ?? {});
       track.reverbFX.fromJSON(d.reverbFX ?? {});
+      track._restoreFXInstances(d.fxInstances ?? []);
+      track.setFXOrder(d.fxOrder ?? track.getFXOrder());
       track.setAnalogue(d.analogue ?? (track.filter.getParam('filter.engine') === 'analogue'));
 
       // Restore LFOs
@@ -426,6 +482,10 @@ export class SynthPanel {
     const track = this.state.selectedTrack;
     this._content.innerHTML = '';
 
+    // Keep the header chain mini-outline current — FX add/remove/reorder/enable
+    // all route through _renderContent (the FX pane calls it), so refresh here.
+    this._renderFXChainOutline();
+
     switch (this.state.activeTab) {
       case 'machine': this._renderMachineTab(track); break;
       case 'mixer':   this._renderMixer();           break;
@@ -439,11 +499,12 @@ export class SynthPanel {
       case 'amp':    this._renderEnv(track);    break;
       case 'lfo':    this._renderLFO(track);     break;
       case 'midi':   this._renderMidiIn(track); break;
-      case 'delay':  this._renderDelay(track);  break;
-      case 'crush':  this._renderCrush(track);  break;
-      case 'chorus': this._renderChorus(track); break;
-      case 'reverb': this._renderReverb(track); break;
+      case 'fx':     this._renderFXPipeline(track); break;
     }
+  }
+
+  _renderFXPipeline(track) {
+    new FXPipelinePanel().render(this._makeTabContext(track));
   }
 
   // ── P-lock helpers ──────────────────────────────────────────
@@ -555,10 +616,9 @@ export class SynthPanel {
         });
       },
       fmtParam: (p, v) => this._fmtParam(p, v),
-      // Header FX bar — MixerPanel keeps its toggles in sync with mixer strips.
-      fxBar:        this._fxBar,
       // Service references used by specific tab panels
       library:      this.library,
+      fxLibrary:    this.fxLibrary,
       openModal:    this.openModal,
       sampleStore:  this.sampleStore,
       audioContext: this.audioContext,
@@ -620,22 +680,6 @@ export class SynthPanel {
   _renderMidiIn(track) {
     const cleanup = new MidiInPanel().render(this._makeTabContext(track));
     if (cleanup) this._activeWidgets.push({ destroy: cleanup });
-  }
-
-  _renderDelay(track) {
-    new FXPanel().render(this._makeTabContext(track), track.delayFX);
-  }
-
-  _renderCrush(track) {
-    new FXPanel().render(this._makeTabContext(track), track.bitcrushFX);
-  }
-
-  _renderChorus(track) {
-    new FXPanel().render(this._makeTabContext(track), track.chorusFX);
-  }
-
-  _renderReverb(track) {
-    new FXPanel().render(this._makeTabContext(track), track.reverbFX);
   }
 
   _renderLFO(track) {

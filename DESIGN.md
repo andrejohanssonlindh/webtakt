@@ -11,7 +11,7 @@
 | [`design/audio-signal-chain.md`](design/audio-signal-chain.md) | Per-track signal chain, filter architecture, FilterViz, envelope architecture, voice pool/selection, pan, DJ filter, audio constraints |
 | [`design/sequencer.md`](design/sequencer.md) | Clock/sequencer architecture, step data model, p-lock architecture, track nav/page control, record mode, drum mode, double-click step |
 | [`design/machines.md`](design/machines.md) | All machine types: drum machines, melodic synths, sampler, wavetable sampler; drum architecture; hidden param pattern |
-| [`design/fx.md`](design/fx.md) | DelayFX, BitcrushFX, ReverbFX — parameters, signal routing, UI, p-lock behaviour |
+| [`design/fx.md`](design/fx.md) | DelayFX, BitcrushFX, ChorusFX, ReverbFX — parameters, signal routing, reorderable FX pipeline pane, UI, p-lock behaviour |
 | [`design/ui.md`](design/ui.md) | SynthPanel tabs, mixer tab, transport controls, scale quantisation, LFO destination groups, state/event flow |
 | [`design/state.md`](design/state.md) | Save/load (Project JSON), sound library, sample store |
 | [`design/tests.md`](design/tests.md) | Audio test suite architecture, coverage, how the Clock shim works |
@@ -91,11 +91,17 @@ js/
     DelayFX.js          — Stereo feedback delay
     BitcrushFX.js       — Bit-depth reduction + rate smear
     ReverbFX.js         — Convolution reverb with synthesised IR
+    DistortionFX.js     — tanh waveshaper drive + tone LP (addable FX instance)
+    CompressorFX.js     — DynamicsCompressorNode + makeup gain, dry/wet (addable FX instance)
+    PhaserFX.js         — 6 LFO-swept allpass stages + feedback. PARKED: removed from the Add-FX menu (too subtle to be useful); class kept for a possible future revisit
+    FXFilter.js         — Standalone post-sum biquad filter block (paraphonic; addable FX instance) — distinct from per-voice Filter.js
+    NormalizerFX.js     — Live auto-gain leveller (addable FX instance): AnalyserNode taps the signal, rAF loop scales a GainNode toward a target RMS; auto-tracks upstream changes
+    FXInstance.js       — Namespacing proxy wrapping an FX so N instances coexist; rewrites paths to fxN.* (see design/audio-signal-chain.md → Multiple FX instances)
   ui/
     TrackRow.js         — 8 track selector buttons, mute state, machine type indicator
     StepGrid.js         — 16-step grid (current page), click to select, dblclick to add lowest note
     SynthPanel.js       — Shell + tab router only (~600 lines): builds header (tab bar,
-                          oscilloscope, FX toggles, copy/paste), routes each tab to a panel
+                          oscilloscope, FX button + chain mini-outline, copy/paste), routes each tab to a panel
                           in panels/, owns shared p-lock helpers (_writeValue, _renderParamList,
                           _step) and the per-render context built by _makeTabContext(). Each tab's
                           DOM lives in its own panel file (see panels/ below).
@@ -122,9 +128,11 @@ js/
       FilterPanel.js          — FILTER tab: ANALOGUE switch (digital/analogue, drives Track.setAnalogue) + type/cutoff/res/gain/env/slope + base LPF/HPF + analogue-only drive/drift/keytrack + FilterViz + filter-env ADSR
       AmpPanel.js             — AMP tab: pan knob + amp ADSR
       LFOPanel.js             — LFO tab: sub-tabs, destination dropdown, simple/advanced layouts
-      FXPanel.js              — Generic DELAY/CRUSH/REVERB tab: render(ctx, fxObj, fmtOverrides)
+      FXPanel.js              — Generic FX knob-row renderer: render(ctx, fxObj, fmtOverrides). Used by FXPipelinePanel for ALL blocks' inline editor (base four + added instances); the dedicated DELAY/CRUSH/CHORUS/REVERB tabs were removed.
+      FXPipelinePanel.js      — FX tab: snaking reorderable signal path + per-block ON/OFF + inline param editor for every block + ADD FX menu + SAVE (name/tags) + LOAD (opens FXPresetModal)
+      FXPresetModal.js        — SOUNDS-style overlay for FX presets (FXLibrary): tag chips + cards (audition ▶ / APPLY / edit / delete) + pinned ▶ PLAY DRY audition bar. Self-contained (own DOM, Esc/click-out), one instance on state._fxPresetModal.
       MidiInPanel.js          — MIDI tab: per-track MIDI In source/channel/CC→param mappings (distinct from MidiPanel)
-      MixerPanel.js           — MIXER tab: per-track strip (level, DLY/CRUSH/REV/DJ knobs, FX toggles)
+      MixerPanel.js           — MIXER tab: per-track strip (level, DLY/CRUSH/REV/DJ knobs, per-FX ON/OFF toggles)
       DeckPanel.js            — DECK tab: DJ crossfade between two decks (A/B columns + constant-power crossfader); per-deck LOAD/CONTROL/SILENCE/UNLOAD. Reads ctx.state.decks (DeckManager).
       MachinePickerPanel.js   — MACHINE tab: searchable grouped machine card grid. Owns canonical MACHINE_GROUPS / MACHINE_DEFS (re-exported by SynthPanel for back-compat).
       SoundsPanel.js          — SOUNDS tab: wraps SoundLibraryPanel + preview/restore logic
@@ -136,12 +144,13 @@ js/
   util/
     BpmSync.js          — Shared BPM-sync utility. Unified sync-knob model: 1/32-note integer counts (count32ToSeconds, MUSICAL_SNAP_32, formatCount32, divToCount32). Used by DelayFX, ReverbFX, LFO, Arpeggiator. Legacy DIV_QN/SYNC_DIVISIONS/divToSeconds kept for load back-compat.
   state/
-    Track.js            — Owns VoicePool + sequencer + filter + FX chain (delay→crush→chorus→reverb) + LFOs + pannerNode + Arpeggiator. `analogue` flag (setAnalogue) drives the whole analogue flow as a unit: filter engine, RC envelopes, keytrack, velocity, chorus
+    Track.js            — Owns VoicePool + sequencer + filter + FX chain + LFOs + pannerNode + Arpeggiator. FX chain order is REORDERABLE (`_fxOrder` / `setFXOrder` / `_rewireFXChain`; default delay→crush→chorus→reverb) — see design/audio-signal-chain.md → Reorderable FX pipeline. `analogue` flag (setAnalogue) drives the whole analogue flow as a unit: filter engine, RC envelopes, keytrack, velocity, chorus
     Project.js          — 8–12 tracks (dynamic), BPM, export/import JSON file. Owns a per-deck busGain (tracks route here → master fxBus). loadDeckJSON/reset for the deck layer.
     DeckManager.js      — Two-deck DJ layer: owns Project A + B (shared Clock/AudioEngine, beatmatched), constant-power crossfader on the two busGains, per-deck silence, "control" (which deck the UI edits), load/unload. See design/ui.md → Deck Tab.
     AppState.js         — Selected track/step, active tab/LFO, event bus. `.project` is a getter following the controlled deck (DeckManager).
-    Settings.js         — App-wide user prefs (NOT part of a project): BPM-sync finest grid (bpmGrid 1/32–1/128), modWheelSensitivity, keybinds (play/record/stopAll/manual + selected-track toggles arp/fxChorus/fxDelay/fxCrush/fxReverb, each an event.code), keyboardLayout preset (or 'custom' + editable customLayout {lower,chromatic}). All binds handled in index.html keydown; the arp/fx binds toggle that effect on the selected track via SynthPanel.toggleArp()/toggleFx(). Single shared `settings` instance, continuous localStorage save, on(fn) subscribers, reset(). See design/ui.md → Settings Pane.
+    Settings.js         — App-wide user prefs (NOT part of a project): BPM-sync finest grid (bpmGrid 1/32–1/128), modWheelSensitivity, keybinds (play/record/stopAll/manual/hold + selected-track toggles arp + fx1/fx2/fx3/fx4, each an event.code), keyboardLayout preset (or 'custom' + editable customLayout {lower,chromatic}). All binds handled in index.html keydown; arp toggles the arp, fx1..fx4 are four generic FX binds each toggling whatever FX block the selected track maps it to (Track._fxBinds) via SynthPanel.toggleArp()/toggleFxBind(). Single shared `settings` instance, continuous localStorage save, on(fn) subscribers, reset() (legacy fxCrush/fxReverb/fxDelay/fxChorus binds migrated to fx1..fx4 on load). See design/ui.md → Settings Pane.
     SoundLibrary.js     — Sound library, two sources one list: USER sounds in localStorage (save/load/delete) + FACTORY sounds shipped as files in sounds/ (async init() fetches sounds/index.json manifest → each sound JSON). Factory merged by id only if not already present (user copy wins); flagged `factory:true`, never written to localStorage (re-fetched each load so preset fixes ship). Old persisted `seed_*` entries are migrated out on load. Regenerate factory files via tools/bake_sounds.py.
+    FXLibrary.js        — Global FX-pipeline preset store (localStorage `webtakt_fx_presets`, no factory presets). Preset = `{ name, tags, createdAt, fx:{ delayFX,bitcrushFX,chorusFX,reverbFX,fxOrder,fxInstances } }` via Track.exportFXPreset()/applyFXPreset(). save(name,tags,track)/load/delete/rename/setTags/allTags. Track-agnostic. SAVE inline in FX pane; LOAD opens FXPresetModal (audition dry vs pipeline, apply, edit, delete).
     SampleStore.js      — Sample store. load(id) resolves: in-memory cache → localStorage (WAV-base64, user imports) → shipped samples/<id>.wav (factory samples a sound references). Exports bufferToWav() for sound export.
     Scales.js           — Scale definitions (20 scales) + noteInScale() helper
   worklets/
@@ -233,6 +242,7 @@ UI (reads AppState, calls Track/Sequencer/Machine methods)
 | Delay | Per-track feedback delay, p-lockable + LFO-assignable |
 | Bitcrush | Per-track bit-depth + rate reduction, p-lockable + LFO-assignable |
 | Reverb | Per-track convolution reverb (synth IR), p-lockable + LFO-assignable |
+| FX pipeline | Per-track REORDERABLE, MULTI-INSTANCE FX chain and the **single home for all effects** (no dedicated DELAY/CRUSH/CHORUS/REVERB tabs, no per-FX header toggles). Drag blocks along a snaking INPUT→OUTPUT path to reorder; per-block ON/OFF bypass; per-block **FX-bind dropdown** (None / FX 1–4 → the four global FX keybinds, per track); click any block to edit its params inline; drag a block to the **BIN** (or ✕) to remove it. "+ Add FX" adds N instances of any type (extra delay/crush/chorus/reverb + **distortion / compressor / normalizer** + a post-sum **FX filter**; Phaser is parked/hidden), and re-adds any detached base block. Base blocks are removable (detached from the chain but kept registered for back-compat + re-add); added instances use `FXInstance` proxies with `fxN.`-namespaced param paths (p-lock/LFO/CC-safe) and are fully torn down on remove. FX button in header opens the pane; a **chain mini-outline** of glyph icons beside it mirrors the chain (click → open pane + select). **SAVE** (name+tags) + **LOAD** (FXPresetModal popup: tag filters, audition dry vs pipeline, apply/edit/delete) — global FX presets (FXLibrary). Order + instances + binds persisted (Track/SoundLibrary/copy-paste). See design/fx.md + design/audio-signal-chain.md → Multiple FX instances. |
 | Deck / DJ crossfade | Two decks (Project A+B) on a shared beatmatched clock; constant-power crossfader, per-deck control/silence/load/unload. DECK tab. Not persisted (live performance layer). |
 | MIDI | MIDI out (MidiMachine per track), MIDI In CC routing, 24-PPQN clock sync out. Timing via setTimeout (Web MIDI has no sample-accurate send) — see MidiEngine.js header. |
 | Loudness | Per-machine fixed trim (`js/machines/LoudnessTrim.js`) normalises every machine to a common loudness. Measured/re-tuned via the loudness bench at `tests/loudness.html`. See `design/machines.md` → Loudness Normalisation. |

@@ -104,6 +104,8 @@ export class SoundLibrary {
       bitcrushFX:  json.bitcrushFX,
       chorusFX:    json.chorusFX,
       reverbFX:    json.reverbFX,
+      fxOrder:     json.fxOrder,
+      fxInstances: json.fxInstances,
       analogue:    json.analogue,
       lfos:        json.lfos,
       pan:         json.pan,
@@ -132,6 +134,10 @@ export class SoundLibrary {
     track.bitcrushFX.fromJSON(sound.bitcrushFX ?? {});
     track.chorusFX.fromJSON(sound.chorusFX ?? {});
     track.reverbFX.fromJSON(sound.reverbFX ?? {});
+    // FX pipeline: rebuild added instances, then apply order (both absent in
+    // sounds saved before the pipeline → base-four default order).
+    track._restoreFXInstances(sound.fxInstances ?? []);
+    track.setFXOrder(sound.fxOrder ?? track.getFXOrder());
     // Analogue flow: derive from the saved flag, or fall back to the restored
     // filter engine for sounds saved before the flag existed. setAnalogue keeps
     // the chorus enable + filter engine consistent.

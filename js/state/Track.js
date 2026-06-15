@@ -78,6 +78,12 @@ import { DelayFX }       from '../signal/DelayFX.js';
 import { BitcrushFX }    from '../signal/BitcrushFX.js';
 import { ChorusFX }      from '../signal/ChorusFX.js';
 import { ReverbFX }      from '../signal/ReverbFX.js';
+import { DistortionFX }  from '../signal/DistortionFX.js';
+import { CompressorFX }  from '../signal/CompressorFX.js';
+import { PhaserFX }      from '../signal/PhaserFX.js';
+import { FXFilter }      from '../signal/FXFilter.js';
+import { NormalizerFX }  from '../signal/NormalizerFX.js';
+import { FXInstance }    from '../signal/FXInstance.js';
 import { Arpeggiator }   from '../signal/Arpeggiator.js';
 import { LiveArp }       from '../signal/LiveArp.js';
 import { Condition }     from '../sequencer/Condition.js';
@@ -114,6 +120,39 @@ const MACHINES = {
   'wt-sampler':     WavetableSamplerMachine,
   'sample-swarm':   SampleSwarmMachine,
   midi:             MidiMachine,
+};
+
+/**
+ * FX block type → factory. Used by Track.addFX(type) to build ADDED instances
+ * (extra copies of the base effects + the new types). The base four blocks are
+ * created directly in the constructor and keep bare (un-prefixed) param paths.
+ */
+const FX_TYPES = {
+  delay:    DelayFX,
+  crush:    BitcrushFX,
+  chorus:   ChorusFX,
+  reverb:   ReverbFX,
+  distortion: DistortionFX,
+  compressor: CompressorFX,
+  // phaser: PhaserFX,  // parked — the effect was too subtle to be useful; may
+  //                       revisit (see PhaserFX.js header + design/fx.md). Old
+  //                       saves referencing a 'phaser' instance degrade gracefully
+  //                       (_restoreFXInstances skips unknown types).
+  filter:   FXFilter,
+  normalizer: NormalizerFX,
+};
+
+/** Human labels for the Add-FX menu (order = menu order). */
+export const FX_TYPE_LABELS = {
+  filter:     'Filter',
+  delay:      'Delay',
+  crush:      'Crush',
+  chorus:     'Chorus',
+  reverb:     'Reverb',
+  distortion: 'Distortion',
+  compressor: 'Compressor',
+  // phaser:  'Phaser',   // parked — see FX_TYPES note above.
+  normalizer: 'Normalizer',
 };
 
 /**
@@ -181,13 +220,41 @@ export class Track {
     this.pannerNode = audio.context.createStereoPanner();
     this.pannerNode.pan.value = 0;
 
-    // Per-track FX chain: panner → delay → bitcrush → chorus → reverb → fxBus.
+    // Per-track FX chain. The chain ORDER is user-customisable (FX pipeline
+    // pane): the blocks are reorderable; the upstream nodes (outputGain →
+    // tremGain → pannerNode) and the downstream output bus are fixed. The chain
+    // is rebuilt declaratively from `_fxOrder` by `_rewireFXChain()`.
     // The BBD chorus is part of the analogue flow — it stays in the chain for
     // every track but is bypassed (dry) unless the track's analogue flag is on.
     this.delayFX    = new DelayFX(audio.context);
     this.bitcrushFX = new BitcrushFX(audio.context);
     this.chorusFX   = new ChorusFX(audio.context);
     this.reverbFX   = new ReverbFX(audio.context);
+
+    // FX block registry: id → the FX block on this track. The pipeline order is
+    // an array of these ids. The base four are PERMANENT (cannot be removed) and
+    // keep bare param paths ('reverb.wet') for back-compat. ADDED instances
+    // (Track.addFX) get ids 'fxN' and are wrapped in an FXInstance proxy so
+    // their param paths are namespaced ('fxN.reverb.wet') and never collide.
+    this._fxBlocks = {
+      delay:  this.delayFX,
+      crush:  this.bitcrushFX,
+      chorus: this.chorusFX,
+      reverb: this.reverbFX,
+    };
+    // Ids that may never be removed (the permanent base blocks).
+    this._fxBaseIds = ['delay', 'crush', 'chorus', 'reverb'];
+    // Monotonic counter for added-instance ids ('fx1', 'fx2', …). Also drives
+    // the FXInstance prefix, so an id of 'fx3' ↔ prefix 'fx3.'.
+    this._fxNextId  = 1;
+    // Default chain order — the base four (matches the historical chain).
+    this._fxOrder = [...this._fxBaseIds];
+
+    // FX bind assignments: bind number (1–4) → block id (or null). The four
+    // global FX keybinds (Settings fx1..fx4) toggle whichever block this track
+    // maps them to, so the SAME key can hit a different effect per track. A block
+    // may hold at most one bind, and a bind at most one block (assigning steals).
+    this._fxBinds = { 1: null, 2: null, 3: null, 4: null };
 
     // Arpeggiator — schedules note fans from Sequencer triggers
     this.arp = new Arpeggiator();
@@ -199,11 +266,8 @@ export class Track {
 
     this.outputGain.connect(this.tremGain);
     this.tremGain.connect(this.pannerNode);
-    this.pannerNode.connect(this.delayFX.inputNode);
-    this.delayFX.connect(this.bitcrushFX.inputNode);
-    this.bitcrushFX.connect(this.chorusFX.inputNode);
-    this.chorusFX.connect(this.reverbFX.inputNode);
-    this.reverbFX.connect(this._outputBus);
+    // Wire pannerNode → [FX blocks in _fxOrder] → outputBus.
+    this._rewireFXChain();
 
     // Canonical (slot-0) filter — UI/sequencer read & write params here. Each
     // voice slot owns its own filter (created by the pool); this one is slot 0's
@@ -405,10 +469,393 @@ export class Track {
     this.chorusFX?.setEnabled(this.analogue && this.chorusFX.getParam('chorus.mix') > 0);
   }
 
+  /**
+   * The current FX pipeline order — an array of block ids (e.g.
+   * ['delay','crush','chorus','reverb']). Returns a copy.
+   * @returns {string[]}
+   */
+  getFXOrder() {
+    return [...this._fxOrder];
+  }
+
+  /** Block ids known to this track (registry keys), in registry order. */
+  getFXBlockIds() {
+    return Object.keys(this._fxBlocks);
+  }
+
+  /** Resolve a block id → its FX block (bare FX or FXInstance proxy), or null. */
+  getFXBlock(id) {
+    return this._fxBlocks[id] ?? null;
+  }
+
+  /**
+   * True if this block can be removed from the chain. Every block currently in
+   * the chain is removable now — the base four can be dragged out too (they stay
+   * registered with their bare paths for back-compat and can be re-added from the
+   * Add menu). Added instances are removed permanently (full teardown).
+   */
+  isFXRemovable(id) {
+    return !!this._fxBlocks[id] && this._fxOrder.includes(id);
+  }
+
+  /** True only for the four permanent base blocks (kept registered for back-compat). */
+  isFXBase(id) {
+    return this._fxBaseIds.includes(id);
+  }
+
+  /**
+   * Block ids that exist (registered) but are NOT currently in the chain — i.e.
+   * base blocks the user dragged out. These are offered in the Add menu so they
+   * can rejoin the chain with their original id (and their existing params).
+   * @returns {string[]}
+   */
+  getDetachedBaseIds() {
+    return this._fxBaseIds.filter(id => !this._fxOrder.includes(id));
+  }
+
+  /** The block type for an id ('delay'|'crush'|…|'filter'). */
+  getFXType(id) {
+    const blk = this._fxBlocks[id];
+    if (!blk) return null;
+    if (blk.type) return blk.type;          // FXInstance carries its type
+    return id;                              // base blocks: id === type
+  }
+
+  /**
+   * Add a new FX instance of `type` to the end of the chain. Wrapped in an
+   * FXInstance so its param paths are namespaced ('fxN.<type>.<param>') and can
+   * never collide with the base blocks or sibling instances.
+   * @param {string} type — key of FX_TYPES
+   * @returns {string|null} the new block id ('fxN'), or null if type unknown
+   */
+  addFX(type) {
+    const Cls = FX_TYPES[type];
+    if (!Cls) return null;
+    const id = `fx${this._fxNextId++}`;
+    const fx = new Cls(this.audio.context);
+    fx.setBpm?.(this.clock.bpm);
+    const inst = new FXInstance(fx, Number(id.slice(2)), type);
+    this._fxBlocks[id] = inst;
+    this._fxOrder.push(id);
+    this._rewireFXChain();
+    this.sequencer?.invalidatePlockModeMap();
+    return id;
+  }
+
+  /**
+   * Rebuild the added FX instances from saved JSON (toJSON().fxInstances). Tears
+   * down any current added instances first, then recreates each with its SAVED
+   * id (so namespaced p-lock / LFO paths still resolve) and bumps the id counter
+   * past the highest restored id. Does not touch fxOrder — the caller applies it.
+   * @param {Array<{id:number,type:string,params:object,enabled:boolean}>} list
+   */
+  _restoreFXInstances(list) {
+    // Drop existing added instances (added ids start with 'fx'; base blocks are
+    // never torn down — they stay registered).
+    for (const id of Object.keys(this._fxBlocks)) {
+      if (!this._fxBaseIds.includes(id)) {
+        try { this._fxBlocks[id]?.disconnect?.(); } catch (_) {}
+        delete this._fxBlocks[id];
+      }
+    }
+    this._fxOrder = this._fxOrder.filter(id => !id.startsWith('fx'));
+    let maxId = 0;
+    for (const obj of list ?? []) {
+      const Cls = FX_TYPES[obj.type];
+      if (!Cls) continue;
+      const numId = Number(obj.id) || (maxId + 1);
+      const fx = new Cls(this.audio.context);
+      fx.setBpm?.(this.clock.bpm);
+      const inst = new FXInstance(fx, numId, obj.type);
+      inst.fromJSON(obj);
+      const blockId = `fx${numId}`;
+      this._fxBlocks[blockId] = inst;
+      this._fxOrder.push(blockId);
+      if (numId > maxId) maxId = numId;
+    }
+    this._fxNextId = maxId + 1;
+    this._rewireFXChain();
+  }
+
+  /**
+   * Serialise just the FX subset of this track — the four base-block param sets,
+   * the chain order, and the added instances. This is the shape an FX-pipeline
+   * preset stores (a strict subset of toJSON()); see applyFXPreset() for the
+   * inverse. Does NOT touch machine / filter / envelope / LFOs.
+   * @returns {{delayFX:object,bitcrushFX:object,chorusFX:object,reverbFX:object,fxOrder:string[],fxInstances:object[]}}
+   */
+  exportFXPreset() {
+    return {
+      delayFX:     this.delayFX.toJSON(),
+      bitcrushFX:  this.bitcrushFX.toJSON(),
+      chorusFX:    this.chorusFX.toJSON(),
+      reverbFX:    this.reverbFX.toJSON(),
+      fxOrder:     [...this._fxOrder],
+      fxInstances: this._fxOrder
+        .filter(id => this.isFXRemovable(id) && !this.isFXBase(id))
+        .map(id => this._fxBlocks[id].toJSON()),
+    };
+  }
+
+  /**
+   * Apply an FX preset (see exportFXPreset) to this track: restore the base-four
+   * params, rebuild added instances, then apply the order. Order matters —
+   * _restoreFXInstances MUST run before setFXOrder so the 'fxN' ids in the order
+   * resolve. Clears any p-locks/LFOs that pointed at instances the preset drops
+   * (handled by _restoreFXInstances tearing down the old instances).
+   * @param {object} preset
+   */
+  applyFXPreset(preset) {
+    if (!preset) return;
+    this.delayFX.fromJSON(preset.delayFX ?? {});
+    this.bitcrushFX.fromJSON(preset.bitcrushFX ?? {});
+    this.chorusFX.fromJSON(preset.chorusFX ?? {});
+    this.reverbFX.fromJSON(preset.reverbFX ?? {});
+    this._restoreFXInstances(preset.fxInstances ?? []);
+    this.setFXOrder(preset.fxOrder ?? [...this._fxBaseIds]);
+    this.sequencer?.invalidatePlockModeMap();
+  }
+
+  /**
+   * Audition an FX preset (or the dry signal) on the CURRENT machine: swap in the
+   * preset's FX chain (or bypass all FX when `dry`), play a one-shot C4, then
+   * restore the previous FX chain after the note's tail. Lets the user A/B a
+   * pipeline against dry without committing. The machine/filter/envelope are
+   * untouched — only the FX subset is swapped and restored.
+   * @param {object|null} preset — an FXLibrary preset's `.fx`, or null for dry
+   * @param {{dry?:boolean}} [opts]
+   */
+  auditionFXPreset(preset, { dry = false } = {}) {
+    if (this.muted) return;
+    const ctx  = this.audio.context;
+    const prev = this.exportFXPreset();          // snapshot to restore after
+
+    if (dry || !preset) {
+      // Dry = every block bypassed (still wired; setEnabled(false) routes through).
+      for (const id of this.getFXBlockIds()) this._fxBlocks[id]?.setEnabled?.(false);
+    } else {
+      this.applyFXPreset(preset);
+    }
+
+    // One-shot C4 blip, mirroring fireFollowNote's voice/envelope/LFO handling.
+    const startTime  = ctx.currentTime + 0.015;
+    const stopTime   = startTime + 0.5;
+    const release    = this.envelope?.getParam('env.release') ?? 0.3;
+    const oscOffTime = stopTime + release;
+
+    const voice    = this._pool?.nextVoice(startTime) ?? null;
+    const machine  = voice?.machine  ?? this.machine;
+    const envelope = voice?.envelope ?? this.envelope;
+    if (voice) voice.claim(oscOffTime);
+
+    machine?.syncParamsAt?.(startTime);
+    machine?.noteOn(60, 100, startTime, stopTime);
+    machine?.noteOff(oscOffTime);
+    envelope?.scheduleNote(startTime, stopTime, { note: 60, velocity: 100 });
+    this.lfos?.forEach(lfo => {
+      lfo.noteOn(startTime, stopTime, envelope?._params ?? {});
+      lfo.noteOff(stopTime);
+    });
+
+    // Restore the prior FX chain once the tail (incl. any FX wash) has decayed.
+    clearTimeout(this._auditionRestoreTimer);
+    const restoreMs = (oscOffTime - ctx.currentTime + 1.2) * 1000;
+    this._auditionRestoreTimer = setTimeout(() => this.applyFXPreset(prev), restoreMs);
+  }
+
+  /**
+   * Remove an FX block from the chain.
+   *  - Added instance ('fxN'): full teardown — detach from the graph, drop LFOs
+   *    pointed at it, strip its p-locks, and delete it from the registry.
+   *  - Base block (delay/crush/chorus/reverb): just pull it out of the chain
+   *    order (it stays registered with its bare paths so existing projects /
+   *    p-locks / presets keep resolving, and it can be re-added). The block is
+   *    bypassed-by-removal: it's no longer wired into the signal path.
+   * @param {string} id
+   */
+  removeFX(id) {
+    if (!this.isFXRemovable(id)) return;
+
+    // Drop any FX bind pointing at this block (it's leaving the chain).
+    const bind = this.getFXBindFor(id);
+    if (bind) this._fxBinds[bind] = null;
+
+    if (this.isFXBase(id)) {
+      // Base block: detach from the chain only, keep it registered.
+      this._fxOrder = this._fxOrder.filter(x => x !== id);
+      this._rewireFXChain();
+      this.sequencer?.invalidatePlockModeMap();
+      return;
+    }
+
+    const inst = this._fxBlocks[id];
+    // Drop LFO connections whose dest path belongs to this instance.
+    this.lfos?.forEach((lfo, i) => {
+      const path = this._lfoDestPaths?.[i];
+      if (path && path.startsWith(`${id}.`)) this.setLFODestination(i, '');
+    });
+    // Strip this instance's p-locks from every step.
+    this.sequencer?.steps?.forEach(s => {
+      for (const k of [...s.plocks.keys()]) {
+        if (k.startsWith(`${id}.`)) s.plocks.delete(k);
+      }
+    });
+    try { inst?.disconnect?.(); } catch (_) {}
+    delete this._fxBlocks[id];
+    this._fxOrder = this._fxOrder.filter(x => x !== id);
+    this._rewireFXChain();
+    this.sequencer?.invalidatePlockModeMap();
+  }
+
+  /**
+   * Re-attach a previously-removed base block (delay/crush/chorus/reverb) to the
+   * end of the chain. No-op if the id isn't a detached base block.
+   * @param {string} id
+   * @returns {string|null} the id if re-attached, else null
+   */
+  reattachBaseFX(id) {
+    if (!this._fxBaseIds.includes(id)) return null;
+    if (this._fxOrder.includes(id)) return null;
+    if (!this._fxBlocks[id]) return null;
+    this._fxOrder.push(id);
+    this._rewireFXChain();
+    this.sequencer?.invalidatePlockModeMap();
+    return id;
+  }
+
+  // ── FX bind assignments (the four global FX keybinds) ──────
+
+  /** The block id assigned to FX bind `n` (1–4), or null. */
+  getFXBindBlock(n) {
+    return this._fxBinds[n] ?? null;
+  }
+
+  /** The bind number (1–4) currently assigned to block `id`, or null. */
+  getFXBindFor(id) {
+    for (const n of [1, 2, 3, 4]) if (this._fxBinds[n] === id) return n;
+    return null;
+  }
+
+  /**
+   * Assign block `id` to FX bind `n` (1–4). Pass id=null to clear the bind.
+   * Enforces the 1:1 rule: the block loses any other bind it held, and any block
+   * previously on bind `n` is displaced.
+   * @param {number} n
+   * @param {string|null} id
+   */
+  setFXBind(n, id) {
+    if (![1, 2, 3, 4].includes(n)) return;
+    if (id) {
+      // Clear this block from any other bind it currently holds.
+      for (const k of [1, 2, 3, 4]) if (this._fxBinds[k] === id) this._fxBinds[k] = null;
+    }
+    this._fxBinds[n] = id ?? null;
+  }
+
+  /**
+   * Toggle the block assigned to FX bind `n` (1–4) on this track. No-op if the
+   * bind is unassigned or its block has gone. Returns the block toggled, or null.
+   * @param {number} n
+   */
+  toggleFXBind(n) {
+    const id = this._fxBinds[n];
+    if (!id) return null;
+    const fx = this._fxBlocks[id];
+    if (!fx?.setEnabled) return null;
+    fx.setEnabled(!fx.enabled);
+    return fx;
+  }
+
+  /**
+   * Resolve a param path → the FX block that owns it (base or instance), or
+   * null. An instance path ('fx3.reverb.wet') matches by its 'fx3.' prefix; a
+   * base path ('reverb.wet') matches the base block by its type prefix.
+   */
+  fxObjForPath(path) {
+    if (typeof path !== 'string') return null;
+    // Instance paths: 'fxN.<type>.<param>'.
+    const m = path.match(/^(fx\d+)\./);
+    if (m) return this._fxBlocks[m[1]] ?? null;
+    // Base paths: dispatch by type prefix.
+    if (path.startsWith('delay.'))  return this._fxBlocks.delay;
+    if (path.startsWith('crush.'))  return this._fxBlocks.crush;
+    if (path.startsWith('chorus.')) return this._fxBlocks.chorus;
+    if (path.startsWith('reverb.')) return this._fxBlocks.reverb;
+    return null;
+  }
+
+  /** All FX param descriptors across base + instance blocks (paths namespaced). */
+  _allFXParams() {
+    const out = [];
+    for (const id of this._fxOrder) {
+      const blk = this._fxBlocks[id];
+      if (blk?.getParamList) out.push(...blk.getParamList());
+    }
+    return out;
+  }
+
+  /**
+   * Set the FX pipeline order and rebuild the audio chain accordingly.
+   * Accepts any permutation/subset of known block ids; unknown ids are dropped.
+   *
+   * Base blocks (delay/crush/chorus/reverb) absent from `order` stay absent — the
+   * user can drag them out of the chain (they remain registered for back-compat
+   * and re-add). Added instances ('fxN') absent from `order` are appended instead
+   * of orphaned, since an instance in the registry but out of the graph would be
+   * a dangling, unreachable node.
+   * @param {string[]} order
+   */
+  setFXOrder(order) {
+    const known = new Set(this.getFXBlockIds());
+    const seen  = new Set();
+    const next  = [];
+    for (const id of order ?? []) {
+      if (known.has(id) && !seen.has(id)) { next.push(id); seen.add(id); }
+    }
+    // Append any ADDED instances not named in `order` (never orphan an instance).
+    // Base blocks are intentionally omittable, so they are NOT auto-appended.
+    for (const id of this.getFXBlockIds()) {
+      if (!seen.has(id) && !this._fxBaseIds.includes(id)) next.push(id);
+    }
+    this._fxOrder = next;
+    this._rewireFXChain();
+  }
+
+  /**
+   * (Re)build the per-track FX chain from `_fxOrder`:
+   *   pannerNode → block[0] → block[1] → … → outputBus
+   * Disconnects pannerNode and every block's output first, then reconnects in
+   * order. Each FX block exposes the uniform inputNode/outputNode/connect()
+   * interface, so reordering is pure rewiring — params, p-locks, LFO and mod-
+   * wheel routing all target AudioParams by path and are unaffected by order.
+   */
+  _rewireFXChain() {
+    // Tear down existing connections from the panner and all blocks.
+    try { this.pannerNode.disconnect(); } catch (_) {}
+    for (const id of this.getFXBlockIds()) {
+      try { this._fxBlocks[id].disconnect(); } catch (_) {}
+    }
+
+    // Reconnect in order: panner → first block, block → next block, last → bus.
+    let prev = this.pannerNode;
+    for (const id of this._fxOrder) {
+      const fx = this._fxBlocks[id];
+      if (!fx) continue;
+      prev.connect(fx.inputNode);
+      prev = fx;            // FX expose .connect(dest) via their outputNode
+    }
+    prev.connect(this._outputBus);
+  }
+
   /** Called by Project when BPM changes — propagates to synced FX and arpeggiator. */
   onBpmChanged(bpm) {
     this.delayFX.setBpm(bpm);
     this.reverbFX.setBpm(bpm);
+    // Added delay/reverb instances are tempo-synced too (setBpm is a no-op on
+    // FX that don't sync).
+    for (const id of this._fxOrder) {
+      if (!this.isFXBase(id)) this._fxBlocks[id]?.setBpm?.(bpm);
+    }
     this.arp.setBpm(bpm);
     this._pool?.setBpm(bpm);   // tempo-synced envelope stages
   }
@@ -438,8 +885,13 @@ export class Track {
     this.liveArp?.releaseAll?.();
     this.lfos?.forEach(lfo => { try { lfo.stop?.(); } catch (_) {} });
     // Disconnect the chain tail from the (per-deck) output bus so the deck's
-    // bus can be GC'd and the nodes stop pulling on the graph.
-    try { this.reverbFX?.disconnect?.(); } catch (_) {}
+    // bus can be GC'd and the nodes stop pulling on the graph. The last block in
+    // _fxOrder feeds the bus; disconnect every block (order-independent) plus
+    // the fixed upstream nodes.
+    for (const id of this.getFXBlockIds()) {
+      try { this._fxBlocks[id]?.disconnect?.(); } catch (_) {}
+    }
+    try { this.pannerNode?.disconnect?.(); } catch (_) {}
     try { this.outputGain?.disconnect?.(); } catch (_) {}
     try { this.tremGain?.disconnect?.(); } catch (_) {}
   }
@@ -520,12 +972,8 @@ export class Track {
                getParam: () => this.trigVelocity };
     }
     const sources = [
-      { obj: this.machine,     params: this.machine.getParamList()      },
-      { obj: this.filter,      params: this.filter.getParamList()       },
-      { obj: this.delayFX,     params: this.delayFX.getParamList()      },
-      { obj: this.bitcrushFX,  params: this.bitcrushFX.getParamList()   },
-      { obj: this.chorusFX,    params: this.chorusFX.getParamList()     },
-      { obj: this.reverbFX,    params: this.reverbFX.getParamList()     },
+      { obj: this.machine, params: this.machine.getParamList() },
+      { obj: this.filter,  params: this.filter.getParamList()  },
     ];
     for (const { obj, params } of sources) {
       const descriptor = params.find(p => p.path === path && p.modulatable);
@@ -533,6 +981,15 @@ export class Track {
       const audioParam = obj.resolveAudioParam?.(path) ?? null;
       // JS-only params (no AudioParam) are still controllable via setParam directly
       return { obj, audioParam, min: descriptor.lfoMin, max: descriptor.lfoMax };
+    }
+    // FX blocks (base + added instances) — owner resolved by path namespace.
+    const fxObj = this.fxObjForPath(path);
+    if (fxObj) {
+      const descriptor = fxObj.getParamList().find(p => p.path === path && p.modulatable);
+      if (descriptor) {
+        const audioParam = fxObj.resolveAudioParam?.(path) ?? null;
+        return { obj: fxObj, audioParam, min: descriptor.lfoMin, max: descriptor.lfoMax };
+      }
     }
     return null;
   }
@@ -625,20 +1082,16 @@ export class Track {
     const allParams = [
       ...this.machine.getParamList(),
       ...this.filter.getParamList(),
-      ...this.delayFX.getParamList(),
-      ...this.bitcrushFX.getParamList(),
-      ...this.reverbFX.getParamList(),
+      ...this._allFXParams(),                 // base + added FX (namespaced paths)
       ...this._envelopeModulatableParams(),
     ];
     const descriptor = allParams.find(p => p.path === path && p.modulatable);
     if (!descriptor) return null;
 
-    // Try slot-0 machine first, then shared signal chain objects
+    // Try slot-0 machine, then filter, then the FX block owning this path.
     let audioParam = this.machine.resolveAudioParam?.(path) ?? null;
     if (!audioParam) audioParam = this.filter.resolveAudioParam?.(path) ?? null;
-    if (!audioParam) audioParam = this.delayFX.resolveAudioParam?.(path) ?? null;
-    if (!audioParam) audioParam = this.bitcrushFX.resolveAudioParam?.(path) ?? null;
-    if (!audioParam) audioParam = this.reverbFX.resolveAudioParam?.(path) ?? null;
+    if (!audioParam) audioParam = this.fxObjForPath(path)?.resolveAudioParam?.(path) ?? null;
     if (!audioParam) return null;
 
     return { audioParam, depthScale: lfoDepthScale(descriptor) };
@@ -698,6 +1151,11 @@ export class Track {
     this.chorusFX.fromJSON({});
     this.reverbFX.fromJSON({});
 
+    // Remove all added FX instances and restore the default base-four order.
+    this._restoreFXInstances([]);
+    this.setFXOrder([...this._fxBaseIds]);
+    this._fxBinds = { 1: null, 2: null, 3: null, 4: null };
+
     // Drop back to the clean digital flow: restores the biquad filter engine
     // and disables the BBD chorus, keeping engine + chorus enable consistent.
     this.setAnalogue(false);
@@ -752,17 +1210,24 @@ export class Track {
       { path: 'amp.pan',   label: 'Pan' },
     ];
 
-    const delayParams = this.delayFX.getParamList()
-      .filter(p => p.modulatable)
-      .map(p => ({ path: p.path, label: p.label }));
-
-    const crushParams = this.bitcrushFX.getParamList()
-      .filter(p => p.modulatable)
-      .map(p => ({ path: p.path, label: p.label }));
-
-    const reverbParams = this.reverbFX.getParamList()
-      .filter(p => p.modulatable)
-      .map(p => ({ path: p.path, label: p.label }));
+    // One LFO-destination group per FX block (base + added instances), in chain
+    // order. Group label = the type label, suffixed with the instance number for
+    // added instances so duplicates are distinguishable (e.g. "Reverb 2").
+    const seenType = {};
+    const fxGroups = [];
+    for (const id of this._fxOrder) {
+      const blk = this._fxBlocks[id];
+      if (!blk?.getParamList) continue;
+      const type  = this.getFXType(id);
+      const items = blk.getParamList()
+        .filter(p => p.modulatable)
+        .map(p => ({ path: p.path, label: p.label }));
+      if (!items.length) continue;
+      seenType[type] = (seenType[type] ?? 0) + 1;
+      const base  = FX_TYPE_LABELS[type] ?? type;
+      const label = this._fxBaseIds.includes(id) ? base : `${base} ${seenType[type]}`;
+      fxGroups.push({ group: label, items });
+    }
 
     const trigItems = [
       { path: 'trig.tone',     label: 'Tone' },
@@ -779,9 +1244,7 @@ export class Track {
     if (machineParams.length) groups.push({ group: this.machine.label ?? 'Machine', items: machineParams });
     if (filterParams.length)  groups.push({ group: 'Filter', items: filterParams });
     groups.push({ group: 'Amp', items: ampParams });
-    if (delayParams.length)  groups.push({ group: 'Delay', items: delayParams });
-    if (crushParams.length)  groups.push({ group: 'Crush', items: crushParams });
-    if (reverbParams.length) groups.push({ group: 'Reverb', items: reverbParams });
+    for (const g of fxGroups) groups.push(g);
     if (this.arp.enabled)    groups.push({ group: 'Arp', items: arpItems });
     return groups;
   }
@@ -807,6 +1270,13 @@ export class Track {
       bitcrushFX:   this.bitcrushFX.toJSON(),
       chorusFX:     this.chorusFX.toJSON(),
       reverbFX:     this.reverbFX.toJSON(),
+      fxOrder:      [...this._fxOrder],
+      // Added FX instances (base four serialise via their own fields above). Each
+      // carries { id, type, params, enabled }; restored before applying fxOrder.
+      fxInstances:  this._fxOrder
+        .filter(id => this.isFXRemovable(id) && !this.isFXBase(id))
+        .map(id => this._fxBlocks[id].toJSON()),
+      fxBinds:      { ...this._fxBinds },
       arp:          this.arp.toJSON(),
       lfos:         this.lfos.map((lfo, i) => ({
         ...lfo.toJSON(),
@@ -868,6 +1338,22 @@ export class Track {
     this.bitcrushFX.fromJSON(obj.bitcrushFX ?? {});
     this.reverbFX.fromJSON(obj.reverbFX ?? {});
     this.chorusFX.fromJSON(obj.chorusFX ?? {});
+
+    // Rebuild added FX instances (must precede setFXOrder so the order's ids
+    // resolve). No-op for legacy projects without fxInstances.
+    this._restoreFXInstances(obj.fxInstances ?? []);
+
+    // FX pipeline order. Absent in legacy projects → keep the default chain.
+    this.setFXOrder(obj.fxOrder ?? this._fxOrder);
+
+    // FX bind assignments (1–4 → block id). Keep only binds whose block still
+    // exists in the chain; absent in legacy projects → all unassigned.
+    this._fxBinds = { 1: null, 2: null, 3: null, 4: null };
+    const savedBinds = obj.fxBinds ?? {};
+    for (const n of [1, 2, 3, 4]) {
+      const id = savedBinds[n] ?? null;
+      if (id && this._fxOrder.includes(id)) this._fxBinds[n] = id;
+    }
 
     // Analogue flow flag. Back-compat: projects saved before the unified flag
     // carry only filter.engine, so derive the flag from it when absent. Then

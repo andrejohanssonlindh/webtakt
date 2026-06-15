@@ -37,11 +37,12 @@ const KEYBIND_ACTIONS = [
   { id: 'manual',   label: 'Manual' },
   { id: 'hold',     label: 'Hold (latch notes)' },
   { id: 'arp',      label: 'Arp on/off (sel. track)' },
-  // FX keys in fx-bar left→right order: C=Crush, V=Reverb, B=Delay, N=Chorus
-  { id: 'fxCrush',  label: 'Crush on/off (sel. track)' },
-  { id: 'fxReverb', label: 'Reverb on/off (sel. track)' },
-  { id: 'fxDelay',  label: 'Delay on/off (sel. track)' },
-  { id: 'fxChorus', label: 'Chorus on/off (sel. track)' },
+  // Four generic FX binds. Each track assigns these to FX blocks in the FX pane;
+  // the key toggles the assigned block on the selected track. Defaults C/V/B/N.
+  { id: 'fx1',      label: 'FX bind 1 (sel. track)' },
+  { id: 'fx2',      label: 'FX bind 2 (sel. track)' },
+  { id: 'fx3',      label: 'FX bind 3 (sel. track)' },
+  { id: 'fx4',      label: 'FX bind 4 (sel. track)' },
 ];
 
 /** Human label for an event.code (e.g. "Space", "Enter", "KeyR" → "R"). */

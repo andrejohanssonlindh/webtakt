@@ -47,6 +47,7 @@ export class AppState {
     this.selectedTrackIndex = 0;
     this.activeTab          = 'synth';
     this.activeLFOIndex     = 0;
+    this.fxSelectedBlockId  = null;   // FX pipeline pane: block being edited inline
     this.selectedStepIndex  = -1;
     this.recording              = false;
     this.drumMode               = false;

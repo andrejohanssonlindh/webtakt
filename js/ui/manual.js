@@ -334,16 +334,16 @@ export const MANUAL_CONTENT = {
                  'machine\'s output.level param — moving it here updates the SYNTH ' +
                  'tab knob for the selected track.'],
       ['DLY', 'Delay send level for this track (0–100%). Equivalent to the Wet ' +
-                 'knob in the DELAY FX tab.'],
+                 'knob for Delay in the FX pane.'],
       ['CRUSH', 'Bitcrush send level for this track (0–100%). Equivalent to the ' +
-                 'Wet knob in the CRUSH FX tab.'],
+                 'Wet knob for Crush in the FX pane.'],
       ['REV', 'Reverb send level for this track (0–100%). Equivalent to the ' +
-                 'Wet knob in the REVERB FX tab.'],
+                 'Wet knob for Reverb in the FX pane.'],
       ['DJ FILT', 'A per-track DJ-style filter. Bipolar: centre is flat. Turn ' +
                  'left to close a low-pass (cuts highs); turn right to open a ' +
                  'high-pass (cuts lows). Useful for build-ups and breakdowns.'],
       ['DLY / CRUSH / REV toggles', 'Enable or bypass each FX processor for this ' +
-                 'track. Same as the toggle buttons in the panel header FX bar.'],
+                 'track. Same as the per-block ON/OFF toggles in the FX pane.'],
     ],
   },
 
@@ -372,11 +372,67 @@ export const MANUAL_CONTENT = {
     ],
   },
 
+  fx: {
+    title: 'FX PIPELINE',
+    blurb: 'The single home for this track\'s effects: reorder the chain, bypass ' +
+           'blocks, add new effects, and edit every effect\'s params inline. ' +
+           'Audio flows along the snaking path: INPUT → effects → OUTPUT. The ' +
+           'default order is Delay → Crush → Chorus → Reverb, but order matters — ' +
+           'reverb before crush sounds very different from crush before reverb. ' +
+           'Opened with the FX button in the header FX bar; the icon row beside ' +
+           'that button mirrors the chain (click an icon to jump here with that ' +
+           'effect selected).',
+    items: [
+      ['Signal path', 'Each tile is one effect, shown in chain order. Drag a ' +
+                 'tile onto another to place it before that one; drop on empty ' +
+                 'path space to move it to the end. The whole chain is always ' +
+                 'shown so you can see and rearrange every effect.'],
+      ['ON / OFF', 'Each tile has an ON/OFF toggle that bypasses the effect ' +
+                 'without removing it from the chain. Bypassed tiles are dimmed ' +
+                 'but stay on the path (and dim in the header icon row too).'],
+      ['Edit params', 'Click any tile — base effect or added — to select it; its ' +
+                 'knobs appear inline below the path. Click the selected tile again ' +
+                 'to deselect it. (The old per-FX header tabs were removed in ' +
+                 'favour of this one editor.)'],
+      ['Per-effect manual', 'With an effect tile selected, open this manual (📖 or ' +
+                 'its key) to read THAT effect\'s own page; with no tile selected ' +
+                 'it shows this FX-pipeline overview. So select a card, hit the ' +
+                 'manual, and you get its specific help.'],
+      ['FX bind', 'Each tile has a small dropdown to assign one of the four FX ' +
+                 'keybinds (FX 1–4) to that effect, per track. Pressing the key ' +
+                 '(default C / V / B / N, rebindable in Settings) toggles the ' +
+                 'assigned effect ON/OFF on the SELECTED track — so the same key ' +
+                 'can drive a different effect on each track. A block holds at ' +
+                 'most one bind; assigning a bind that\'s in use steals it.'],
+      ['Remove', 'Drag any tile to the BIN (under SAVE) to take it out of the ' +
+                 'chain — or use the ✕ on the tile. Added effects are deleted; ' +
+                 'the base four (Delay/Crush/Chorus/Reverb) are just detached and ' +
+                 'can be re-added from + ADD FX (they keep their settings).'],
+      ['Add FX', 'The + ADD FX menu adds another effect to the chain — including ' +
+                 'a Filter (carve the mix post-effects), Distortion, Compressor, ' +
+                 'a Normalizer (auto-levels the signal at that point so a loud ' +
+                 'effect earlier in the chain doesn\'t blow up the level), or a ' +
+                 'second copy of any base effect (e.g. two reverbs). A base effect ' +
+                 'you removed reappears here as "(re-add)". Added effects can be ' +
+                 'reordered and removed freely.'],
+      ['Save', 'SAVE stores the whole pipeline (order + every effect\'s settings ' +
+                 '+ added instances) as a named, tagged global preset.'],
+      ['Load / presets popup', 'LOAD opens the FX-preset manager — a SOUNDS-style ' +
+                 'popup with tag filters and one card per preset. ▶ PLAY DRY (pinned ' +
+                 'at the top) plays the current track with NO effects; ▶ on a card ' +
+                 'auditions that pipeline (a one-shot, then restores) so you can A/B ' +
+                 'dry vs a pipeline vs dry. APPLY commits a preset to the track; ✎ ' +
+                 'edits name/tags; ✕ deletes. Saved sounds also carry their FX ' +
+                 'chain, so loading a sound restores its effects too.'],
+    ],
+  },
+
   delay: {
     title: 'DELAY',
     blurb: 'A per-track stereo delay with feedback. Adds echoes at a set time; ' +
-           'feedback controls how many repeats you hear before they fade. The FX ' +
-           'toggle in the header must be on for the delay to pass audio.',
+           'feedback controls how many repeats you hear before they fade. Edit ' +
+           'and bypass it from the FX pane (the delay\'s ON toggle must be on for ' +
+           'it to pass audio).',
     items: [
       ['Time', 'Delay line length — the gap between the dry signal and its first ' +
                  'echo. Click the knob centre to toggle MS↔BPM. In BPM mode it ' +
@@ -415,7 +471,7 @@ export const MANUAL_CONTENT = {
            'engine. Two delay lines run at unrelated rates, producing the shimmer ' +
            'of a Juno or Solina ensemble rather than a simple single-voice chorus. ' +
            'Enabled automatically when a track is in Analogue mode; also available ' +
-           'on any track from the FX tab.',
+           'on any track from the FX pane.',
     items: [
       ['Mix', 'Wet level of the chorus (0–100%). The Patina mix law is used: ' +
                  'wet = mix × 0.85, dry = 1 − mix × 0.4, so even at full mix the ' +
@@ -448,6 +504,56 @@ export const MANUAL_CONTENT = {
                  'soft, carpeted spaces. Higher values keep the tail bright and ' +
                  'airy. P-lockable and LFO-assignable.'],
       ['Wet', 'Mix level of the reverb signal (0–100%). P-lockable and LFO-assignable.'],
+    ],
+  },
+
+  normalizer: {
+    title: 'NORMALIZER',
+    blurb: 'An added FX block (+ ADD FX) that auto-levels the signal at its point ' +
+           'in the chain. It watches the LOUD parts of whatever reaches it and ' +
+           'drives them toward the Target level — so a hot effect earlier in the ' +
+           'chain (a big distortion, a resonant filter, a reverb wash) gets turned ' +
+           'DOWN, and a too-quiet point can be lifted UP. Because it measures the ' +
+           'live signal, it re-adjusts on its own when the upstream chain changes. ' +
+           'Place it AFTER the effects you want to tame. Must be ON to act; ' +
+           'bypassed it passes through transparently.\n\n' +
+           'Target is a SINGLE knob for both directions: set it BELOW the signal\'s ' +
+           'level to turn it down, ABOVE to push it up. Around the natural level it ' +
+           'sits near unity. Range 0 = no change at all (a quick A/B).',
+    items: [
+      ['Target', 'The level the loud parts are driven toward. One knob, both ways: ' +
+                 'LOWER than the signal\'s level = turned DOWN (quieter), HIGHER = ' +
+                 'lifted UP. A built-in ceiling caps extreme boost so near-silence ' +
+                 'isn\'t amplified into noise.'],
+      ['Range', 'How far it may push from no-change (0%) to full normalisation ' +
+                '(100%). 0 leaves the signal untouched; 100% drives fully to ' +
+                'Target. Scales both downward and upward correction.'],
+      ['Speed', 'How fast it adapts. Low = slow, gentle levelling (less pumping); ' +
+                'high = reacts quickly to level changes.'],
+    ],
+  },
+
+  phaser: {
+    title: 'PHASER',
+    blurb: 'An added FX block (+ ADD FX). A phaser mixes the dry signal with a ' +
+           'copy passed through a bank of allpass filters whose frequencies are ' +
+           'swept by an LFO. Where the two copies meet they cancel, creating a row ' +
+           'of moving notches that sweep up and down the spectrum — a swooshing, ' +
+           'hollow, "jet plane" shimmer (think Small Stone / Phase 90 on guitars, ' +
+           'pads, or drums). The effect lives in the SWEEP, so it is most obvious ' +
+           'on sustained, harmonically rich sounds; on a short blip you mostly hear ' +
+           'a tonal colour. Raise Wet from 0 to hear it (must be ON).',
+    items: [
+      ['Rate', 'Speed of the sweep LFO (0.05–8 Hz). Slow = a long, lazy swoosh; ' +
+                'fast = a wobbly, vibrato-like churn.'],
+      ['Depth', 'How far the notches sweep (0–1). Wider depth = a more dramatic, ' +
+                'full-range swoosh; low depth = a narrow, subtle shimmer.'],
+      ['Feedback', 'Feeds the output back through the allpass bank (0–0.9), ' +
+                'sharpening the notches into resonant, whistling peaks. High values ' +
+                'are the most obvious phaser sound.'],
+      ['Wet', 'Mix of the phased copy against the dry (0–100%). The notches cancel ' +
+                'deepest near 100% — start there to hear the effect, then back off ' +
+                'to taste. At 0 the phaser is silent (pure dry).'],
     ],
   },
 };
@@ -1138,10 +1244,12 @@ export class ManualOverlay {
    * @param {string} tabKey       — active tab name
    * @param {string} [machineType] — for the SYNTH tab, the loaded machine's
    *   type; selects a per-machine section if one exists in MACHINE_MANUAL.
+   * @param {string} [fxType]      — for the FX tab, the selected block's type
+   *   (delay/crush/.../phaser/normalizer); shows that effect's own entry.
    */
-  show(tabKey, machineType) {
+  show(tabKey, machineType, fxType) {
     if (!this._el) this._build();
-    this._render(tabKey, machineType);
+    this._render(tabKey, machineType, fxType);
     this._el.style.display = 'flex';
     document.addEventListener('keydown', this._onKey);
   }
@@ -1154,14 +1262,18 @@ export class ManualOverlay {
 
   isOpen() { return !!this._el && this._el.style.display === 'flex'; }
 
-  _render(tabKey, machineType) {
+  _render(tabKey, machineType, fxType) {
     const box = this._box;
     box.innerHTML = '';
 
-    // SYNTH tab: prefer a per-machine section, fall back to the generic one.
-    const content = (tabKey === 'synth' && machineType && MACHINE_MANUAL[machineType])
-      ? MACHINE_MANUAL[machineType]
-      : MANUAL_CONTENT[tabKey];
+    // FX tab with a block selected → that effect's own entry. Otherwise:
+    // SYNTH tab prefers a per-machine section, else the generic tab entry.
+    const onFxTab = tabKey === 'fx';
+    const content = (onFxTab && fxType && MANUAL_CONTENT[fxType])
+      ? MANUAL_CONTENT[fxType]
+      : (tabKey === 'synth' && machineType && MACHINE_MANUAL[machineType])
+        ? MACHINE_MANUAL[machineType]
+        : MANUAL_CONTENT[tabKey];
 
     // Header row: title + close button.
     const head = document.createElement('div');
@@ -1178,6 +1290,18 @@ export class ManualOverlay {
     close.addEventListener('click', () => this.hide());
     head.appendChild(close);
     box.appendChild(head);
+
+    // On the FX tab, a tip explaining the select/deselect → per-card manual flow.
+    if (onFxTab) {
+      const tip = document.createElement('p');
+      tip.className = 'manual-tip';
+      tip.textContent = fxType
+        ? 'Showing the manual for the selected effect. Click its tile again to ' +
+          'deselect, then reopen the manual for the FX-pipeline overview.'
+        : 'Showing the FX-pipeline overview. Select an effect tile, then reopen ' +
+          'the manual to read that effect\'s own page.';
+      box.appendChild(tip);
+    }
 
     if (!content) {
       const empty = document.createElement('p');

@@ -160,11 +160,10 @@ getVisibleSteps() {
   _resolveParamOwner(path) {
     if (path.startsWith('env.') || path.startsWith('fenv.')) return this.track.envelope;
     if (path.startsWith('filter.') || path === 'base.lpf' || path === 'base.hpf') return this.track.filter;
-    if (path.startsWith('delay.'))  return this.track.delayFX;
-    if (path.startsWith('crush.'))  return this.track.bitcrushFX;
-    if (path.startsWith('chorus.')) return this.track.chorusFX;
-    if (path.startsWith('reverb.')) return this.track.reverbFX;
     if (path.startsWith('arp.'))    return this.track.arp;
+    // FX blocks (base four by type prefix, added instances by 'fxN.' prefix).
+    const fxObj = this.track.fxObjForPath(path);
+    if (fxObj) return fxObj;
     return this.track.machine;
   }
 
@@ -196,10 +195,9 @@ getVisibleSteps() {
     const sources = [
       this.track.machine,
       this.track.filter,
-      this.track.delayFX,
-      this.track.bitcrushFX,
-      this.track.chorusFX,
-      this.track.reverbFX,
+      // All FX blocks (base four + added instances) — paths already namespaced
+      // by the FXInstance proxy for added ones.
+      ...this.track.getFXBlockIds().map(id => this.track.getFXBlock(id)),
     ];
     for (const src of sources) {
       for (const p of src.getParamList()) {

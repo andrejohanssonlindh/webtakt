@@ -146,15 +146,14 @@
             if (cfg.channel !== 0 && cfg.channel !== channel) return;
             cfg.ccMappings.forEach(m => {
               if (m.cc !== cc || !m.param) return;
-              // Normalise 0-127 → param range
+              // Normalise 0-127 → param range. Include FX blocks (base + added
+              // instances) via fxObjForPath so namespaced FX params map too.
               const sources = [
                 track.machine,
                 track.filter,
                 track.envelope,
-                track.delayFX,
-                track.bitcrushFX,
-                track.reverbFX,
-              ];
+                track.fxObjForPath?.(m.param),
+              ].filter(Boolean);
               for (const src of sources) {
                 const desc = src.getParamList?.().find(p => p.path === m.param);
                 if (desc) {
@@ -743,21 +742,18 @@
         _toggleHold();
         return;
       }
-      // Selected-track toggles: arp + the four FX bypasses.
+      // Selected-track toggles: arp + the four generic FX binds.
       if (e.code === kb.arp) {
         e.preventDefault();
         synthPanel.toggleArp();
         return;
       }
-      const fxKey = {
-        [kb.fxChorus]: 'chorusFX',
-        [kb.fxDelay]:  'delayFX',
-        [kb.fxCrush]:  'bitcrushFX',
-        [kb.fxReverb]: 'reverbFX',
-      }[e.code];
-      if (fxKey) {
+      // FX binds 1–4: toggle whichever FX block the SELECTED track maps each bind
+      // to (assigned per-track in the FX pane). Unassigned binds do nothing.
+      const fxBindNum = { [kb.fx1]: 1, [kb.fx2]: 2, [kb.fx3]: 3, [kb.fx4]: 4 }[e.code];
+      if (fxBindNum) {
         e.preventDefault();
-        synthPanel.toggleFx(fxKey);
+        synthPanel.toggleFxBind(fxBindNum);
         return;
       }
       // e.code is layout-independent and unaffected by Shift
