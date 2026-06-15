@@ -117,6 +117,75 @@ getVisibleSteps() {
     return this.steps.slice(start, start + STEPS_PER_PAGE);
   }
 
+  /**
+   * Move the trigger at `fromAbs` one slot in `dir` (+1 right / -1 left), wrapping
+   * at the pattern boundary (stepCount), with collision-push:
+   *   - If the adjacent slot is empty, the trigger slides into it (the in-between
+   *     steps are untouched — moving A right in `(A)()()(B)` lands `()(A)()(B)`).
+   *   - If the adjacent slot is occupied, the contiguous run of occupied steps in
+   *     front of it is pushed along by one until the first empty slot absorbs the
+   *     cascade. Steps beyond that first gap never move.
+   * "Occupied" = step.active. Wrap is over the whole pattern (mod stepCount), so
+   * the last step moves to the first and vice-versa — never page-local.
+   *
+   * Operates on whole Step objects (then reindexes) so a step's notes, p-locks,
+   * condition, etc. travel together.
+   *
+   * @param {number} fromAbs  absolute index of the step to move (0 .. stepCount-1)
+   * @param {number} dir      +1 (right) or -1 (left)
+   * @returns {number} the new absolute index of the moved step (== fromAbs if the
+   *                   move was a no-op, e.g. pattern full in that direction)
+   */
+  moveStep(fromAbs, dir) {
+    const n = this.stepCount;
+    if (n <= 1) return fromAbs;
+    const step = (dir > 0) ? 1 : -1;
+    const to   = ((fromAbs + step) % n + n) % n;
+
+    // Walk from the destination onward (wrapping) to the first empty slot. Stop if
+    // we loop all the way back to `fromAbs` — the pattern is full, nothing moves.
+    let gap = to;
+    while (this.steps[gap].active) {
+      const next = ((gap + step) % n + n) % n;
+      if (next === fromAbs) return fromAbs;   // no empty slot ahead → no-op
+      gap = next;
+    }
+
+    // Rotate the chain [fromAbs → … → gap] (in `dir` order) by one: the gap (empty)
+    // is pulled back to fromAbs, every occupied step in between shifts one toward
+    // the gap, and the moved step lands on `to`.
+    const empty = this.steps[gap];          // the empty slot that absorbs the cascade
+    let cur = gap;
+    while (cur !== fromAbs) {
+      const prev = ((cur - step) % n + n) % n;
+      this.steps[cur] = this.steps[prev];
+      cur = prev;
+    }
+    this.steps[fromAbs] = empty;            // vacated origin holds the now-empty step
+    for (let i = 0; i < this.steps.length; i++) this.steps[i].index = i;
+    return to;
+  }
+
+  /**
+   * Rotate the WHOLE pattern by one step in `dir` (+1 right / -1 left). The step
+   * that falls off one end wraps to the other. Used by the TRIG SHIFT buttons /
+   * ←→ keys when no step is selected. Operates on whole Step objects + reindexes.
+   * @param {number} dir  +1 (right) or -1 (left)
+   */
+  shiftAll(dir) {
+    const count = this.stepCount;
+    if (count <= 1) return;
+    if (dir > 0) {
+      const last = this.steps[count - 1];
+      for (let i = count - 1; i > 0; i--) { this.steps[i] = this.steps[i - 1]; this.steps[i].index = i; }
+      this.steps[0] = last; last.index = 0;
+    } else {
+      const first = this.steps[0];
+      for (let i = 0; i < count - 1; i++) { this.steps[i] = this.steps[i + 1]; this.steps[i].index = i; }
+      this.steps[count - 1] = first; first.index = count - 1;
+    }
+  }
+
   start() {
     this.clock.register(this._tickBound);
   }
@@ -388,7 +457,7 @@ getVisibleSteps() {
     };
 
     const arp = this.track.arp;
-    // Input modes ('input' / 'input-manual') are keyboard-driven (LiveArp), NOT
+    // Input modes ('input' / 'input-manual' / 'input-random') are keyboard-driven (LiveArp), NOT
     // step-triggered — their buildEvents() returns []. So steps must fire NORMALLY
     // in those modes (this is also how recorded input-arp notes play back). Only
     // chord/manual/random fan a step through the arp.

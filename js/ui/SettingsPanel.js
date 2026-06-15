@@ -42,6 +42,8 @@ const KEYBIND_ACTIONS = [
   { id: 'arp',      label: 'Arp on/off (sel. track)' },
   { id: 'octaveUp',   label: 'Keyboard octave +' },
   { id: 'octaveDown', label: 'Keyboard octave −' },
+  { id: 'moveLeft',   label: 'Shift step ◀' },
+  { id: 'moveRight',  label: 'Shift step ▶' },
   // Four generic FX binds. Each track assigns these to FX blocks in the FX pane;
   // the key toggles the assigned block on the selected track. Defaults C/V/B/N.
   { id: 'fx1',      label: 'FX bind 1 (sel. track)' },

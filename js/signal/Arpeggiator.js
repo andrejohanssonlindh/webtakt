@@ -27,6 +27,11 @@
  *              key; later steps are relative semitone moves. With a chord held, the
  *              step figure runs from each held note in parallel (all at once). Driven
  *              by LiveArp like 'input'; the sequencer does NOT trigger it.
+ *   'input-random' — LIVE keyboard-driven version of 'random'. Same generator
+ *              (note count + ±range + rate + gate + variance) as random mode, but
+ *              each random note is rolled around a live-held key instead of a
+ *              sequencer root. Re-rolled every cycle. Driven by LiveArp like 'input';
+ *              the sequencer does NOT trigger it.
  *
  * Chord mode: trig length comes from the step voice length (same as a normal note).
  * Manual mode: per-step gate override in ms; 0 = use base step length.
@@ -45,7 +50,7 @@
  * Parameters (flat object, serialisable)
  * ───────────────────────────────────────
  *   enabled        boolean  false
- *   mode           string   'chord' | 'manual' | 'random' | 'input' | 'input-manual'
+ *   mode           string   'chord' | 'manual' | 'random' | 'input' | 'input-manual' | 'input-random'
  *
  *   -- chord mode --
  *   chord          string   chord type key (see CHORD_DEFS)
@@ -204,7 +209,7 @@ export class Arpeggiator {
    */
   isLiveInputMode() {
     const m = this._params.mode;
-    return m === 'input' || m === 'input-manual';
+    return m === 'input' || m === 'input-manual' || m === 'input-random';
   }
 
   /** Add a manual step at the end. */
@@ -298,6 +303,9 @@ export class Arpeggiator {
     if (this._params.mode === 'input-manual') {
       return this._buildInputManualCycle(held, t0);
     }
+    if (this._params.mode === 'input-random') {
+      return this._buildInputRandomCycle(held, t0);
+    }
 
     const p       = this._params;
     const ordered = this._applyPattern(held);  // preserves {note,velocity} objects
@@ -364,6 +372,47 @@ export class Arpeggiator {
 
     // One root's figure defines the cycle length — they all share it (parallel).
     const cycleSec = Math.max(0.001, offset);
+    return { events, cycleSec };
+  }
+
+  /**
+   * Input-random cycle: the random-mode generator (note count + ±range + rate +
+   * gate + variance) driven by the LIVE-held keys instead of a sequencer root.
+   * Each of the `noteCount` notes picks a random held key as its root and offsets
+   * it by a random ±range semitone amount, then the notes are spaced exactly like
+   * random mode (equal gap + variance on the middle notes). Re-rolled every cycle,
+   * so holding a key (or chord) yields an ever-changing random run around it.
+   *
+   * @param {{note:number,velocity:number}[]} held  held notes, each with velocity
+   * @param {number} t0  AudioContext time of the first note
+   * @returns {{events: Array<{note,velocity,time,offTime}>, cycleSec: number}}
+   */
+  _buildInputRandomCycle(held, t0) {
+    const p       = this._params;
+    const count   = Math.max(2, Math.min(8, Math.round(p.noteCount)));
+    const range   = Math.max(1, Math.round(p.range));
+    const gapSec  = this._gapSec(p.syncMode, p.speed, p.bpmCount32);
+    const gateSec = this._gateSec(gapSec, p.rGate);
+
+    const events = [];
+    let   cursor = t0;
+    for (let i = 0; i < count; i++) {
+      // Pick a random held key as this note's root, then offset by ±range.
+      const root     = held[Math.floor(Math.random() * held.length)];
+      const interval = Math.round((Math.random() * 2 - 1) * range);
+      const note     = Math.max(0, Math.min(127, root.note + interval));
+
+      const isMiddle = i > 0 && i < count - 1;
+      let effectiveGap = gapSec;
+      if (isMiddle && p.variance > 0) {
+        effectiveGap += gapSec * p.variance * 0.5 * (Math.random() * 2 - 1);
+        effectiveGap  = Math.max(effectiveGap, 0.001);
+      }
+      events.push({ note, velocity: root.velocity, time: cursor, offTime: cursor + gateSec });
+      cursor += effectiveGap;
+    }
+
+    const cycleSec = count * gapSec;
     return { events, cycleSec };
   }
 

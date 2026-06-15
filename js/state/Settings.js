@@ -14,10 +14,12 @@
  *   modWheelSensitivity — scroll → mod-wheel travel multiplier (0.1–3.0, 1 = the
  *                        historical 300px-per-full-range feel). Lower = calmer.
  *   keybinds           — { play, record, stopAll, manual, hold, arp, octaveUp,
- *                        octaveDown, fx1, fx2, fx3, fx4 }: each an `event.code`
- *                        string (layout-independent). Handled in index.html
- *                        keydown. arp toggles the arp; octaveUp/octaveDown shift
- *                        the on-screen keyboard octave; fx1..fx4 are four generic
+ *                        octaveDown, moveLeft, moveRight, fx1, fx2, fx3, fx4 }: each
+ *                        an `event.code` string (layout-independent). Handled in
+ *                        index.html keydown. arp toggles the arp; octaveUp/octaveDown
+ *                        shift the on-screen keyboard octave; moveLeft/moveRight shift
+ *                        one step — moving the selected trigger, or rotating the whole
+ *                        pattern when no step is selected; fx1..fx4 are four generic
  *                        FX binds, each toggling whatever FX block the SELECTED
  *                        track maps it to (assigned per track in the FX pane —
  *                        see Track._fxBinds). Track keys (not rebindable):
@@ -70,6 +72,10 @@ export const DEFAULTS = Object.freeze({
     // On-screen keyboard octave shift (mirrors the OCT+/OCT- buttons).
     octaveUp:   'ArrowUp',
     octaveDown: 'ArrowDown',
+    // Shift one step left/right (mirrors the TRIG ◀/▶ buttons): moves the selected
+    // trigger, or rotates the whole pattern when no step is selected.
+    moveLeft:   'ArrowLeft',
+    moveRight:  'ArrowRight',
     // Four generic FX binds. Each track assigns these to specific FX blocks
     // (FX pipeline pane) — pressing the key toggles the assigned block on the
     // SELECTED track only. Defaults keep the old C/V/B/N keys.

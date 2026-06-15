@@ -181,8 +181,17 @@ export const MANUAL_CONTENT = {
       ['CONDITION', 'Step-only. Makes the step fire only on certain pattern ' +
                  'repetitions (e.g. "2:4" = fires on 2 out of every 4 passes). ' +
                  '"—" means always. Enables evolving, non-looping patterns.'],
-      ['◀ SHIFT / SHIFT ▶', 'Rotate all steps in the pattern one position left or ' +
-                 'right. The step that falls off one end wraps to the other.'],
+      ['◀ SHIFT / SHIFT ▶', 'No-step view: rotate the whole pattern one position ' +
+                 'left or right (the step that falls off one end wraps to the other). ' +
+                 'The ← / → keys do the same when no step is selected.'],
+      ['◀ MOVE / MOVE ▶', 'Step-selected view: move just the selected trigger one ' +
+                 'slot. It slides into an adjacent empty slot (other notes stay put); ' +
+                 'if the next slot is taken, the run of notes in front of it is pushed ' +
+                 'along by one until the first gap. Wraps around the whole pattern ' +
+                 '(last step → first), not per page, so on a 32-step pattern step 16 ' +
+                 'moves to 17 and the view follows to the next page. Selection follows ' +
+                 'the trigger. The ← / → keys do the same (both buttons and keys ' +
+                 'rebindable / shared in Settings).'],
       ['FILL PAGE (1/16 · 1/8 · 1/4 · 1/2)', 'Quick drum-fill. Stamps C4 onto the ' +
                  'current page at a note division: 1/16 = every step, 1/8 = every ' +
                  '2nd, 1/4 = every 4th (four-on-the-floor), 1/2 = every 8th. Pressing ' +
@@ -237,6 +246,11 @@ export const MANUAL_CONTENT = {
                  'the key you hold instead of a sequencer step: step 1 is the held note, ' +
                  'later steps are semitone moves from it. Hold a chord and the figure ' +
                  'runs from each held note at the same time. RECORD captures it too.'],
+      ['Mode: INPUT RANDOM', 'Live keyboard-driven version of RANDOM. The same ' +
+                 'generator (NOTES count, RANGE ±, RATE, GATE, VARIANCE) rolls its ' +
+                 'random run around the key(s) you hold instead of a sequencer root, ' +
+                 're-rolled every cycle. Hold a chord and each random note picks one ' +
+                 'of the held keys as its centre. RECORD captures it too.'],
       ['PATTERN', 'Direction the arp traverses its notes: Up, Down, UpDown, or Random.'],
       ['RATE', 'How fast the arp fires notes. Double-click the knob centre to toggle ' +
                  'MS↔BPM mode. In BPM mode it snaps to musical divisions (e.g. 1/8, ' +

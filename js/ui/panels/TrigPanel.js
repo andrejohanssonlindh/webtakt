@@ -266,42 +266,27 @@ export class TrigPanel {
     activeWidgets.push(lengthKnob, chanceKnob, toneKnob, velKnob);
 
     // ── Shift buttons (always visible) ──────────────────────
+    // Two scopes, chosen by whether a step is selected:
+    //   No step → rotate the WHOLE track by one step (wrap-around).
+    //   Step selected → MOVE just that trigger one slot, with collision-push and
+    //     pattern-wide wrap.
+    // Both are handled by the shared 'moveSelectedStep' coordinator (index.html),
+    // which branches on selection — so these buttons and the ←/→ keybind take
+    // exactly the same path. See Sequencer.moveStep / Sequencer.shiftAll.
     const shiftRow = document.createElement('div');
     shiftRow.className = 'trig-btn-row';
 
+    const doShift = dir => state.emit('moveSelectedStep', { dir });
+
     const shiftBwd = document.createElement('button');
     shiftBwd.className = 'btn';
-    shiftBwd.textContent = '◀ SHIFT';
-    shiftBwd.addEventListener('click', () => {
-      const seq   = track.sequencer;
-      const count = seq.stepCount;
-      const first = seq.steps[0];
-      for (let i = 0; i < count - 1; i++) {
-        seq.steps[i] = seq.steps[i + 1];
-        seq.steps[i].index = i;
-      }
-      seq.steps[count - 1] = first;
-      first.index = count - 1;
-      state.emit('stepChanged', { trackIndex: state.selectedTrackIndex, stepIndex: -1, step: null });
-      renderContent();
-    });
+    shiftBwd.textContent = hasStep ? '◀ MOVE' : '◀ SHIFT';
+    shiftBwd.addEventListener('click', () => doShift(-1));
 
     const shiftFwd = document.createElement('button');
     shiftFwd.className = 'btn';
-    shiftFwd.textContent = 'SHIFT ▶';
-    shiftFwd.addEventListener('click', () => {
-      const seq   = track.sequencer;
-      const count = seq.stepCount;
-      const last  = seq.steps[count - 1];
-      for (let i = count - 1; i > 0; i--) {
-        seq.steps[i] = seq.steps[i - 1];
-        seq.steps[i].index = i;
-      }
-      seq.steps[0] = last;
-      last.index = 0;
-      state.emit('stepChanged', { trackIndex: state.selectedTrackIndex, stepIndex: -1, step: null });
-      renderContent();
-    });
+    shiftFwd.textContent = hasStep ? 'MOVE ▶' : 'SHIFT ▶';
+    shiftFwd.addEventListener('click', () => doShift(+1));
 
     shiftRow.appendChild(shiftBwd);
     shiftRow.appendChild(shiftFwd);
@@ -359,8 +344,20 @@ export class TrigPanel {
     });
     panel.appendChild(fillRow);
 
-    // ── No-step section: QUANTIZE knob + Note Follow ────────
+    // ── No-step section: QUANTIZE / FLW DLY / Note Follow ────
+    // These track-wide (no-step) controls live in a SEPARATE right-hand column so
+    // the otherwise-empty right side of the pane is used and the left column stays
+    // short of the scroll height. The column is a sibling of .trig-panel; the
+    // wrapping flex .panel-content places it to the right when there's room.
     if (!hasStep) {
+      const sideCol = document.createElement('div');
+      sideCol.className = 'trig-side-col';
+
+      const sideLabel = document.createElement('span');
+      sideLabel.className = 'trig-fill-label label';
+      sideLabel.textContent = 'TRACK';
+      sideCol.appendChild(sideLabel);
+
       const noStepRow = document.createElement('div');
       noStepRow.className = 'trig-knobs-row';
 
@@ -397,7 +394,7 @@ export class TrigPanel {
       noStepRow.appendChild(followDelayKnob.el);
       activeWidgets.push(followDelayKnob);
 
-      panel.appendChild(noStepRow);
+      sideCol.appendChild(noStepRow);
 
       // ── Note Follow dropdown ─────────────────────────────
       const followRow = document.createElement('div');
@@ -433,14 +430,15 @@ export class TrigPanel {
 
       followRow.appendChild(followLabel);
       followRow.appendChild(followSel);
-      panel.appendChild(followRow);
+      sideCol.appendChild(followRow);
 
       const msg = document.createElement('div');
       msg.className = 'trig-no-step';
       msg.textContent = 'Select a step to edit note and condition';
-
       panel.appendChild(msg);
+
       container.appendChild(panel);
+      container.appendChild(sideCol);
       return;
     }
 

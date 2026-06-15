@@ -9,6 +9,8 @@
  *   Random — note count, range, speed/sync, variance
  *   Input  — LIVE keyboard-driven: hold keys to arp them (pattern/rate/gate/variance).
  *            No chord type — the held keys are the chord. RECORD captures them to steps.
+ *   Input Random — LIVE keyboard-driven random: same generator as Random mode
+ *            (note count / range / rate / gate / variance) rolled around held keys.
  *
  * An ON/OFF toggle at the top enables/disables the arp without clearing its settings.
  *
@@ -128,7 +130,7 @@ export class ArpPanel {
 
     // Mode selector: sequencer-driven modes on the top row, the two live
     // keyboard-driven (input) modes on a second row below.
-    const isInputMode = m => m === 'input' || m === 'input-manual';
+    const isInputMode = m => m === 'input' || m === 'input-manual' || m === 'input-random';
     const pickMode = m => {
       arp.setParam('mode', m);
       if (!isInputMode(m)) {
@@ -156,7 +158,11 @@ export class ArpPanel {
     headerRow.appendChild(makeModeRow(['chord', 'manual', 'random']));
     this.container.appendChild(headerRow);
     this.container.appendChild(
-      makeModeRow(['input', 'input-manual'], { 'input-manual': 'INPUT MANUAL' }, 'arp-mode-wrap-input')
+      makeModeRow(
+        ['input', 'input-manual', 'input-random'],
+        { 'input-manual': 'INPUT MANUAL', 'input-random': 'INPUT RANDOM' },
+        'arp-mode-wrap-input'
+      )
     );
 
     // ── Mode content ────────────────────────────────────────────────────────
@@ -166,6 +172,7 @@ export class ArpPanel {
     if (mode === 'random')       this._renderRandom();
     if (mode === 'input')        this._renderInput();
     if (mode === 'input-manual') this._renderInputManual();
+    if (mode === 'input-random') this._renderInputRandom();
   }
 
   // ── Chord mode ─────────────────────────────────────────────────────────────
@@ -269,6 +276,14 @@ export class ArpPanel {
   // (no hint — the behaviour is documented in the in-app manual).
   _renderInputManual() {
     this._renderManual();
+  }
+
+  // ── Input-random mode (live keyboard-driven random) ──────────────────────────
+  // Same generator UI as random mode (NOTES / RANGE / rate / gate / variance), but
+  // the random run is rolled around the live-held key(s) instead of a sequencer
+  // root. Reuses _renderRandom directly — behaviour is documented in the manual.
+  _renderInputRandom() {
+    this._renderRandom();
   }
 
   _renderManual() {

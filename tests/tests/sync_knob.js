@@ -132,6 +132,41 @@ suite('Sync knob (MS/BPM unified)', () => {
     assert.ok(stepEvents.length === 0, 'input mode is not step-triggered');
   });
 
+  test('Arpeggiator: input-random buildInputCycle (notes around held roots, cycle len)', async () => {
+    const { track } = await makeOfflineTrack('synth', 0.1);
+    const arp = track.arp;
+    arp.setBpm(120);
+    arp.setParam('mode', 'input-random');
+    arp.setParam('syncMode', 'bpm');
+    arp.setParam('bpmCount32', 4);   // 1/8 = 0.25s gap @120
+    arp.setParam('variance', 0);
+    arp.setParam('rGate', 0);
+    arp.setParam('noteCount', 5);
+    arp.setParam('range', 3);
+
+    const held = [{ note: 60, velocity: 100 }, { note: 72, velocity: 90 }]; // C4, C5
+    const { events, cycleSec } = arp.buildInputCycle(held, 0);
+
+    assert.ok(events.length === 5, 'noteCount events generated');
+    assert.near(cycleSec, 5 * 0.25, 1e-9, 'cycle length = noteCount * gap');
+    // Equal spacing (variance 0).
+    assert.near(events[1].time - events[0].time, 0.25, 1e-9, 'equal gap from bpm count');
+
+    // Every note must sit within ±range of one of the held roots and carry that
+    // root's velocity.
+    events.forEach(ev => {
+      const ok = held.some(h => Math.abs(ev.note - h.note) <= 3);
+      assert.ok(ok, `note ${ev.note} within ±range of a held root`);
+      const root = held.find(h => Math.abs(ev.note - h.note) <= 3);
+      assert.ok(ev.velocity === root.velocity, 'note inherits its root velocity');
+    });
+
+    // Steps must NOT trigger input-random — buildEvents returns nothing.
+    const stepEvents = arp.buildEvents(60, 100, 0, 0.5, 0.5);
+    assert.ok(stepEvents.length === 0, 'input-random is not step-triggered');
+    assert.ok(arp.isLiveInputMode(), 'input-random reports as a live input mode');
+  });
+
   test('Arpeggiator: input mode fires steps normally (recorded notes play back)', async () => {
     // Regression: a step recorded by the live-input arp must still play on
     // playback. Input mode's buildEvents() returns [], so _fireStep must route

@@ -632,6 +632,45 @@
       stepGrid._build();
     }
 
+    // ── SHIFT one step in `dir` — scope depends on selection (TRIG buttons + ←→) ──
+    // Shared coordinator for both scopes:
+    //   No step selected → rotate the WHOLE pattern (Sequencer.shiftAll, wrap-around).
+    //   Step selected     → MOVE just that trigger (Sequencer.moveStep — collision-
+    //     push + pattern-wide wrap), following it across a page boundary and keeping
+    //     it selected so repeated presses keep nudging the same note.
+    function _shiftSelected(dir) {
+      const seq = state.selectedTrack.sequencer;
+
+      if (state.selectedStepIndex < 0) {
+        // Whole-track rotation.
+        seq.shiftAll(dir);
+        stepGrid._build();
+        state.emit('stepChanged', { trackIndex: state.selectedTrackIndex, stepIndex: -1, step: null });
+        return;
+      }
+
+      // Per-trigger move.
+      const fromAbs = seq.pageOffset * 16 + state.selectedStepIndex;
+      if (!seq.steps[fromAbs]?.active) return;     // nothing to move (empty slot)
+      const toAbs   = seq.moveStep(fromAbs, dir);
+      if (toAbs === fromAbs) return;               // no-op (pattern full that way)
+
+      const newPage = Math.floor(toAbs / 16);
+      if (newPage !== seq.pageOffset) {
+        seq.pageOffset = newPage;
+        _updatePageCounter();
+        _lastHighlight = -1;
+      }
+      stepGrid._build();
+      // Reselect the moved trigger at its new visible index (emits stepSelected →
+      // grid + TRIG panel re-render). Clear first so selectStep never sees the new
+      // index as "same as current" and toggles the selection off (can happen when a
+      // cross-page move lands on the same visible slot it left).
+      state.selectedStepIndex = -1;
+      state.selectStep(toAbs - newPage * 16);
+    }
+    state.on('moveSelectedStep', ({ dir }) => _shiftSelected(dir));
+
     function _closeLengthPopup() {
       lengthPopup.style.display = 'none';
       document.removeEventListener('pointerdown', _popupOutsideClick);
@@ -763,6 +802,18 @@
       if (e.code === kb.octaveDown) {
         e.preventDefault();
         keyboard.shiftOctave(-1);
+        return;
+      }
+      // Shift one step left/right: moves the selected trigger, or rotates the whole
+      // pattern when no step is selected.
+      if (e.code === kb.moveLeft) {
+        e.preventDefault();
+        _shiftSelected(-1);
+        return;
+      }
+      if (e.code === kb.moveRight) {
+        e.preventDefault();
+        _shiftSelected(+1);
         return;
       }
       // FX binds 1–4: toggle whichever FX block the SELECTED track maps each bind

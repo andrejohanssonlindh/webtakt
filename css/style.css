@@ -2034,7 +2034,23 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  width: 100%;
+  /* Was width:100% (single full-width column). Now a bounded left column so the
+     no-step TRACK controls (.trig-side-col) can wrap to its right inside the
+     wrapping flex .panel-content. Grows to fill when no side column is present. */
+  flex: 1 1 320px;
+  min-width: 280px;
+}
+
+/* Right-hand column for the track-wide no-step controls (QUANTIZE / FLW DLY /
+   NOTE FOLLOW). Sits beside .trig-panel when the pane is wide enough; wraps
+   below it on narrow panes. */
+.trig-side-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 0 1 220px;
+  min-width: 180px;
+  align-content: flex-start;
 }
 
 /* ── Voice cards in trig tab ───────────────────────────── */
@@ -4142,10 +4158,12 @@ body {
   align-items: center;
 }
 
-/* Second mode row: the two live keyboard-driven (input) modes, below the header.
+/* Second mode row: the live keyboard-driven (input) modes, below the header.
    Aligns under the top row and is separated by the same border as the header.
    align-items:center + the buttons' own padding keeps them at natural height —
-   without it the flex column parent stretches them to fill its full height. */
+   without it the flex column parent stretches them to fill its full height.
+   flex-wrap lets the (now three) input-mode buttons spill onto a second line on
+   a narrow panel rather than overflowing. */
 .arp-mode-wrap-input {
   padding: 4px 8px 6px;
   border-bottom: 1px solid var(--border);
@@ -4153,6 +4171,7 @@ body {
      ARP ON/OFF button + its gap). */
   padding-left: 78px;
   flex-shrink: 0;
+  flex-wrap: wrap;
   align-items: center;
 }
 
