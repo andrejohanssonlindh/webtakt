@@ -27,7 +27,7 @@
  * note-fire time from `<prefix>.<stage>.bpmCount32` (an integer count of 1/32
  * notes) via count32ToSeconds(count, bpm). The seconds param stays the source
  * of truth in 'ms' mode. Sustain has no duration, so it is never synced.
- * See js/util/BpmSync.js and design/sync-knob-rollout.md.
+ * See js/util/BpmSync.js and design/audio-signal-chain.md (Unified Sync-Knob Model).
  */
 
 import { count32ToSeconds } from '../util/BpmSync.js';

@@ -264,6 +264,60 @@ Two scheduling paths:
 
 ---
 
+## Unified Sync-Knob Model
+
+Every time/rate param that can lock to tempo uses **one mode-aware knob** (MS↔BPM,
+or HZ↔BPM for rate-domain params) instead of a separate ms knob + division
+dropdown. The knob's range + formatter swap with the mode; **clicking the knob
+center** toggles the mode (the body shows `MS`/`HZ`/`BPM`). Core helpers live in
+`js/util/BpmSync.js`; the KnobWidget primitives are `setRange` / `snapPoints` /
+`centerLabel` / `onCenterClick`.
+
+- **BPM granularity is a 1/32 count.** A synced param stores `*.bpmCount32` — an
+  integer count of 1/32 notes — plus a `*.syncMode` (`ms`/`bpm`, or `hz`/`bpm`).
+  `GRID_BASE` (=32, grid units per whole note) is the single resolution constant;
+  `GRID_UNIT_QN`, the snap points, and the division names all derive from it, so
+  one edit rescales the grid. Seconds = `count32ToSeconds(count, bpm)`; rate-domain
+  params (LFO/chorus/vibrato/sweep) treat the count as an oscillator **period** via
+  `count32ToHz(count, bpm)`.
+- **Display** shows the nearest division + 1/32 remainder (`5` → `1/8 + 1/32`);
+  clean divisions render clean (`8` → `1/4`). `formatCount32` handles this.
+- **Shift snaps to the next musical division** (`MUSICAL_SNAP_32`).
+- **FX/LFO knobs are continuous** (fractional counts via a `FINE_STEP` sub-grid);
+  envelopes/arp use integer counts.
+- **LFO in BPM mode is always continuous/native** — the LFO modulates the
+  underlying *seconds* AudioParam, never a JS-stepped value.
+- **Both modes are p-lockable**: ms-seconds via `audioParam`, the 1/32 count via
+  `plockMode: 'js'`; `syncMode` is p-lockable too. The two underlying params are
+  kept split per param so dispatch/serialisation layers stay untouched.
+
+**Where it's applied** (all migrated): DelayFX time, ReverbFX pre-delay, Arp rate
+(chord/random + per manual step), LFO rate (global + per-section), amp/filter
+envelope A/D/R (`env.*`/`fenv.*`, sustain excluded), Chorus rate, Strings vibrato
+rate, WT-sampler sweep rate, and **FM per-operator ADSR** (FM carries its own
+ADSR, parallel to `Envelope.js` — any machine with its own internal envelope needs
+the same per-stage treatment). BPM reaches machines via
+`Track.onBpmChanged → VoicePool.setBpm → machine.setBpm?.()`.
+
+**Rendering.** The generic `FXPanel._renderSync` (FX) and
+`DefaultMachinePanel._renderSyncKnob` (machines) auto-render any number param that
+has sibling `<base>.syncMode` + `<base>.bpmCount32` (BPM params marked `hidden`).
+Custom panels (Arp, LFO, ADSRWidget, FMPanel, WavetableSamplerPanel) carry their
+own `_makeSyncKnob` helper for the same model.
+
+**User-settable finest grid.** The Settings pane exposes a finest division
+(1/32 / 1/64 / 1/128). It does **not** change `GRID_BASE` (that would reinterpret
+every stored count). Instead `BpmSync.setSnapResolution(gridBase)` reassigns the
+live `MUSICAL_SNAP_32` array (prepending sub-1/32 targets) and lowers the FX
+knobs' `bpmMin` to reach them; stored counts stay in 1/32 units. `MUSICAL_SNAP_32`
+is an exported live `let` binding so panels read it fresh.
+
+**Back-compat.** Every migrated class maps legacy `*.bpmDiv` enum strings → 1/32
+count in `fromJSON` (via `divToCount32`) and deletes the legacy key. Covered by
+`tests/tests/sync_knob.js`.
+
+---
+
 ## Pan (Stereo Panner)
 
 Each track has a `StereoPannerNode` (`track.pannerNode`) inserted between `outputGain` and `fxBus`.

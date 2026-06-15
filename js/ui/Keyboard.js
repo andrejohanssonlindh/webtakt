@@ -128,37 +128,47 @@ export class Keyboard {
     state.on('scaleChanged',     () => { this._applyScale(); this._updateKeyLabels(); });
     state.on('trackSelected',    ({ prevTrack }) => {
       // If the previous track had hold on, leave the latched notes ringing —
-      // the voice pool slots are already claimed and will decay naturally.
-      // We just abandon _heldSlots (the slots keep the voices alive) and clear
-      // the keyboard's tracking state so the new track starts clean.
+      // the voice pool slots are already claimed and keep sounding. But DON'T
+      // just drop the slot references: stash them on the track so toggling hold
+      // off later (even after switching back) can still flush them. Abandoning
+      // them would orphan the voices, leaving STOP-ALL as the only way to stop
+      // a held note once you'd switched away from its track.
       // For live-arp input mode on the prev track, we DO stop the arp runner
       // (it would otherwise loop forever with no key to stop it).
       if (prevTrack?.held) {
-        // Don't send noteOffs — latched notes keep sounding through their pool slots.
-        // Just abandon _heldSlots; the voices are already claimed and will decay.
+        // Move the still-open keyboard voices into the track's latch stash,
+        // keyed by midi note. They keep ringing; _flushLatched(track) releases
+        // them when hold turns off or the track is switched back + flushed.
+        prevTrack._latchedVoices = prevTrack._latchedVoices ?? new Map();
+        for (const [note, voice] of this._heldSlots) {
+          prevTrack._latchedVoices.set(note, voice);
+        }
         this._heldSlots.clear();
       }
-      // Stop any free-running live-arp schedulers on track switch — but for held
-      // tracks, don't silence the pool (that would cut the notes). Use a targeted
-      // stop instead of releaseAll().
+      // Stop any free-running live-arp schedulers on track switch — but a HELD
+      // track keeps its arp looping. Hold latches the chord, so the arp should
+      // keep cycling those notes after you switch away (mirroring how a held
+      // non-arp chord keeps ringing, stashed into _latchedVoices above). Clearing
+      // its _held set / stopping the scheduler here was what made "hold" appear to
+      // release the moment you switched tracks with the arp on. LiveArp is owned by
+      // its own track and drives that track's own pool, so it's unaffected by which
+      // track is selected — leaving it running is safe. The latch is cleared when
+      // hold turns off (holdModeChanged) or via panic.
       this.state.project.tracks.forEach(t => {
         if (!t.liveArp) return;
-        if (t.held) {
-          // Stop the scheduler loop only — let already-scheduled notes finish.
-          if (t.liveArp._timerID !== null) {
-            clearTimeout(t.liveArp._timerID);
-            t.liveArp._timerID = null;
-          }
-          t.liveArp._held = [];
-        } else {
-          t.liveArp.releaseAll();
-        }
+        if (!t.held) t.liveArp.releaseAll();
       });
       this._heldKeys.clear();
       this._keyToNote.clear();
       this.keyboardEl.querySelectorAll('.key.held').forEach(k => k.classList.remove('held'));
       this._attachLiveArpHooks();  // cover any tracks added at runtime
       this._applyScale(); this._updateKeyLabels();
+      // Re-show the held-key highlights for the track we just switched TO if it
+      // still has notes latched (non-arp HOLD stash) or a looping arp under HOLD.
+      // Purely visual — the notes are owned by the track, not _heldKeys, so we
+      // don't repopulate _heldKeys (that would double-release on hold-off /
+      // mouse-up). _applyScale rebuilt the keys above, so paint after it.
+      this._restoreHeldVisuals(this.state.selectedTrack);
     });
     state.on('keyFoldingChanged',({ on }) => { this.keyFolding = on; this._applyScale(); this._updateKeyLabels(); });
     state.on('recordingChanged', ({ recording }) => {
@@ -221,8 +231,12 @@ export class Keyboard {
     });
 
     // Global STOP-ALL / panic — drop all held-key state + visual highlights.
+    // Track pools are hard-silenced elsewhere, so just drop the stale stash refs.
     state.on('panic', () => {
-      this.state.project.tracks.forEach(t => t.liveArp?.releaseAll());
+      this.state.project.tracks.forEach(t => {
+        t.liveArp?.releaseAll();
+        t._latchedVoices?.clear();
+      });
       this._recordNoteOnTime.clear();
       this._recordNoteOnStep.clear();
       this._heldSlots.clear();
@@ -233,11 +247,69 @@ export class Keyboard {
 
     // Hold mode: when turned off, flush all latched notes by running real note-offs
     // for everything still in _heldKeys. Snapshot first since _noteOff mutates the set.
-    state.on('holdModeChanged', ({ holdMode }) => {
+    // Also release any voices stashed on this track from a previous switch-away —
+    // hold can be toggled off on a track you'd latched then left, and those voices
+    // are no longer in _heldKeys/_heldSlots, only in the track's latch stash.
+    state.on('holdModeChanged', ({ holdMode, track }) => {
       if (!holdMode) {
         [...this._heldKeys].forEach(note => this._noteOff(note));
+        const tgt = track ?? this.state.selectedTrack;
+        this._flushLatched(tgt);
+        // A held arp track keeps looping after you switch away (see trackSelected).
+        // Its keys are no longer in _heldKeys, so the loop above won't reach the
+        // live arp — release it directly so turning hold off stops the background
+        // loop and lets the in-flight notes ring out their natural release.
+        if (tgt?.liveArp?.running) tgt.liveArp.releaseAll();
+        // Clear any held-key highlights restored by _restoreHeldVisuals on a
+        // switch-back — those keys aren't in _heldKeys, so _noteOff above never
+        // unpaints them. Hold-off means nothing is latched any more.
+        this.keyboardEl.querySelectorAll('.key.held').forEach(k => k.classList.remove('held'));
       }
     });
+  }
+
+  /**
+   * Release every voice stashed in a track's latch stash (notes that were held
+   * via HOLD mode then left ringing when the user switched away). Sends a real
+   * note-off + re-claims each slot for just its release tail so the pool can
+   * reuse it. No-op when the track has no stash.
+   * @param {import('../state/Track.js').Track} track
+   */
+  _flushLatched(track) {
+    const stash = track?._latchedVoices;
+    if (!stash || stash.size === 0) return;
+    const time = this.state.project.audio.context.currentTime + 0.015;
+    for (const voice of stash.values()) {
+      if (!voice) continue;
+      const envelope = voice.envelope ?? track.envelope;
+      const machine  = voice.machine  ?? track.machine;
+      const release  = envelope?.getParam('env.release') ?? 0.3;
+      voice.claim(time + release);
+      machine?.noteOff(time);
+      envelope?.noteOff(time);
+    }
+    stash.clear();
+  }
+
+  /**
+   * Re-apply the `.held` highlight to keys that the given track still has latched
+   * while HOLD is on — so switching back to a held track shows which notes are
+   * ringing. Visual only: it does NOT touch _heldKeys (those notes are owned by
+   * the track's latch stash / live arp, not the physical-key set). No-op unless
+   * the track is held. Notes:
+   *   • non-arp HOLD → keys live in track._latchedVoices (keyed by midi note)
+   *   • arp HOLD     → keys live in track.liveArp._held ([{note}])
+   * @param {import('../state/Track.js').Track} track
+   */
+  _restoreHeldVisuals(track) {
+    if (!track?.held) return;
+    const notes = new Set();
+    track._latchedVoices?.forEach((_, note) => notes.add(note));
+    track.liveArp?._held?.forEach(h => notes.add(h.note));
+    for (const note of notes) {
+      const keyEl = this.keyboardEl.querySelector(`.key[data-note="${note}"]`);
+      if (keyEl) keyEl.classList.add('held');
+    }
   }
 
   get _rootNote() {

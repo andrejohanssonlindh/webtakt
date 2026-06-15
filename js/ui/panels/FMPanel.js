@@ -12,7 +12,7 @@
  * ADSRWidget). In BPM mode the knob drives a 1/32 count (`${path}.bpmCount32`)
  * shown as "1/8", shift-snapping to musical divisions; FMMachine resolves it to
  * seconds at note-fire from the track BPM. Sustain has no duration → no toggle.
- * See js/machines/FMMachine.js and design/sync-knob-rollout.md.
+ * See js/machines/FMMachine.js and design/audio-signal-chain.md (Unified Sync-Knob Model).
  */
 
 import { KnobWidget } from '../KnobWidget.js';

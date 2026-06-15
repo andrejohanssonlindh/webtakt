@@ -63,9 +63,9 @@ export function formatParam(p, v) {
   if (p.path === 'filter.drift')     return Math.round(v / 0.08 * 100) + '%';
   if (p.path === 'filter.keytrack')  return Math.round(v * 100) + '%';
   if (p.path === 'env.velSens')      return Math.round(v * 100) + '%';
-  if (p.path === 'chorus.mix')       return Math.round(v * 100) + '%';
-  if (p.path === 'chorus.rate')      return v.toFixed(2) + 'Hz';
-  if (p.path === 'chorus.depth')     return Math.round(v * 100) + '%';
+  if (p.path.endsWith('chorus.mix'))   return Math.round(v * 100) + '%';
+  if (p.path.endsWith('chorus.rate'))  return v.toFixed(2) + 'Hz';
+  if (p.path.endsWith('chorus.depth')) return Math.round(v * 100) + '%';
   if (p.path === 'hum')              return Math.round(v * 100) + '%';
   if (p.path === 'humFreq')          return Math.round(v) + 'Hz';
   if (p.path === 'osc.detune')       return (v >= 0 ? '+' : '') + Math.round(v) + '¢';

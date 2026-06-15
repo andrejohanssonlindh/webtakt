@@ -123,7 +123,7 @@ export class FXPanel {
    * Render a unified MS/BPM sync control: one mode-aware knob + an MS/BPM
    * toggle. In MS mode the knob drives the seconds param (p-lockable); in BPM
    * mode it sweeps the 1/32-note grid (track-level), shift snapping to musical
-   * divisions. See design/sync-knob-rollout.md.
+   * divisions. See design/audio-signal-chain.md (Unified Sync-Knob Model).
    */
   _renderSync(ctx, fxObj, p, knobRow, fmtOverrides) {
     const { activeWidgets, knobByPath, state, fmtParam, renderContent } = ctx;
@@ -158,8 +158,9 @@ export class FXPanel {
       size:    64,
       fmt,
       snapPoints: isBpm ? p.bpmSnap : null,
-      // Click the knob center to toggle MS↔BPM. Center shows the current mode.
-      centerLabel: isBpm ? 'BPM' : 'MS',
+      // Double-click the knob center to toggle modes. Center shows the current
+      // mode; offLabel lets rate-style sync knobs read 'HZ' instead of 'MS'.
+      centerLabel: isBpm ? 'BPM' : (p.offLabel ?? 'MS'),
       onCenterClick: () => {
         fxObj.setParam(p.modePath, isBpm ? 'ms' : 'bpm');
         renderContent();   // rebuild so the knob picks up the new range/value

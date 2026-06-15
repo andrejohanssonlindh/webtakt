@@ -186,7 +186,7 @@ export class ReverbFX {
       // Unified MS/BPM sync knob for pre-delay. Both underlying params rebuild
       // the IR, so neither is modulatable — the knob is track-level in both
       // modes (no p-lock). Underlying params stay listed (hidden) for setParam
-      // dispatch / serialisation. See design/sync-knob-rollout.md.
+      // dispatch / serialisation. See design/audio-signal-chain.md (Unified Sync-Knob Model).
       {
         path: 'reverb.sync', label: 'Pre-dly', type: 'sync',
         modePath: 'reverb.syncMode',

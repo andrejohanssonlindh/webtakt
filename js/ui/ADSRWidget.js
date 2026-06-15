@@ -20,12 +20,12 @@
  *                stage durations on the canvas (default () => 120).
  *
  * Tempo-sync (per stage): A / D / R each show a clickable MS/BPM label in the
- * knob body — clicking the center (no drag) flips that stage's mode, matching
- * the FX delay knob. In BPM mode the stage stores a 1/32 count
+ * knob body — double-clicking the center (no drag) flips that stage's mode,
+ * matching the KnobWidget sync knobs (FX/Arp/LFO/FM). In BPM mode the stage stores a 1/32 count
  * (`${prefix}.${stage}.bpmCount32`) and its mode (`…​.syncMode`); the knob value
  * + display switch to the count (shown as "1/8"), while the canvas always plots
  * the resolved seconds so the shape stays readable. Sustain has no duration and
- * no mode label. See js/signal/Envelope.js and design/sync-knob-rollout.md.
+ * no mode label. See js/signal/Envelope.js and design/audio-signal-chain.md (Unified Sync-Knob Model).
  */
 
 import { formatCount32, count32ToSeconds, MUSICAL_SNAP_32 } from '../util/BpmSync.js';
@@ -405,7 +405,7 @@ export class ADSRWidget {
    * Write a stage from a target-seconds value, honouring its sync mode.
    * MS stages store raw seconds. BPM stages convert seconds → 1/32 count
    * (snapped to the nearest musical division when shift/ctrl held) so dragging
-   * a synced handle lands on clean divisions. See design/sync-knob-rollout.md.
+   * a synced handle lands on clean divisions. See design/audio-signal-chain.md (Unified Sync-Knob Model).
    */
   _setStageFromSeconds(key, secs, fine) {
     if (this._stageMode(key) !== 'bpm') { this._set(key, secs); return; }
@@ -533,6 +533,7 @@ export class ADSRWidget {
       this._knobs[key] = { ctx, c, valEl, lblEl, KS };
 
       let dragging = false, lastY = 0, downY = 0, downInCenter = false;
+      let lastClickTime = 0;   // for center double-click detection (mode toggle)
       const accent    = this._accent;
       const syncable  = this._isSyncable(key);
 
@@ -585,10 +586,19 @@ export class ADSRWidget {
         if (!dragging) return;
         const isClick = Math.abs((e?.clientY ?? downY) - downY) <= 4;
         if (isClick && downInCenter && syncable) {
-          // Center click (no meaningful drag) → toggle mode, don't fire release.
+          // Center DOUBLE-click (two clicks within 400ms, no meaningful drag) →
+          // toggle mode. Matches the KnobWidget sync knobs (FX/Arp/LFO/FM/etc.)
+          // so every MS/BPM knob in the app flips mode the same way.
+          const now = Date.now();
+          if (now - lastClickTime < 400) {
+            dragging = false;
+            lastClickTime = 0;
+            this._toggleStageMode(key);
+            return;
+          }
+          lastClickTime = now;
           dragging = false;
-          this._toggleStageMode(key);
-          return;
+          return;   // single center click: arm double-click, don't fire release
         }
         if (this._onRelease) this._onRelease();
         dragging = false;

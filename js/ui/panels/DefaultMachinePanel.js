@@ -9,6 +9,7 @@
  */
 
 import { KnobWidget } from '../KnobWidget.js';
+import { formatCount32, MUSICAL_SNAP_32 } from '../../util/BpmSync.js';
 
 export class DefaultMachinePanel {
   /**
@@ -25,8 +26,20 @@ export class DefaultMachinePanel {
   render(ctx) {
     const { machine, step, hasStep, container, activeWidgets, knobByPath, writeValue, emitStep, fmtParam } = ctx;
 
+    // Path set including hidden params, used to detect MS↔BPM sync trios:
+    // a visible rate knob `<base>.<x>` whose machine also exposes
+    // `<base>.syncMode` + `<base>.bpmCount32` is rendered as one mode-aware knob.
+    const allPaths = new Set(machine.getParamList().map(p => p.path));
+
     machine.getParamList().forEach(p => {
       if (p.hidden) return;
+
+      const base = p.path.includes('.') ? p.path.slice(0, p.path.lastIndexOf('.')) : null;
+      if (p.type === 'number' && base
+          && allPaths.has(`${base}.syncMode`) && allPaths.has(`${base}.bpmCount32`)) {
+        this._renderSyncKnob(ctx, p, base);
+        return;
+      }
 
       const hasPLock   = hasStep && step.plocks.has(p.path);
       const displayVal = hasPLock ? step.plocks.get(p.path) : machine.getParam(p.path);
@@ -98,5 +111,59 @@ export class DefaultMachinePanel {
         container.appendChild(row);
       }
     });
+  }
+
+  /**
+   * Render a unified MS↔BPM (here Hz↔BPM) sync knob for a machine rate param.
+   * Double-clicking the knob centre toggles `<base>.syncMode`; the body shows
+   * the current mode ('HZ'/'BPM'). In Hz mode the knob drives `<rateP>.path`
+   * (the raw Hz value); in BPM mode it drives `<base>.bpmCount32` (1/32 period
+   * count), shift-snapping to musical divisions. Both modes are p-lockable —
+   * `writeValue` routes to step.plocks when a step is selected, exactly like the
+   * FX delay sync knob. See design/audio-signal-chain.md (Unified Sync-Knob Model).
+   */
+  _renderSyncKnob(ctx, rateP, base) {
+    const { machine, track, step, hasStep, container, activeWidgets, knobByPath,
+            writeValue, emitStep, fmtParam, renderContent } = ctx;
+
+    const modePath  = `${base}.syncMode`;
+    const countPath = `${base}.bpmCount32`;
+    const countP    = machine.getParamList().find(x => x.path === countPath);
+    const isBpm     = machine.getParam(modePath) === 'bpm';
+
+    const activePath = isBpm ? countPath : rateP.path;
+    const min  = isBpm ? (countP?.min ?? 1)   : (rateP.min ?? 0);
+    const max  = isBpm ? (countP?.max ?? 128) : (rateP.max ?? 1);
+    const fmt  = isBpm ? (v => formatCount32(v)) : (v => fmtParam(rateP, v));
+
+    const hasPLock   = hasStep && step.plocks.has(activePath);
+    const displayVal = hasPLock ? step.plocks.get(activePath) : machine.getParam(activePath);
+
+    const knob = new KnobWidget({
+      label:   rateP.label,
+      min, max,
+      value:   displayVal ?? min,
+      size:    64,
+      fmt,
+      snapPoints:  isBpm ? MUSICAL_SNAP_32 : null,
+      centerLabel: isBpm ? 'BPM' : 'HZ',
+      onCenterClick: () => {
+        // Toggle on the machine directly (mode is a setting, not a per-step lock,
+        // matching FXPanel) and mirror to the non-canonical voice slots, then
+        // rebuild so the knob picks up the new range/value/label.
+        machine.setParam(modePath, isBpm ? 'hz' : 'bpm');
+        if (track && machine === track.machine) track._pool?.syncParams();
+        renderContent();
+      },
+      onChange: v => {
+        writeValue(machine, activePath, v, false);
+        knob.setHasPLock(hasStep);
+      },
+      onRelease: () => { if (hasStep) emitStep(); },
+    });
+    knob.setHasPLock(hasPLock);
+    container.appendChild(knob.el);
+    activeWidgets.push(knob);
+    knobByPath?.set(activePath, knob);
   }
 }

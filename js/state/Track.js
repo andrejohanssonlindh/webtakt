@@ -196,6 +196,11 @@ export class Track {
     this.clock   = clock;
     this.muted   = false;
     this.held    = false;   // true while keyboard/MIDI note-offs are suppressed for this track
+    // HOLD-mode latch stash: midiNote → VoiceSlot for notes left ringing when the
+    // user switched away from this (held) track. Filled by Keyboard on track
+    // switch, drained by Keyboard._flushLatched when hold turns off. Lets a held
+    // note be stopped after switching away without resorting to STOP-ALL.
+    this._latchedVoices = new Map();
     this.followSource = null;
 
     // The node this track's FX chain feeds into. Defaults to the shared master
@@ -851,6 +856,7 @@ export class Track {
   onBpmChanged(bpm) {
     this.delayFX.setBpm(bpm);
     this.reverbFX.setBpm(bpm);
+    this.chorusFX.setBpm(bpm);   // BBD chorus rate has Hz↔BPM sync
     // Added delay/reverb instances are tempo-synced too (setBpm is a no-op on
     // FX that don't sync).
     for (const id of this._fxOrder) {

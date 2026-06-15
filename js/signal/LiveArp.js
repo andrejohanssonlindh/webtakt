@@ -38,8 +38,6 @@ export class LiveArp {
     /** AudioContext time the next cycle should begin. */
     this._nextCycleTime = 0;
     this._timerID = null;
-    /** Latest oscOffTime scheduled — used to decide if the pool needs silencing on stop. */
-    this._lastOffTime = 0;
     /**
      * Optional capture hook: (note, velocity, lengthTicks) => void. Set by the
      * Keyboard so each fired note can be printed into the pattern while
@@ -113,11 +111,22 @@ export class LiveArp {
       clearTimeout(this._timerID);
       this._timerID = null;
     }
-    // Cancel all lookahead-scheduled notes by silencing the pool immediately.
-    // Without this, notes scheduled up to LOOKAHEAD_SEC (100ms) ahead keep playing
-    // after keys are released, making the arp feel unresponsive. The pool's silence()
-    // ramps to zero in ~5ms to avoid a click.
-    this.track._pool?.silence(this._ctx.currentTime);
+    // Stop scheduling new cycles — but DON'T silence the pool. Every note already
+    // fired (in _fireEvent) has its complete gate + release tail queued on the
+    // AudioParams at fire time, so letting the pool run lets those notes ring out
+    // their natural envelope, exactly like a sequenced note. A hard silence() here
+    // was the old behaviour and slammed every voice to zero in ~5ms, cutting the
+    // release tail dead — releasing keys (or switching tracks) felt like an abrupt
+    // chop instead of a musical fade. See note below on the overhang trade-off.
+    //
+    // Trade-off: notes scheduled into the LOOKAHEAD_SEC window but not yet started
+    // still fire after the last key is released (a tiny tail of arp notes). With a
+    // short lookahead that's at most a note or two, which reads as natural release
+    // rather than unresponsiveness — and it's the price of never cutting a tail.
+    //
+    // Panic / STOP-ALL still hard-kills everything: it goes through Track.silence()
+    // → pool.silence(), an independent path that does NOT rely on this method. So
+    // removing the silence here does not weaken the panic button.
   }
 
   _schedule() {
@@ -192,7 +201,6 @@ export class LiveArp {
 
     const release    = track.envelope?.getParam('env.release') ?? 0.3;
     const oscOffTime = ev.offTime + release;
-    if (oscOffTime > this._lastOffTime) this._lastOffTime = oscOffTime;
 
     const voice    = track._pool?.nextVoice(ev.time) ?? null;
     const machine  = voice?.machine  ?? track.machine;

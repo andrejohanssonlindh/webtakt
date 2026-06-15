@@ -19,7 +19,7 @@
  * ────────
  * When lfo.syncMode === 'bpm', the rate is expressed as an INTEGER COUNT of
  * 1/32 notes (lfo.bpmCount32 / lfo.adsr.<sec>.bpmCount32), matching the unified
- * sync-knob model (see js/util/BpmSync.js, design/sync-knob-rollout.md). The
+ * sync-knob model (see js/util/BpmSync.js, design/audio-signal-chain.md (Unified Sync-Knob Model)). The
  * 1/32 count is the LFO *period*, so Hz = 1 / count32ToSeconds(count, bpm).
  * In free Hz mode the speed knob sets Hz directly.
  *
@@ -40,12 +40,7 @@
  * Used by: Track.js, Sequencer.js (noteOn / noteOff calls)
  */
 
-import { count32ToSeconds, divToCount32 } from '../util/BpmSync.js';
-
-/** LFO rate from a 1/32 count: the count is the LFO period. */
-function count32ToHz(count32, bpm) {
-  return 1 / Math.max(count32ToSeconds(count32, bpm), 1e-6);
-}
+import { count32ToHz, divToCount32 } from '../util/BpmSync.js';
 
 export class LFO {
   /**

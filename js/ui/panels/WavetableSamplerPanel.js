@@ -15,6 +15,7 @@
  */
 
 import { KnobWidget } from '../KnobWidget.js';
+import { formatCount32, MUSICAL_SNAP_32 } from '../../util/BpmSync.js';
 
 const WAVE_H  = 96;  // canvas CSS height per slot
 const SNAP_PX = 10;  // pixel snap zone for handle pick-up
@@ -150,11 +151,29 @@ export class WavetableSamplerPanel {
     sweepRow.appendChild(sweepDepthKnob.el);
     this.ctx.activeWidgets.push(sweepDepthKnob);
 
+    // SWP SPEED is a unified Hz↔BPM sync knob: double-click the centre to flip
+    // mode. Hz mode drives sweep.speed; BPM mode drives sweep.bpmCount32 (1/32
+    // period count, shift-snaps to musical divisions). Both p-lockable via
+    // writeValue. See design/audio-signal-chain.md (Unified Sync-Knob Model).
+    const sweepBpm = m.getParam('sweep.syncMode') === 'bpm';
+    const sweepActivePath = sweepBpm ? 'sweep.bpmCount32' : 'sweep.speed';
     const sweepSpeedKnob = new KnobWidget({
-      label: 'SWP SPEED', min: 0.05, max: 20, size: 48,
-      value: m.getParam('sweep.speed'),
-      fmt: v => v < 1 ? v.toFixed(2) + 'Hz' : v.toFixed(1) + 'Hz',
-      onChange: v => this.ctx.writeValue(m, 'sweep.speed', v, false),
+      label: 'SWP SPEED', size: 48,
+      min: sweepBpm ? 1   : 0.05,
+      max: sweepBpm ? 128 : 20,
+      value: m.getParam(sweepActivePath),
+      fmt: sweepBpm
+        ? (v => formatCount32(v))
+        : (v => v < 1 ? v.toFixed(2) + 'Hz' : v.toFixed(1) + 'Hz'),
+      snapPoints:  sweepBpm ? MUSICAL_SNAP_32 : null,
+      centerLabel: sweepBpm ? 'BPM' : 'HZ',
+      onCenterClick: () => {
+        m.setParam('sweep.syncMode', sweepBpm ? 'hz' : 'bpm');
+        const trk = this.ctx.track;
+        if (trk && m === trk.machine) trk._pool?.syncParams();
+        this.ctx.renderContent?.();
+      },
+      onChange: v => this.ctx.writeValue(m, sweepActivePath, v, false),
       onRelease: () => this.ctx.emitStep?.(),
     });
     sweepRow.appendChild(sweepSpeedKnob.el);

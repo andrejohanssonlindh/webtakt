@@ -220,7 +220,7 @@ export class LFOPanel {
    * knob centre toggles lfo.syncMode for the whole LFO; the body shows the
    * current mode ('HZ'/'BPM'). In BPM mode the knob sweeps the 1/32 grid
    * continuously, and shift-drag/scroll snaps to musical divisions. See
-   * design/sync-knob-rollout.md.
+   * design/audio-signal-chain.md (Unified Sync-Knob Model).
    *
    * @param {LFO} lfo
    * @param {object} cfg

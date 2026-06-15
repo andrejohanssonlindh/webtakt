@@ -2,7 +2,7 @@
  * sync_knob.js — unified MS/BPM sync-knob model tests
  *
  * Guards the migration of synced time params from beat-division strings to the
- * integer 1/32-count model (see design/sync-knob-rollout.md). Covers DelayFX,
+ * integer 1/32-count model (see design/audio-signal-chain.md (Unified Sync-Knob Model)). Covers DelayFX,
  * ReverbFX, LFO and Arpeggiator: BPM-mode timing math, serialise round-trip,
  * and legacy `*.bpmDiv` → `*.bpmCount32` back-compat on load.
  */
@@ -304,6 +304,110 @@ suite('Sync knob (MS/BPM unified)', () => {
     t3.machine.fromJSON({ type: 'fm', params: { 'op1.env.a': 0.02 } });
     assert.ok(t3.machine.getParam('op1.env.a.syncMode') === 'ms', 'missing syncMode defaults to ms');
     assert.near(t3.machine._stageSeconds('op1', 'a'), 0.02, 1e-9, 'legacy stage = raw seconds');
+  });
+
+  test('Strings vibrato: Hz↔BPM sync resolves the vibrato LFO rate', async () => {
+    const { track } = await makeOfflineTrack('strings', 0.1);   // clock 120 BPM
+    const m = track.machine;
+    m.setBpm(120);
+
+    // Hz mode (default): rate is the raw Hz value.
+    m.setParam('vibrato.rate', 5);
+    assert.ok(m.getParam('vibrato.syncMode') === 'hz', 'defaults to hz');
+    assert.near(m._effectiveVibratoHz(), 5, 1e-9, 'hz mode = raw Hz');
+
+    // BPM mode: rate derives from the 1/32 PERIOD count (8 = 1/4 = 0.5s @120 → 2 Hz).
+    m.setParam('vibrato.syncMode', 'bpm');
+    m.setParam('vibrato.bpmCount32', 8);
+    assert.near(m._effectiveVibratoHz(), 2, 1e-6, 'bpm mode rate from count');
+
+    // Tempo change re-resolves live; the Hz param is untouched.
+    m.setBpm(60);   // 1/4 = 1.0s → 1 Hz
+    assert.near(m._effectiveVibratoHz(), 1, 1e-6, 'bpm rate follows tempo');
+    assert.near(m.getParam('vibrato.rate'), 5, 1e-9, 'hz param untouched in bpm mode');
+
+    // BPM reaches the machine through the track plumbing.
+    track.onBpmChanged(120);
+    assert.near(track.machine._effectiveVibratoHz(), 2, 1e-6, 'track BPM reaches strings machine');
+
+    // Round-trip the sync params; legacy project (no keys) defaults to hz.
+    const json = m.toJSON();
+    const { track: t2 } = await makeOfflineTrack('strings', 0.1);
+    t2.machine.fromJSON(json);
+    assert.ok(t2.machine.getParam('vibrato.syncMode') === 'bpm', 'syncMode round-trip');
+    assert.ok(t2.machine.getParam('vibrato.bpmCount32') === 8, 'count round-trip');
+
+    const { track: t3 } = await makeOfflineTrack('strings', 0.1);
+    t3.machine.fromJSON({ type: 'strings', params: { 'vibrato.rate': 7 } });
+    assert.ok(t3.machine.getParam('vibrato.syncMode') === 'hz', 'missing syncMode defaults to hz');
+    assert.near(t3.machine._effectiveVibratoHz(), 7, 1e-9, 'legacy rate = raw Hz');
+  });
+
+  test('WT-sampler sweep: Hz↔BPM sync resolves the sweep LFO rate', async () => {
+    const { track } = await makeOfflineTrack('wt-sampler', 0.1);   // clock 120 BPM
+    const m = track.machine;
+    m.setBpm(120);
+
+    m.setParam('sweep.speed', 4);
+    assert.ok(m.getParam('sweep.syncMode') === 'hz', 'defaults to hz');
+    assert.near(m._effectiveSweepHz(), 4, 1e-9, 'hz mode = raw Hz');
+
+    m.setParam('sweep.syncMode', 'bpm');
+    m.setParam('sweep.bpmCount32', 8);     // 1/4 = 0.5s @120 → 2 Hz
+    assert.near(m._effectiveSweepHz(), 2, 1e-6, 'bpm mode rate from count');
+
+    m.setBpm(60);                          // 1/4 = 1.0s → 1 Hz
+    assert.near(m._effectiveSweepHz(), 1, 1e-6, 'bpm rate follows tempo');
+    assert.near(m.getParam('sweep.speed'), 4, 1e-9, 'hz param untouched in bpm mode');
+
+    track.onBpmChanged(120);
+    assert.near(track.machine._effectiveSweepHz(), 2, 1e-6, 'track BPM reaches wt-sampler machine');
+
+    const json = m.toJSON();
+    const { track: t2 } = await makeOfflineTrack('wt-sampler', 0.1);
+    t2.machine.fromJSON(json);
+    assert.ok(t2.machine.getParam('sweep.syncMode') === 'bpm', 'syncMode round-trip');
+    assert.ok(t2.machine.getParam('sweep.bpmCount32') === 8, 'count round-trip');
+
+    const { track: t3 } = await makeOfflineTrack('wt-sampler', 0.1);
+    t3.machine.fromJSON({ type: 'wt-sampler', params: { 'sweep.speed': 6 } });
+    assert.ok(t3.machine.getParam('sweep.syncMode') === 'hz', 'missing syncMode defaults to hz');
+    assert.near(t3.machine._effectiveSweepHz(), 6, 1e-9, 'legacy rate = raw Hz');
+  });
+
+  test('Chorus FX: Hz↔BPM sync resolves the LFO rate (period→Hz)', async () => {
+    const { track } = await makeOfflineTrack('synth', 0.1);   // clock 120 BPM
+    const ch = track.chorusFX;
+    ch.setBpm(120);
+
+    ch.setParam('chorus.rate', 0.55);
+    assert.ok(ch.getParam('chorus.syncMode') === 'hz', 'defaults to hz');
+    assert.near(ch._effectiveRateHz(), 0.55, 1e-9, 'hz mode = raw Hz');
+
+    // BPM mode: count is the PERIOD. 16 = 1/2 = 1.0s @120 → 1 Hz.
+    ch.setParam('chorus.syncMode', 'bpm');
+    ch.setParam('chorus.bpmCount32', 16);
+    assert.near(ch._effectiveRateHz(), 1, 1e-6, 'bpm mode rate from period count');
+
+    ch.setBpm(60);   // 1/2 = 2.0s → 0.5 Hz
+    assert.near(ch._effectiveRateHz(), 0.5, 1e-6, 'bpm rate follows tempo');
+    assert.near(ch.getParam('chorus.rate'), 0.55, 1e-9, 'hz param untouched in bpm mode');
+
+    // BPM reaches the chorus through the track plumbing.
+    track.onBpmChanged(120);
+    assert.near(track.chorusFX._effectiveRateHz(), 1, 1e-6, 'track BPM reaches chorus');
+
+    // Round-trip; legacy project (no keys) defaults to hz.
+    const json = ch.toJSON();
+    const { track: t2 } = await makeOfflineTrack('synth', 0.1);
+    t2.chorusFX.fromJSON(json);
+    assert.ok(t2.chorusFX.getParam('chorus.syncMode') === 'bpm', 'syncMode round-trip');
+    assert.ok(t2.chorusFX.getParam('chorus.bpmCount32') === 16, 'count round-trip');
+
+    const { track: t3 } = await makeOfflineTrack('synth', 0.1);
+    t3.chorusFX.fromJSON({ params: { 'chorus.rate': 2 }, enabled: false });
+    assert.ok(t3.chorusFX.getParam('chorus.syncMode') === 'hz', 'missing syncMode defaults to hz');
+    assert.near(t3.chorusFX._effectiveRateHz(), 2, 1e-9, 'legacy rate = raw Hz');
   });
 
 });

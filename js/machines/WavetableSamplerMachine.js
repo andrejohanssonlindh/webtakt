@@ -19,6 +19,7 @@
  */
 
 import { Machine } from './Machine.js';
+import { count32ToHz } from '../util/BpmSync.js';
 
 const WORKLET_PATH = 'js/worklets/wavetable-sampler-processor.js';
 
@@ -44,10 +45,14 @@ export class WavetableSamplerMachine extends Machine {
       'sample.rootB':   60,
       'sample.loop':    false,
       'sample.reverse': false,
-      'sweep.depth':    0,      // 0–1 (fraction of 0–1 morph range)
-      'sweep.speed':    0.5,    // Hz
+      'sweep.depth':      0,      // 0–1 (fraction of 0–1 morph range)
+      'sweep.speed':      0.5,    // Hz (sweep.syncMode='hz')
+      'sweep.syncMode':   'hz',   // 'hz' | 'bpm'
+      'sweep.bpmCount32': 8,      // 1/32 period count (sweep.syncMode='bpm'); 8 = 1/4
       'output.level':   0.85,
     };
+
+    this._bpm = 120;   // current tempo, for resolving BPM-synced sweep rate
 
     this._bufferA    = null;
     this._bufferB    = null;
@@ -106,9 +111,32 @@ export class WavetableSamplerMachine extends Machine {
 
     this._sweepOsc = this.context.createOscillator();
     this._sweepOsc.type = 'sine';
-    this._sweepOsc.frequency.value = this._params['sweep.speed'];
+    this._sweepOsc.frequency.value = this._effectiveSweepHz();
     this._sweepOsc.connect(this._sweepGain);
     this._sweepOsc.start();
+  }
+
+  /**
+   * Resolve the sweep LFO rate in Hz from the current sync mode: the raw Hz
+   * value ('hz' mode) or the 1/32 period count + tempo ('bpm' mode).
+   */
+  _effectiveSweepHz() {
+    if (this._params['sweep.syncMode'] === 'bpm') {
+      return count32ToHz(this._params['sweep.bpmCount32'], this._bpm);
+    }
+    return this._params['sweep.speed'];
+  }
+
+  /** Write the resolved sweep rate to the LFO oscillator. */
+  _applySweepRate() {
+    if (!this._sweepOsc) return;
+    this._sweepOsc.frequency.setTargetAtTime(this._effectiveSweepHz(), this.context.currentTime, 0.02);
+  }
+
+  /** Track tempo changed — re-resolve the sweep rate if BPM-synced. */
+  setBpm(bpm) {
+    this._bpm = bpm;
+    if (this._params['sweep.syncMode'] === 'bpm') this._applySweepRate();
   }
 
   _teardownSweep() {
@@ -224,8 +252,10 @@ export class WavetableSamplerMachine extends Machine {
       // gain = depth * 0.5 so the osc swings ±depth/2 around the morph centre
       this._sweepGain.gain.setTargetAtTime(value * 0.5, this.context.currentTime, 0.02);
     }
-    if (path === 'sweep.speed' && this._sweepOsc) {
-      this._sweepOsc.frequency.setTargetAtTime(value, this.context.currentTime, 0.02);
+    // sweep.speed (Hz), sweep.bpmCount32 (period count) and sweep.syncMode all
+    // resolve through the same effective-rate helper so BPM mode wins when active.
+    if (path === 'sweep.speed' || path === 'sweep.bpmCount32' || path === 'sweep.syncMode') {
+      this._applySweepRate();
     }
   }
 
@@ -246,6 +276,9 @@ export class WavetableSamplerMachine extends Machine {
       { path: 'morph',          label: 'Morph',       type: 'number',  min: 0,     max: 1,   default: 0.5,  modulatable: true,  lfoMin: 0, lfoMax: 1,   plockMode: 'audioParam' },
       { path: 'sweep.depth',    label: 'Swp Depth',   type: 'number',  min: 0,     max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
       { path: 'sweep.speed',    label: 'Swp Speed',   type: 'number',  min: 0.05,  max: 20,  default: 0.5,  modulatable: false, plockMode: 'js' },
+      // BPM half of the Swp Speed sync knob (rendered together by the panel) — hidden from any generic flat list.
+      { path: 'sweep.syncMode',   label: 'Swp Sync', type: 'enum',   options: ['hz','bpm'], default: 'hz',         plockMode: 'js', hidden: true },
+      { path: 'sweep.bpmCount32', label: 'Swp Div',  type: 'number', min: 1, max: 128, default: 8, modulatable: false, plockMode: 'js', hidden: true },
       { path: 'sample.startA',     label: 'Start A',    type: 'number',  min: 0,     max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
       { path: 'sample.endA',       label: 'End A',      type: 'number',  min: 0,     max: 1,   default: 1,    modulatable: false, plockMode: 'js' },
       { path: 'sample.loopStartA', label: 'LpSt A',     type: 'number',  min: 0,     max: 1,   default: 0,    modulatable: false, plockMode: 'js' },

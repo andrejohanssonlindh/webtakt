@@ -3,7 +3,7 @@
  * ----------
  * Shared BPM-sync utilities.
  *
- * The unified sync-knob model (see design/sync-knob-rollout.md) expresses BPM
+ * The unified sync-knob model (see design/audio-signal-chain.md (Unified Sync-Knob Model)) expresses BPM
  * mode as a COUNT of 1/GRID_BASE-of-a-whole-note grid units. Active API used by
  * DelayFX, ReverbFX, LFO and Arpeggiator:
  *   count32ToSeconds(count, bpm)  — grid count → wall-clock seconds
@@ -85,6 +85,16 @@ export const FINE_INCREMENT = 1 / FINE_STEP;
 /** Convert a grid count (may be fractional) + BPM to seconds. */
 export function count32ToSeconds(count, bpm) {
   return count * GRID_UNIT_QN * 60 / bpm;
+}
+
+/**
+ * Convert a grid count + BPM to a rate in Hz, treating the count as the PERIOD
+ * (one full cycle spans `count` grid units). Used by LFO-style rate knobs
+ * (LFO.js, Strings vibrato, WT-sampler sweep) whose BPM mode expresses the
+ * oscillator period rather than a one-shot duration.
+ */
+export function count32ToHz(count, bpm) {
+  return 1 / Math.max(count32ToSeconds(count, bpm), 1e-6);
 }
 
 // Musical divisions as a fraction of a whole note → grid units (× GRID_BASE).

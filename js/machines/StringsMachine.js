@@ -43,6 +43,7 @@
 
 import { Machine } from './Machine.js';
 import { makeTrimGain } from './LoudnessTrim.js';
+import { count32ToHz } from '../util/BpmSync.js';
 
 // Per-mode character: octave shift (semitones) + a relative ensemble scaler.
 // Voice offsets (semitones) define the unison stack for each mode — the
@@ -88,9 +89,23 @@ export class StringsMachine extends Machine {
     'vibrato':      { label: 'Vibrato', type: 'number', min: 0, max: 50, default: 6,
                       modulatable: true, lfoMin: 0, lfoMax: 50,
                       target: m => m._vibratoGain.gain, schedule: 'setTarget', tc: 0.02 },
+    // Vibrato rate is a unified MS↔BPM (here Hz↔BPM) sync knob: in 'hz' mode the
+    // knob drives this Hz value (LFO/p-lock modulatable via the osc.frequency
+    // AudioParam); in 'bpm' mode the rate is derived from `vibrato.bpmCount32`
+    // (1/32 period count) + the track tempo. manualTarget keeps the AudioParam
+    // exposed to the LFO/resolveAudioParam while `_applyVibratoRate` owns the
+    // actual write (so BPM mode wins when active). See design/audio-signal-chain.md (Unified Sync-Knob Model).
     'vibrato.rate': { label: 'Vib Rate', type: 'number', min: 0.5, max: 12, default: 5.0,
-                      modulatable: true, lfoMin: 0.5, lfoMax: 12,
-                      target: m => m._vibratoOsc.frequency, schedule: 'setTarget', tc: 0.02 },
+                      modulatable: true, lfoMin: 0.5, lfoMax: 12, plockMode: 'audioParam',
+                      target: m => m._vibratoOsc.frequency, manualTarget: true,
+                      apply: (v, t, m) => m._applyVibratoRate(t) },
+    // syncMode + bpmCount32 are the BPM half of the vibrato.rate sync knob — the
+    // panel renders them together as one knob, so they are hidden from the flat
+    // param list (still p-lockable/serialised via their paths).
+    'vibrato.syncMode':   { label: 'Vib Sync', type: 'enum', options: ['hz', 'bpm'], default: 'hz',
+                            hidden: true, plockMode: 'js', apply: (v, t, m) => m._applyVibratoRate(t) },
+    'vibrato.bpmCount32': { label: 'Vib Div', type: 'number', min: 1, max: 128, default: 8,
+                            hidden: true, plockMode: 'js', apply: (v, t, m) => m._applyVibratoRate(t) },
     'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.7,
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
@@ -103,6 +118,7 @@ export class StringsMachine extends Machine {
 
     this._initSpec();
     this._rootFreq = 440;   // needed before any _applyTuning (setParam during fromJSON)
+    this._bpm = 120;        // current tempo, for resolving BPM-synced vibrato rate
 
     this.outputGain = context.createGain();
     this.outputGain.gain.value = this._params['output.level'];
@@ -134,7 +150,7 @@ export class StringsMachine extends Machine {
     // Shared vibrato LFO → each osc.detune (depth in cents via _vibratoGain)
     this._vibratoOsc = context.createOscillator();
     this._vibratoOsc.type            = 'sine';
-    this._vibratoOsc.frequency.value = this._params['vibrato.rate'];
+    this._vibratoOsc.frequency.value = this._effectiveVibratoHz();
     this._vibratoGain = context.createGain();
     this._vibratoGain.gain.value = this._params['vibrato'];
     this._vibratoOsc.connect(this._vibratoGain);
@@ -182,6 +198,30 @@ export class StringsMachine extends Machine {
     this._bowSrc.start();
 
     this._applyTuning(this._rootFreq, context.currentTime);
+  }
+
+  /**
+   * Resolve the vibrato LFO rate in Hz from the current sync mode: the raw Hz
+   * value ('hz' mode) or the 1/32 period count + tempo ('bpm' mode).
+   */
+  _effectiveVibratoHz() {
+    if (this._params['vibrato.syncMode'] === 'bpm') {
+      return count32ToHz(this._params['vibrato.bpmCount32'], this._bpm);
+    }
+    return this._params['vibrato.rate'];
+  }
+
+  /** Write the resolved vibrato rate to the LFO oscillator. */
+  _applyVibratoRate(time) {
+    if (!this._vibratoOsc) return;
+    const t = time ?? this.context.currentTime;
+    this._vibratoOsc.frequency.setTargetAtTime(this._effectiveVibratoHz(), t, 0.02);
+  }
+
+  /** Track tempo changed — re-resolve the vibrato rate if BPM-synced. */
+  setBpm(bpm) {
+    this._bpm = bpm;
+    if (this._params['vibrato.syncMode'] === 'bpm') this._applyVibratoRate();
   }
 
   /**

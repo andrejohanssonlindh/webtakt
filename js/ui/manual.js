@@ -218,18 +218,22 @@ export const MANUAL_CONTENT = {
                  'window above and below.'],
       ['Mode: INPUT', 'Live keyboard-driven mode. Hold keys to form the chord and the ' +
                  'arpeggiator plays those held pitches. The held keys are the chord — ' +
-                 'no step needed. Enable RECORD to capture what you play into the pattern.'],
+                 'no step needed. Releasing the keys stops the arp and lets the last ' +
+                 'notes ring out their normal release tail (no abrupt cut). With HOLD ' +
+                 'on the chord latches and keeps arpeggiating even after you lift your ' +
+                 'fingers or switch to another track; turn HOLD off to stop it. ' +
+                 'Enable RECORD to capture what you play into the pattern.'],
       ['Mode: INPUT MANUAL', 'Live keyboard-driven version of MANUAL. The custom step ' +
                  'sequence (per-step semitone offset, RATE and GATE) plays relative to ' +
                  'the key you hold instead of a sequencer step: step 1 is the held note, ' +
                  'later steps are semitone moves from it. Hold a chord and the figure ' +
                  'runs from each held note at the same time. RECORD captures it too.'],
       ['PATTERN', 'Direction the arp traverses its notes: Up, Down, UpDown, or Random.'],
-      ['RATE', 'How fast the arp fires notes. Click the knob centre to toggle ' +
+      ['RATE', 'How fast the arp fires notes. Double-click the knob centre to toggle ' +
                  'MS↔BPM mode. In BPM mode it snaps to musical divisions (e.g. 1/8, ' +
                  '1/16). P-lockable per step.'],
       ['GATE', 'How long each arp note sounds. 0ms (or LEGATO) ties notes together. ' +
-                 'Click the knob centre to toggle MS↔BPM. P-lockable per step.'],
+                 'Double-click the knob centre to toggle MS↔BPM. P-lockable per step.'],
       ['VARIANCE', 'Adds random timing jitter to each arp step. 0% = precise; ' +
                  'higher values humanise the rhythm. P-lockable per step.'],
       ['NOTES (Random mode)', 'How many notes to randomly select each cycle.'],
@@ -253,7 +257,7 @@ export const MANUAL_CONTENT = {
                  'DECAY — time from peak down to the sustain level. SUSTAIN — ' +
                  'level held while the note is on. RELEASE — fade-out time after ' +
                  'note-off. Each A/D/R knob can be toggled between MS and BPM sync ' +
-                 '(click the small tag in the knob body).'],
+                 '(double-click the knob centre).'],
     ],
   },
 
@@ -278,7 +282,7 @@ export const MANUAL_CONTENT = {
       ['Trig', 'FRE = free-running (LFO never resets). TRG = triggered (LFO ' +
                  'restarts from Phase on each note-on). Use TRG for consistent ' +
                  'attack shapes; FRE for evolving textures.'],
-      ['Rate', 'LFO speed. Click the knob centre to toggle HZ↔BPM. In BPM mode ' +
+      ['Rate', 'LFO speed. Double-click the knob centre to toggle HZ↔BPM. In BPM mode ' +
                  'the rate is tempo-locked to a musical division (e.g. 1/4, 1/8); ' +
                  'in HZ mode it sweeps freely from 0.001 to 20 Hz.'],
       ['Depth', 'How far the LFO moves the destination parameter. 0% = no movement; ' +
@@ -435,7 +439,7 @@ export const MANUAL_CONTENT = {
            'it to pass audio).',
     items: [
       ['Time', 'Delay line length — the gap between the dry signal and its first ' +
-                 'echo. Click the knob centre to toggle MS↔BPM. In BPM mode it ' +
+                 'echo. Double-click the knob centre to toggle MS↔BPM. In BPM mode it ' +
                  'snaps to musical divisions (e.g. 1/8, 1/4) and tracks tempo ' +
                  'automatically. P-lockable in MS mode.'],
       ['Feedback', 'How much of the delayed signal is fed back into the delay ' +
@@ -479,7 +483,9 @@ export const MANUAL_CONTENT = {
       ['Rate', 'Speed of the left LFO (0.05–6 Hz). The right delay line runs at ' +
                  'rate × 1.27 — the deliberate mismatch between them is what ' +
                  'creates the ensemble shimmer rather than a single slow wobble. ' +
-                 'P-lockable and LFO-assignable.'],
+                 'Double-click the knob centre to toggle HZ↔BPM; in BPM mode the ' +
+                 'rate locks to the tempo and snaps to musical divisions. ' +
+                 'P-lockable in either mode, and LFO-assignable in HZ mode.'],
       ['Depth', 'Modulation depth — how far the LFOs swing the delay times ' +
                  '(0–100%). More depth = wider, lusher chorus; less = subtle ' +
                  'thickening. P-lockable and LFO-assignable.'],
@@ -495,7 +501,7 @@ export const MANUAL_CONTENT = {
       ['Decay', 'Reverb tail length in seconds (0.1–8s). Short values give tight ' +
                  'rooms and plates; long values give halls and caverns. Changing ' +
                  'Decay rebuilds the IR — track-level only (not p-lockable).'],
-      ['Pre-dly', 'Pre-delay before the reverb tail begins. Click the knob centre ' +
+      ['Pre-dly', 'Pre-delay before the reverb tail begins. Double-click the knob centre ' +
                  'to toggle MS↔BPM. Longer pre-delay separates the dry signal from ' +
                  'the reverb for clarity, or can sync to tempo for rhythmic ' +
                  'effects. Track-level only (rebuilds the IR on change).'],
@@ -686,7 +692,7 @@ export const MACHINE_MANUAL = {
       ['OPn ADSR', 'Per-operator envelope. The carrier\'s envelope sets amplitude; ' +
                  'the modulators\' envelopes fade their modulation index over time — ' +
                  'a decaying modulator creates a classic bright-to-dark FM pluck. ' +
-                 'A/D/R knobs have MS/BPM sync (click the tag in the knob body).'],
+                 'A/D/R knobs have MS/BPM sync (double-click the knob centre to toggle).'],
       ['Level', 'Master output level for this machine (0–100%).'],
     ],
   },
@@ -785,7 +791,9 @@ export const MACHINE_MANUAL = {
       ['Vibrato', 'Depth of the built-in vibrato LFO in cents (0–50¢). ' +
                  '0 = no vibrato; higher values give a natural pitch wavering.'],
       ['Vib Rate', 'Speed of the vibrato LFO (0.5–12 Hz). Typical violin vibrato ' +
-                 'is around 5–7 Hz.'],
+                 'is around 5–7 Hz. Double-click the knob centre to toggle HZ↔BPM; ' +
+                 'in BPM mode the rate locks to the tempo and snaps to musical ' +
+                 'divisions (1/8, 1/4, …). P-lockable in either mode.'],
       ['Level', 'Master output level for this machine (0–100%).'],
     ],
   },
@@ -1170,7 +1178,9 @@ export const MACHINE_MANUAL = {
                  'full morph range.'],
       ['Sweep Speed', 'Speed of the built-in morph sweep LFO in Hz (0.05–20 Hz). ' +
                  'Slow rates give gradual textural evolution; faster rates create ' +
-                 'rhythmic or tremolo-like effects.'],
+                 'rhythmic or tremolo-like effects. Double-click the knob centre to ' +
+                 'toggle HZ↔BPM; in BPM mode the rate locks to the tempo and snaps ' +
+                 'to musical divisions. P-lockable in either mode.'],
       ['Start A–B / End A–B', 'Normalised playback region for each sample ' +
                  '(0–1). Trim each sample to a specific region independently.'],
       ['Gain A–B', 'Pre-amp level for each sample. Balance the two buffers so ' +

@@ -33,6 +33,8 @@
  *   toJSON() / fromJSON()
  */
 
+import { count32ToHz, MUSICAL_SNAP_32 } from '../util/BpmSync.js';
+
 // Base delay times (s) and depth scaling, ported verbatim from Patina so the
 // voicing is identical. The DelayNode max is sized to hold base + full swing.
 const BASE_L  = 0.013;
@@ -46,10 +48,13 @@ export class ChorusFX {
 
     this._params = {
       'chorus.mix':   0,
-      'chorus.rate':  0.55,
+      'chorus.rate':  0.55,        // Hz (chorus.syncMode='hz')
       'chorus.depth': 0.5,
+      'chorus.syncMode':   'hz',   // 'hz' | 'bpm'
+      'chorus.bpmCount32': 16,     // 1/32 period count (chorus.syncMode='bpm'); 16 = 1/2
     };
 
+    this._bpm = 120;   // current tempo, for resolving the BPM-synced rate
     this.enabled = false;
 
     this.inputNode  = context.createGain();
@@ -73,8 +78,8 @@ export class ChorusFX {
     this._lfoR = context.createOscillator();
     this._lfoL.type = 'sine';
     this._lfoR.type = 'sine';
-    this._lfoL.frequency.value = this._params['chorus.rate'];
-    this._lfoR.frequency.value = this._params['chorus.rate'] * 1.27;
+    this._lfoL.frequency.value = this._effectiveRateHz();
+    this._lfoR.frequency.value = this._effectiveRateHz() * 1.27;
 
     this._depthL = context.createGain();
     this._depthR = context.createGain();
@@ -125,6 +130,31 @@ export class ChorusFX {
     this._dryGain.gain.setTargetAtTime(this.enabled ? 1 - mix * 0.4 : 1, t, 0.05);
   }
 
+  /**
+   * Resolve the chorus LFO rate in Hz from the current sync mode: the raw Hz
+   * value ('hz' mode) or the 1/32 period count + tempo ('bpm' mode).
+   */
+  _effectiveRateHz() {
+    if (this._params['chorus.syncMode'] === 'bpm') {
+      return count32ToHz(this._params['chorus.bpmCount32'], this._bpm);
+    }
+    return this._params['chorus.rate'];
+  }
+
+  /** Write the resolved rate to both LFOs (right tracks left at ×1.27). */
+  _applyRate(time) {
+    const t  = time ?? this.context.currentTime;
+    const hz = this._effectiveRateHz();
+    this._lfoL.frequency.setTargetAtTime(hz, t, 0.05);
+    this._lfoR.frequency.setTargetAtTime(hz * 1.27, t, 0.05);
+  }
+
+  /** Update BPM and recalculate the rate when in BPM sync mode. */
+  setBpm(bpm) {
+    this._bpm = bpm;
+    if (this._params['chorus.syncMode'] === 'bpm') this._applyRate();
+  }
+
   /** @param {string} path @param {number} value @param {number} [time] */
   setParam(path, value, time) {
     this._params[path] = value;
@@ -137,9 +167,12 @@ export class ChorusFX {
           this._dryGain.gain.setTargetAtTime(1 - value * 0.4, t, 0.05);
         }
         break;
+      // rate (Hz), bpmCount32 (period count) and syncMode all resolve through
+      // the same effective-rate helper so BPM mode wins when active.
       case 'chorus.rate':
-        this._lfoL.frequency.setTargetAtTime(value, t, 0.05);
-        this._lfoR.frequency.setTargetAtTime(value * 1.27, t, 0.05);
+      case 'chorus.bpmCount32':
+      case 'chorus.syncMode':
+        this._applyRate(t);
         break;
       case 'chorus.depth': {
         const depth = value * DEPTH_S;
@@ -157,7 +190,21 @@ export class ChorusFX {
   getParamList() {
     return [
       { path: 'chorus.mix',   label: 'Mix',   type: 'number', min: 0,    max: 1,  default: 0,    modulatable: true, lfoMin: 0,    lfoMax: 1,  plockMode: 'audioParam' },
-      { path: 'chorus.rate',  label: 'Rate',  type: 'number', min: 0.05, max: 6,  default: 0.55, modulatable: true, lfoMin: 0.05, lfoMax: 6,  plockMode: 'audioParam' },
+      // Rate is a unified Hz↔BPM sync knob (FXPanel._renderSync). Hz mode drives
+      // the LFO frequency directly (chorus.rate, modulatable); BPM mode drives a
+      // 1/32 PERIOD count (chorus.bpmCount32 → count32ToHz). offLabel:'HZ' so the
+      // knob body reads HZ/BPM, and isRate so the panel formats Hz (not seconds).
+      {
+        path: 'chorus.sync', label: 'Rate', type: 'sync',
+        modePath: 'chorus.syncMode',
+        msPath:   'chorus.rate',
+        bpmPath:  'chorus.bpmCount32',
+        offLabel: 'HZ',
+        bpmMin: 0.25, bpmMax: 64, bpmSnap: MUSICAL_SNAP_32,
+      },
+      { path: 'chorus.syncMode',   label: 'Sync',     type: 'enum',   options: ['hz','bpm'], default: 'hz',  modulatable: false, plockMode: 'js', hidden: true },
+      { path: 'chorus.rate',       label: 'Rate',     type: 'number', min: 0.05, max: 6,  default: 0.55, modulatable: true, lfoMin: 0.05, lfoMax: 6, plockMode: 'audioParam', hidden: true },
+      { path: 'chorus.bpmCount32', label: 'Division', type: 'number', min: 1,    max: 64, default: 16,   modulatable: true, plockMode: 'js', hidden: true },
       { path: 'chorus.depth', label: 'Depth', type: 'number', min: 0,    max: 1,  default: 0.5,  modulatable: true, lfoMin: 0,    lfoMax: 1,  plockMode: 'audioParam' },
     ];
   }

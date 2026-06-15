@@ -411,7 +411,7 @@ export class ArpPanel {
    * the body shows the current mode ('MS'/'BPM'). In BPM mode the knob sweeps
    * the 1/32 grid and shift-drag/scroll snaps to musical divisions. Works for
    * both arp-level params and per-step objects via a small accessor bundle.
-   * See design/sync-knob-rollout.md.
+   * See design/audio-signal-chain.md (Unified Sync-Knob Model).
    *
    * @param {object} acc
    * @param {string} acc.label        knob label
