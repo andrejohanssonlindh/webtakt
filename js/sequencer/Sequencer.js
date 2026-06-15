@@ -424,6 +424,22 @@ getVisibleSteps() {
       finally { for (const path of Object.keys(saved)) arp.setParam(path, saved[path]); }
     };
 
+    // ── Continuous Input machine: no per-note gating ───────────
+    // A continuous live-input track (InputMachine, gate off) has no notes — its
+    // amp gate is held open by Track._applyInputGate. Firing the voice loop here
+    // would call envelope.scheduleNote and momentarily gate the live signal. So
+    // we skip the voice/envelope firing entirely; the shared filter/pan/FX
+    // p-locks dispatched above (scheduled at v0time, restored at v0off) still
+    // sweep the continuous signal, which is exactly the desired behaviour.
+    // (Gated Input — input.gate on — falls through and fires normally, chopping
+    // the signal with the envelope like any other voice.)
+    const inputMachine = this.track.machine;
+    if (inputMachine?.type === 'input' && !inputMachine.gated) {
+      jsRestores.forEach(fn => fn());
+      restoreCanonicalJs();
+      return;
+    }
+
     // ── Fire each voice ────────────────────────────────────────
     step.voices.forEach((sv, vi) => {
       const effectiveNudge = sv.nudge * (1 - (this.track.nudgeQuantize ?? 0));

@@ -23,7 +23,11 @@ const LADDER_WORKLET_PATH = 'js/worklets/patina-ladder-processor.js';
 
 export class AudioEngine {
   constructor() {
-    this.context = new AudioContext();
+    // latencyHint 'interactive' asks the platform for the smallest stable
+    // output buffer — matters for live monitoring through the Input machine
+    // (InputMachine.js). Browsers still impose ~20-60ms+ round-trip; see
+    // baseLatency/outputLatency getters and design/input-machine.md.
+    this.context = new AudioContext({ latencyHint: 'interactive' });
 
     // Preload the analogue ladder filter worklet (Filter.js engine='analogue').
     // Fire-and-forget at boot: nothing awaits it, but by the time a user switches
@@ -66,5 +70,20 @@ export class AudioEngine {
   /** @param {number} value — 0.0 to 1.0 */
   setMasterVolume(value) {
     this.masterGain.gain.setTargetAtTime(value, this.context.currentTime, 0.01);
+  }
+
+  /**
+   * Estimated input→output round-trip latency in seconds, or null if the
+   * browser doesn't expose the figures. Used by InputPanel to show the user
+   * the real monitoring latency rather than a guess. baseLatency is the
+   * AudioContext's own processing buffer; outputLatency includes the OS/device
+   * path. We sum what's available (both are read-only browser estimates).
+   * @returns {number|null}
+   */
+  getLatencySeconds() {
+    const base = typeof this.context.baseLatency === 'number' ? this.context.baseLatency : null;
+    const out  = typeof this.context.outputLatency === 'number' ? this.context.outputLatency : null;
+    if (base == null && out == null) return null;
+    return (base ?? 0) + (out ?? 0);
   }
 }

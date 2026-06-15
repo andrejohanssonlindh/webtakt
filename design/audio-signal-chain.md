@@ -102,6 +102,20 @@ Slot 0's filter is canonical — UI and sequencer read & write `Track.filter` (=
 Every `setParam` on it fans out to the sibling slot filters via `Filter.mirrorTo()`, so all
 voices stay identical. DJ-filter base-cutoff writes iterate `VoicePool.filters` directly.
 
+#### Continuous Input machine — held-open amp gate (departure)
+
+The Input machine (`InputMachine`, machine family I/O — live audio capture, see
+`design/input-machine.md`) is the one source that is continuous and note-less. In its default
+**continuous** mode the per-voice amp gate must be held OPEN, since there are no notes to open
+it. `Track._applyInputGate()` pins every slot's `Envelope.ampGain.gain` to 1 (called from
+`setMachine` and the InputPanel gate toggle), and `Sequencer._fireStep` early-returns for a
+continuous-input track — skipping the voice/envelope firing so steps don't re-gate the signal,
+while still letting shared filter/pan/FX p-locks sweep the live audio. In **gated** mode
+(`input.gate` on) the machine falls back to the normal VoiceSlot path: steps/keys chop the
+input through the envelope like any other voice. Leaving the Input machine restores the gate
+to closed (0). The Input source itself is a single ref-counted `MediaStreamAudioSourceNode`
+shared across slots (one stream, fanned out), not 8 independent sources.
+
 LFOs connect to AudioParams:
   - Filter.node.frequency / Q, _baseLPF/_baseHPF.frequency — connected to ALL 8 slot filters
   - Machine AudioParams (osc.detune, sub.level, output.level, etc.) — connected to ALL 8 slot machines

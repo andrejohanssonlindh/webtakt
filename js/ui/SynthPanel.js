@@ -15,6 +15,7 @@ import { Condition }               from '../sequencer/Condition.js';
 import { FMPanel }                 from './panels/FMPanel.js';
 import { DefaultMachinePanel }     from './panels/DefaultMachinePanel.js';
 import { MidiPanel }               from './panels/MidiPanel.js';
+import { InputPanel }              from './panels/InputPanel.js';
 import { SamplerPanel }            from './panels/SamplerPanel.js';
 import { WavetableSamplerPanel }   from './panels/WavetableSamplerPanel.js';
 import { SampleSwarmPanel }        from './panels/SampleSwarmPanel.js';
@@ -650,6 +651,11 @@ export class SynthPanel {
     if (track.machine.type === 'midi') {
       const ctx = this._makePanelContext(track);
       new MidiPanel(this._content, ctx, this.midiEngine);
+      return;
+    }
+    if (track.machine.type === 'input') {
+      const ctx = this._makePanelContext(track);
+      new InputPanel(this._content, ctx);
       return;
     }
     const ctx = this._makePanelContext(track);

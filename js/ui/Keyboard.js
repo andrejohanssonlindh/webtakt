@@ -349,6 +349,13 @@ export class Keyboard {
     return noteInScale(midiNote, track.scaleIndex ?? 0, track.leadNote ?? 0);
   }
 
+  /** True when the selected track is an Input machine in continuous (non-gated)
+   *  mode — keyboard play is suppressed so it never gates the held-open signal. */
+  _continuousInputTrack() {
+    const m = this.state.selectedTrack?.machine;
+    return m?.type === 'input' && !m.gated;
+  }
+
   /** Returns ascending in-scale MIDI notes starting from rootNote, enough to fill both rows. */
   _getScaleNotes() {
     const notes = [];
@@ -527,6 +534,13 @@ export class Keyboard {
   async _noteOn(midiNote) {
     if (!this._isInScale(midiNote)) return;
     if (this._heldKeys.has(midiNote)) return;
+    // Continuous Input machine has no notes — its amp gate is held open
+    // (Track._applyInputGate), so a key press must not trigger a voice/envelope
+    // (it would briefly gate the live signal), fire followers, or record a step.
+    // Gated input (input.gate on) is excluded and plays normally below, chopping
+    // the live input on key-down. Guarded before _heldKeys so _noteOff is a no-op
+    // too (it early-returns on an untracked key).
+    if (this._continuousInputTrack()) return;
     this._heldKeys.add(midiNote);
 
     const keyEl = this.keyboardEl.querySelector(`.key[data-note="${midiNote}"]`);

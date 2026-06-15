@@ -156,6 +156,12 @@ export class VoicePool {
   /** All per-slot filters — used for direct AudioParam writes (e.g. DJ filter). */
   get filters()  { return this._slots.map(s => s._filter); }
 
+  /** All per-slot envelopes — used for direct ampGain writes (e.g. Input continuous gate). */
+  get envelopes() { return this._slots.map(s => s.envelope); }
+
+  /** All per-slot machines — used to fan a shared op across voices (e.g. Input enable). */
+  get machines() { return this._slots.map(s => s.machine); }
+
   /** Propagate the current BPM to every slot's envelope + machine (tempo-synced stages). */
   setBpm(bpm) {
     this._bpm = bpm;

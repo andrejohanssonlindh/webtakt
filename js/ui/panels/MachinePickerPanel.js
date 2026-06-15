@@ -65,9 +65,10 @@ export const MACHINE_GROUPS = [
     ],
   },
   {
-    label: 'MIDI',
+    label: 'I/O',
     defs: [
-      { type: 'midi', label: 'MIDI Out', desc: 'Send notes to external MIDI device' },
+      { type: 'input', label: 'Input',    desc: 'Live audio in (line / USB)' },
+      { type: 'midi',  label: 'MIDI Out', desc: 'Send notes to external MIDI device' },
     ],
   },
 ];
@@ -134,7 +135,8 @@ export class MachinePickerPanel {
         // without committing the swap (snapshot/restore). Samplers have no
         // default buffer, so they are not previewable.
         if (def.type !== 'sampler' && def.type !== 'wt-sampler'
-            && def.type !== 'sample-swarm' && def.type !== 'midi') {
+            && def.type !== 'sample-swarm' && def.type !== 'midi'
+            && def.type !== 'input') {
           // A <span> (not a nested <button>) — nested buttons are invalid HTML.
           const prev = document.createElement('span');
           prev.className   = 'machine-card-preview';

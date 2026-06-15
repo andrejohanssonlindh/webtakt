@@ -98,7 +98,8 @@ export const MANUAL_CONTENT = {
   machine: {
     title: 'MACHINE',
     blurb: 'Swap the synthesis engine on the selected track. Machines are ' +
-           'grouped into Drums, Melodic, Analogue, and Sampler families. ' +
+           'grouped into Drums, Melodic, Analogue, Sampler, and I/O families ' +
+           '(I/O = live audio Input and MIDI Out). ' +
            'Click a card to commit the swap; use the ▶ preview button (on ' +
            'non-sampler cards) to audition without committing.',
     items: [
@@ -108,7 +109,7 @@ export const MANUAL_CONTENT = {
                  'the swap is not committed. Samplers and MIDI have no default buffer ' +
                  'and are not previewable.'],
       ['Grouped cards', 'Cards are grouped by family (Drums / Melodic / Analogue / ' +
-                 'Sampler / MIDI). Clicking a card commits the machine swap, replacing ' +
+                 'Sampler / I/O). Clicking a card commits the machine swap, replacing ' +
                  'the current machine and resetting its params to defaults.'],
     ],
   },
@@ -1227,6 +1228,42 @@ export const MACHINE_MANUAL = {
       ['Pitch', 'When on, notes transpose all voices relative to Root. ' +
                  'When off, pitch-independent drum mode.'],
       ['Level', 'Master output level for this machine (0–100%).'],
+    ],
+  },
+
+  // ── I/O ──────────────────────────────────────────────────────────────────
+
+  input: {
+    title: 'SYNTH (Input)',
+    blurb: 'Captures live incoming audio (3.5 mm line-in, a USB interface, or any ' +
+           'input your browser exposes) and feeds it straight into this track\'s ' +
+           'signal chain — so you can filter it, p-lock the cutoff, sweep it with ' +
+           'LFOs, and run it through the FX pipeline like any other voice. It is ' +
+           'not "played" with notes: pitch is ignored. Some input→output latency ' +
+           'is unavoidable in a browser (typically ~20–60 ms+); great for ' +
+           'processing and looping, noticeable for live monitoring.',
+    items: [
+      ['Enable Input', 'Requests access to your audio input (a browser permission ' +
+                 'prompt appears the first time). Needs a secure page — HTTPS or ' +
+                 'localhost. Once granted, the button shows "● Input live".'],
+      ['Input Device', 'Choose which input to capture (system default, line-in, USB ' +
+                 'interface, …). Device names appear only after access is granted ' +
+                 'once. Re-selecting re-opens the stream on the new device.'],
+      ['Input Level meter', 'Green→yellow→orange→red bar showing the incoming ' +
+                 'signal (measured before Level/gate). Use it to confirm signal is ' +
+                 'arriving even if you can\'t hear it yet, and to set a sensible ' +
+                 'input gain at the source (aim for green/yellow, avoid red).'],
+      ['Gain', 'Makeup gain on the raw input before everything else (0–8×, ' +
+                 'default 2×). Line-in and many mics arrive quiet — turn this up ' +
+                 'until the level meter sits in the green/yellow.'],
+      ['Level', 'Output level of the captured signal into the chain (0–100%). ' +
+                 'P-lockable and LFO-assignable like any machine level.'],
+      ['Gate', 'Continuous (default): the input passes through all the time, like a ' +
+                 'mixer channel. Note-gated: the sequencer steps and keyboard chop ' +
+                 'the live input on and off through the amp envelope — a trance-gate ' +
+                 '/ gated-reverb effect.'],
+      ['Round-trip latency', 'Read-only estimate of the browser\'s input→output ' +
+                 'delay, when it reports one. Can\'t be fully eliminated in-browser.'],
     ],
   },
 };

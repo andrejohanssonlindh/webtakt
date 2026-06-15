@@ -69,6 +69,7 @@ import { MarimbaMachine }         from '../machines/MarimbaMachine.js';
 import { StringsMachine }         from '../machines/StringsMachine.js';
 import { MoogishMachine }         from '../machines/MoogishMachine.js';
 import { MidiMachine }           from '../machines/MidiMachine.js';
+import { InputMachine }          from '../machines/InputMachine.js';
 import { Filter }        from '../signal/Filter.js';
 import { Envelope }      from '../signal/Envelope.js';
 import { VoicePool }     from '../signal/VoicePool.js';
@@ -120,6 +121,7 @@ const MACHINES = {
   'wt-sampler':     WavetableSamplerMachine,
   'sample-swarm':   SampleSwarmMachine,
   midi:             MidiMachine,
+  input:            InputMachine,
 };
 
 /**
@@ -397,6 +399,64 @@ export class Track {
     // New machine = new param set; drop the sequencer's cached plock-mode map.
     // (Guarded: sequencer is created after the constructor's first setMachine.)
     this.sequencer?.invalidatePlockModeMap();
+
+    // Input machine in continuous mode needs the per-voice amp gate held open
+    // (it has no notes to open it). Leaving input → close the gate again. reset:
+    // a machine swap is an explicit intent to establish a clean gate baseline.
+    this._applyInputGate({ reset: true });
+  }
+
+  /**
+   * Reconcile the per-voice amp gate with the Input machine's gate mode.
+   *
+   * The Input machine (InputMachine.js) produces continuous live audio with no
+   * notes. The slot envelope's ampGain defaults to 0 and opens only on a note,
+   * so for CONTINUOUS input we must pin every slot's ampGain open (gain = 1).
+   * For GATED input (input.gate = true) we leave the envelope alone — the
+   * sequencer/keyboard drive it normally, chopping the live signal. Any other
+   * machine type, or no pool yet, restores the gate to closed (0) so a normal
+   * voice is silent until its envelope fires.
+   *
+   * Called from setMachine (machine swap), mute/unmute, after silence() (STOP),
+   * and from InputPanel when the gate toggle flips. Idempotent.
+   *
+   * Mute applies HERE for continuous input: unlike a normal machine (where mute
+   * only stops sequencer notes and lets live voices ring), continuous input has
+   * no notes — so mute must actually silence it. A muted continuous-input track
+   * pins the gate to 0.
+   */
+  _applyInputGate({ reset = false } = {}) {
+    if (!this._pool) return;
+    const m = this.machine;
+    const isInput    = m?.type === 'input';
+    const continuous = isInput && !m.gated;
+    const t = this.audio.context.currentTime;
+
+    // CONTINUOUS input (or muted continuous): pin every slot's amp gate to a
+    // static value — there are no notes, the envelope never runs, so we own
+    // ampGain outright. open while unmuted, closed while muted.
+    if (continuous) {
+      const open = !this.muted;
+      for (const env of this._pool.envelopes) {
+        const g = env.ampGain.gain;
+        g.cancelScheduledValues(t);
+        g.setValueAtTime(open ? 1 : 0, t);
+      }
+      return;
+    }
+
+    // GATED input (or any non-input machine): the per-note ADSR envelope owns
+    // ampGain. On INCIDENTAL calls (mute toggle, re-render, fromJSON) we must
+    // NOT cancel/pin it — that would wipe a still-ringing note's scheduled
+    // release and freeze the gate OPEN. Only on an explicit `reset` (machine
+    // swap, gate-mode toggle — including continuous→gated, which left the gate
+    // pinned wide open at 1.0) do we force a clean closed baseline.
+    if (!reset) return;
+    for (const env of this._pool.envelopes) {
+      const g = env.ampGain.gain;
+      g.cancelScheduledValues(t);
+      g.setValueAtTime(0, t);
+    }
   }
 
   /**
@@ -407,12 +467,43 @@ export class Track {
    * play too.) A note already ringing when you hit mute finishes its tail —
    * mute only blocks the NEXT sequencer step, which matches Elektron behaviour.
    */
+  /**
+   * Enable live audio capture on EVERY voice slot's InputMachine, not just the
+   * canonical slot 0. The pool round-robins voices, so in note-gated mode each
+   * key press may land on any slot — every slot needs the stream or only the
+   * first note (slot 0) sounds. All slots acquire the SAME shared source node
+   * (ref-counted by the InputMachine stream manager), so this is one stream
+   * fanned out, not N microphones. No-op on non-input machines.
+   * @returns {Promise<boolean>} success of the canonical (slot-0) acquire
+   */
+  async enableInput() {
+    if (this.machine?.type !== 'input') return false;
+    const machines = this._pool?.machines ?? [this.machine];
+    // Mirror the canonical device selection to every slot first.
+    const dev = this.machine.getDevice();
+    const results = await Promise.all(machines.map(async (m) => {
+      if (m !== this.machine) await m.setDevice(dev);
+      return m.enableInput();
+    }));
+    this._applyInputGate();
+    return results[0] ?? false;
+  }
+
+  /** Disable live capture on every slot's InputMachine. No-op on other types. */
+  disableInput() {
+    if (this.machine?.type !== 'input') return;
+    for (const m of (this._pool?.machines ?? [])) m.disableInput?.();
+    this._applyInputGate();
+  }
+
   mute() {
     this.muted = true;
+    this._applyInputGate();   // continuous input has no notes — mute must silence it
   }
 
   unmute() {
     this.muted = false;
+    this._applyInputGate();   // re-open a continuous-input gate that mute closed
   }
 
   setHold(on) {
@@ -877,6 +968,10 @@ export class Track {
     this.liveArp?.releaseAll();
     if (this._pool) this._pool.silence(t);
     else this.envelope?.silence(t);
+    // Continuous live input is a monitor, not a ringing note — STOP/panic cuts
+    // the instant of sound but the input keeps working, so re-arm its gate. The
+    // stream itself is untouched (use the panel's toggle to actually stop it).
+    this._applyInputGate();
   }
 
   /**
@@ -1311,6 +1406,12 @@ export class Track {
     // Swap machine type (rebuilds pool slots), then restore params into slot 0
     if (obj.machine?.type) this.setMachine(obj.machine.type);
     this.machine.fromJSON(obj.machine ?? {});
+
+    // Re-apply the Input continuous/gated amp gate now that the restored
+    // input.gate value is in place (setMachine above ran before fromJSON, so it
+    // saw the default gate). reset: load is an explicit clean-baseline intent.
+    // No-op for non-input machines.
+    this._applyInputGate({ reset: true });
 
     // Restore sampler buffer asynchronously if we have a store reference
     if ((this.machine.type === 'sampler' || this.machine.type === 'sample-swarm') && this.machine.sampleId && this.sampleStore) {
