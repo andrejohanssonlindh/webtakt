@@ -50,21 +50,21 @@ export class KickHardMachine extends Machine {
   // 'tune' = manualTarget (resolves to _tuneOsc.frequency for LFO, but setParam
   // sweeps both body + sub oscs via apply). 'drive' rebuilds the waveshaper curve.
   static SPEC = {
-    'tune':         { label: 'Tune', type: 'number', min: 20, max: 200, default: 60,
+    'tune':         { label: 'Tune', type: 'number', min: 20, max: 200, default: 60, group: 'TONE',
                       modulatable: true, lfoMin: 20, lfoMax: 200, plockMode: 'audioParam',
                       target: m => m._tuneOsc.frequency, manualTarget: true,
                       apply: (v, t, m) => {
                         m._tuneOsc.frequency.setTargetAtTime(v, t, 0.01);
                         m._subOsc.frequency.setTargetAtTime(v / 2, t, 0.01);
                       } },
-    'decay':        { label: 'Decay', type: 'number', min: 0.05, max: 2.0, default: 0.45, plockMode: 'js' },
-    'sweep':        { label: 'Sweep', type: 'number', min: 1, max: 8, default: 4.0, plockMode: 'js' },
-    'sub.level':    { label: 'Sub', type: 'number', min: 0, max: 1, default: 0.8, plockMode: 'js' },
-    'drive':        { label: 'Drive', type: 'number', min: 1, max: 6, default: 3.0, plockMode: 'js',
+    'decay':        { label: 'Decay', type: 'number', min: 0.05, max: 2.0, default: 0.45, group: 'TONE', plockMode: 'js' },
+    'sweep':        { label: 'Sweep', type: 'number', min: 1, max: 8, default: 4.0, group: 'TONE', plockMode: 'js' },
+    'sub.level':    { label: 'Sub', type: 'number', min: 0, max: 1, default: 0.8, group: 'TONE', plockMode: 'js' },
+    'drive':        { label: 'Drive', type: 'number', min: 1, max: 6, default: 3.0, group: 'TONE', plockMode: 'js',
                       apply: (v, t, m) => { m._shaper.curve = _makeShaperCurve(v); } },
-    'punch':        { label: 'Punch', type: 'number', min: 0, max: 1, default: 0.7, plockMode: 'js' },
-    'punch.decay':  { label: 'Punch Decay', type: 'number', min: 0.005, max: 0.08, default: 0.025, plockMode: 'js' },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.9,
+    'punch':        { label: 'Punch', type: 'number', min: 0, max: 1, default: 0.7, group: 'PUNCH', plockMode: 'js' },
+    'punch.decay':  { label: 'Punch Decay', type: 'number', min: 0.005, max: 0.08, default: 0.025, group: 'PUNCH', plockMode: 'js' },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.9, group: 'OUTPUT',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

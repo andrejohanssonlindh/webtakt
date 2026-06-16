@@ -41,26 +41,26 @@ export class WoodMachine extends Machine {
   // 'ring' = manualTarget: resolves to _ring1.Q for LFO, but setParam sets Q on
   // both resonators via apply.
   static SPEC = {
-    'freq1':        { label: 'Freq 1', type: 'number', min: 200, max: 4000, default: 600,
+    'freq1':        { label: 'Freq 1', type: 'number', min: 200, max: 4000, default: 600, group: 'RESONATOR',
                       modulatable: true, lfoMin: 200, lfoMax: 4000,
                       target: m => m._ring1.frequency, schedule: 'setTarget', tc: 0.005 },
-    'freq2':        { label: 'Freq 2', type: 'number', min: 400, max: 8000, default: 1400,
+    'freq2':        { label: 'Freq 2', type: 'number', min: 400, max: 8000, default: 1400, group: 'RESONATOR',
                       modulatable: true, lfoMin: 400, lfoMax: 8000,
                       target: m => m._ring2.frequency, schedule: 'setTarget', tc: 0.005 },
-    'ring':         { label: 'Ring', type: 'number', min: 1, max: 30, default: 12,
+    'ring':         { label: 'Ring', type: 'number', min: 1, max: 30, default: 12, group: 'RESONATOR',
                       modulatable: true, lfoMin: 1, lfoMax: 30, plockMode: 'audioParam',
                       target: m => m._ring1.Q, manualTarget: true,
                       apply: (v, t, m) => {
                         m._ring1.Q.setTargetAtTime(v, t, 0.005);
                         m._ring2.Q.setTargetAtTime(v, t, 0.005);
                       } },
-    'mix':          { label: 'Mix', type: 'number', min: 0, max: 1, default: 0.35, plockMode: 'js' },
-    'decay':        { label: 'Decay', type: 'number', min: 0.001, max: 0.4, default: 0.08, plockMode: 'js' },
-    'click':        { label: 'Click', type: 'number', min: 0, max: 1, default: 0.6, plockMode: 'js' },
-    'click.freq':   { label: 'Click Freq', type: 'number', min: 500, max: 12000, default: 3000,
+    'mix':          { label: 'Mix', type: 'number', min: 0, max: 1, default: 0.35, group: 'RESONATOR', plockMode: 'js' },
+    'decay':        { label: 'Decay', type: 'number', min: 0.001, max: 0.4, default: 0.08, group: 'STRIKE', plockMode: 'js' },
+    'click':        { label: 'Click', type: 'number', min: 0, max: 1, default: 0.6, group: 'STRIKE', plockMode: 'js' },
+    'click.freq':   { label: 'Click Freq', type: 'number', min: 500, max: 12000, default: 3000, group: 'STRIKE',
                       modulatable: true, lfoMin: 500, lfoMax: 12000,
                       target: m => m._clickOsc.frequency, schedule: 'setTarget', tc: 0.005 },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 1.0,
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 1.0, group: 'OUTPUT',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

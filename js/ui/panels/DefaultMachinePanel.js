@@ -31,13 +31,40 @@ export class DefaultMachinePanel {
     // `<base>.syncMode` + `<base>.bpmCount32` is rendered as one mode-aware knob.
     const allPaths = new Set(machine.getParamList().map(p => p.path));
 
+    // Group routing: params sharing a `group` (a SPEC layout hint) render inside
+    // one labelled `.param-group` row instead of the flat container run. Machines
+    // that declare no groups never create a wrapper — every element lands in
+    // `container` exactly as before. Wrappers are created lazily in SPEC order so
+    // the groups appear where their first param does.
+    const groupEls = new Map();   // group name → wrapper element
+    const targetFor = (p) => {
+      if (!p.group) return container;
+      let g = groupEls.get(p.group);
+      if (!g) {
+        g = document.createElement('div');
+        g.className = 'param-group';
+        const lbl = document.createElement('div');
+        lbl.className = 'param-group-label';
+        lbl.textContent = p.group;
+        g.appendChild(lbl);
+        const body = document.createElement('div');
+        body.className = 'param-group-body';
+        g.appendChild(body);
+        g._body = body;
+        groupEls.set(p.group, g);
+        container.appendChild(g);
+      }
+      return g._body;
+    };
+
     machine.getParamList().forEach(p => {
       if (p.hidden) return;
+      const dst = targetFor(p);
 
       const base = p.path.includes('.') ? p.path.slice(0, p.path.lastIndexOf('.')) : null;
       if (p.type === 'number' && base
           && allPaths.has(`${base}.syncMode`) && allPaths.has(`${base}.bpmCount32`)) {
-        this._renderSyncKnob(ctx, p, base);
+        this._renderSyncKnob(ctx, p, base, dst);
         return;
       }
 
@@ -61,7 +88,7 @@ export class DefaultMachinePanel {
           onRelease: () => { if (hasStep) emitStep(); },
         });
         knob.setHasPLock(hasPLock);
-        container.appendChild(knob.el);
+        dst.appendChild(knob.el);
         activeWidgets.push(knob);
         knobByPath?.set(p.path, knob);
 
@@ -88,7 +115,7 @@ export class DefaultMachinePanel {
 
         row.appendChild(label);
         row.appendChild(sel);
-        container.appendChild(row);
+        dst.appendChild(row);
 
       } else if (p.type === 'boolean') {
         const row = document.createElement('div');
@@ -108,7 +135,7 @@ export class DefaultMachinePanel {
 
         row.appendChild(label);
         row.appendChild(cb);
-        container.appendChild(row);
+        dst.appendChild(row);
       }
     });
   }
@@ -122,9 +149,10 @@ export class DefaultMachinePanel {
    * `writeValue` routes to step.plocks when a step is selected, exactly like the
    * FX delay sync knob. See design/audio-signal-chain.md (Unified Sync-Knob Model).
    */
-  _renderSyncKnob(ctx, rateP, base) {
+  _renderSyncKnob(ctx, rateP, base, dst) {
     const { machine, track, step, hasStep, container, activeWidgets, knobByPath,
             writeValue, emitStep, fmtParam, renderContent } = ctx;
+    const target = dst ?? container;   // group body when grouped, else the panel run
 
     const modePath  = `${base}.syncMode`;
     const countPath = `${base}.bpmCount32`;
@@ -162,7 +190,7 @@ export class DefaultMachinePanel {
       onRelease: () => { if (hasStep) emitStep(); },
     });
     knob.setHasPLock(hasPLock);
-    container.appendChild(knob.el);
+    target.appendChild(knob.el);
     activeWidgets.push(knob);
     knobByPath?.set(activePath, knob);
   }

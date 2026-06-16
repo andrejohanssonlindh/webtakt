@@ -47,20 +47,20 @@ export class TransientMachine extends Machine {
   // 'pitch' is modulatable but JS-only (used to set the body start freq in
   // noteOn — not a standing AudioParam). 'body.wave' swaps the osc type.
   static SPEC = {
-    'pitch':        { label: 'Pitch', type: 'number', min: 0, max: 2000, default: 0,
+    'pitch':        { label: 'Pitch', type: 'number', min: 0, max: 2000, default: 0, group: 'BODY',
                       modulatable: true, lfoMin: 0, lfoMax: 2000, plockMode: 'js' },
-    'pitch.end':    { label: 'Pitch End', type: 'number', min: 0.05, max: 1.0, default: 0.4, plockMode: 'js' },
-    'body.decay':   { label: 'Body Decay', type: 'number', min: 0.01, max: 2.0, default: 0.12, plockMode: 'js' },
-    'body.wave':    { label: 'Body Wave', type: 'enum', options: ['sine','triangle'], default: 'sine',
+    'pitch.end':    { label: 'Pitch End', type: 'number', min: 0.05, max: 1.0, default: 0.4, group: 'BODY', plockMode: 'js' },
+    'body.decay':   { label: 'Body Decay', type: 'number', min: 0.01, max: 2.0, default: 0.12, group: 'BODY', plockMode: 'js' },
+    'body.wave':    { label: 'Body Wave', type: 'enum', options: ['sine','triangle'], default: 'sine', group: 'BODY',
                       plockMode: 'js', apply: (v, t, m) => { m._bodyOsc.type = v; } },
-    'click.freq':   { label: 'Click Freq', type: 'number', min: 100, max: 8000, default: 1200,
+    'click.freq':   { label: 'Click Freq', type: 'number', min: 100, max: 8000, default: 1200, group: 'CLICK',
                       modulatable: true, lfoMin: 100, lfoMax: 8000,
                       target: m => m._clickOsc.frequency, schedule: 'setTarget', tc: 0.005 },
-    'click.decay':  { label: 'Click Decay', type: 'number', min: 0.001, max: 0.05, default: 0.008, plockMode: 'js' },
-    'noise.click':  { label: 'Crack', type: 'number', min: 0, max: 1, default: 0.3,
+    'click.decay':  { label: 'Click Decay', type: 'number', min: 0.001, max: 0.05, default: 0.008, group: 'CLICK', plockMode: 'js' },
+    'noise.click':  { label: 'Crack', type: 'number', min: 0, max: 1, default: 0.3, group: 'CLICK',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m._noiseClickGain.gain, schedule: 'setTarget', tc: 0.01 },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85,
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85, group: 'OUTPUT',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

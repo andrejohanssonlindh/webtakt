@@ -53,31 +53,53 @@ export class FMPanel {
       return knob;
     };
 
-    // ── Operator cell factory ────────────────────────────────────
+    // Phone-only collapse: graphics (per-op ADSR canvas + schematic) render
+    // inside <details> that start OPEN on desktop/iPad and CLOSED on phone, so
+    // the at-a-glance visuals stay on big screens but free vertical space where
+    // it's tight. Re-evaluated on every render (tab switch reapplies correctly).
+    const isPhone = window.matchMedia('(max-width: 640px)').matches;
+
+    // ── Operator section factory ─────────────────────────────────
+    // Each operator is a `.param-group` (same reflow as DefaultMachinePanel:
+    // 3-up desktop → 2-up iPad → 1-up phone). Body = two knob rows (params +
+    // ADSR) followed by a collapsible ADSR-shape canvas.
     const mkOpCell = (opKey, opLabel, role, roleClass, paramKeys) => {
       const cell = document.createElement('div');
-      cell.className = 'fm-op-cell';
+      cell.className = 'param-group fm-op-group';
 
       const hdr = document.createElement('div');
-      hdr.className = 'fm-op-hdr';
+      hdr.className = 'param-group-label fm-op-hdr';
       hdr.innerHTML = `<span class="fm-op-label">${opLabel}</span><span class="fm-op-role ${roleClass}">${role}</span>`;
       cell.appendChild(hdr);
 
-      const allRow = document.createElement('div');
-      allRow.className = 'fm-op-params-row';
+      const body = document.createElement('div');
+      body.className = 'fm-op-body';
+      cell.appendChild(body);
 
-      // Param knobs (ratio, level, detune, [feedback])
+      // Row 1 — param knobs (ratio, level, detune, [feedback]).
+      const paramRow = document.createElement('div');
+      paramRow.className = 'fm-op-krow';
       paramKeys.forEach(path => {
         const knob = mkKnob(path, 44);
-        if (knob) allRow.appendChild(knob.el);
+        if (knob) paramRow.appendChild(knob.el);
       });
+      body.appendChild(paramRow);
 
-      // ADSR section
+      // Row 2 — ADSR knobs + (collapsible) shape canvas.
       const adsrDiv     = document.createElement('div');
       adsrDiv.className = 'fm-op-adsr';
 
       const envKnobWrap     = document.createElement('div');
       envKnobWrap.className = 'fm-op-env-krow';
+
+      // Shape canvas lives inside a phone-collapsible <details>.
+      const envDetails = document.createElement('details');
+      envDetails.className = 'fm-op-env-details';
+      if (!isPhone) envDetails.open = true;
+      const envSummary = document.createElement('summary');
+      envSummary.className = 'fm-op-env-summary';
+      envSummary.textContent = 'shape';
+      envDetails.appendChild(envSummary);
 
       const envCanvas     = document.createElement('canvas');
       envCanvas.className = 'fm-op-env-canvas';
@@ -213,50 +235,70 @@ export class FMPanel {
       });
 
       adsrDiv.appendChild(envKnobWrap);
-      adsrDiv.appendChild(envCanvas);
-      allRow.appendChild(adsrDiv);
-      cell.appendChild(allRow);
+      envDetails.appendChild(envCanvas);
+      adsrDiv.appendChild(envDetails);
+      body.appendChild(adsrDiv);
 
-      requestAnimationFrame(drawEnvCanvas);
+      // Canvas has zero size while the <details> is collapsed; redraw when the
+      // user expands it so it picks up real dimensions.
+      envDetails.addEventListener('toggle', () => {
+        if (envDetails.open) requestAnimationFrame(drawEnvCanvas);
+      });
+
+      if (envDetails.open) requestAnimationFrame(drawEnvCanvas);
       return cell;
     };
 
-    // ── Layout: schematic left + 2×2 operator grid right ────────
+    // ── Layout: operator sections, OUTPUT, then schematic at bottom ──
     const wrap = document.createElement('div');
     wrap.className = 'fm-wrap';
 
-    const topRow = document.createElement('div');
-    topRow.className = 'fm-top-row';
-    wrap.appendChild(topRow);
+    // Operator sections — `.param-group` row reflowing 3/2/1-up. Carrier first
+    // (OP1) so the signal-flow reads top-down on a stacked phone layout.
+    const opsRow = document.createElement('div');
+    opsRow.className = 'fm-ops-row';
+    opsRow.appendChild(mkOpCell('op1', 'OP1', 'CARRIER', 'fm-role-carrier', ['op1.ratio', 'op1.level', 'op1.detune']));
+    opsRow.appendChild(mkOpCell('op2', 'OP2', 'MOD+FB',  'fm-role-fb',      ['op2.ratio', 'op2.level', 'op2.feedback', 'op2.detune']));
+    opsRow.appendChild(mkOpCell('op3', 'OP3', 'MOD',     'fm-role-mod',     ['op3.ratio', 'op3.level', 'op3.detune']));
+    opsRow.appendChild(mkOpCell('op4', 'OP4', 'MOD',     'fm-role-mod',     ['op4.ratio', 'op4.level', 'op4.detune']));
 
-    // Schematic column
-    const schLeft = document.createElement('div');
-    schLeft.className = 'fm-left';
+    // OUTPUT — its own section, matching every other machine.
+    const outG = document.createElement('div');
+    outG.className = 'param-group fm-op-group';
+    const outLbl = document.createElement('div');
+    outLbl.className = 'param-group-label';
+    outLbl.textContent = 'OUTPUT';
+    outG.appendChild(outLbl);
+    const outBody = document.createElement('div');
+    outBody.className = 'param-group-body';
+    const outKnob = mkKnob('output.level', 44);
+    if (outKnob) outBody.appendChild(outKnob.el);
+    outG.appendChild(outBody);
+    opsRow.appendChild(outG);
 
+    wrap.appendChild(opsRow);
+
+    // Schematic — reference visual at the very bottom, phone-collapsible.
+    const schDetails = document.createElement('details');
+    schDetails.className = 'fm-sch-details';
+    if (!isPhone) schDetails.open = true;
+    const schSummary = document.createElement('summary');
+    schSummary.className = 'fm-sch-summary';
+    schSummary.textContent = 'Operator routing';
+    schDetails.appendChild(schSummary);
+
+    const schWrap = document.createElement('div');
+    schWrap.className = 'fm-left';
     const schCanvas = document.createElement('canvas');
     schCanvas.className = 'fm-sch-canvas';
-    schLeft.appendChild(schCanvas);
-    topRow.appendChild(schLeft);
+    schWrap.appendChild(schCanvas);
+    schDetails.appendChild(schWrap);
+    wrap.appendChild(schDetails);
 
-    _drawSchematic(schCanvas, schLeft);
-
-    // Operator grid (2×2)
-    const opsRight = document.createElement('div');
-    opsRight.className = 'fm-ops-right';
-
-    opsRight.appendChild(mkOpCell('op4', 'OP4', 'MOD',     'fm-role-mod',     ['op4.ratio', 'op4.level', 'op4.detune']));
-    opsRight.appendChild(mkOpCell('op3', 'OP3', 'MOD',     'fm-role-mod',     ['op3.ratio', 'op3.level', 'op3.detune']));
-    opsRight.appendChild(mkOpCell('op2', 'OP2', 'MOD+FB',  'fm-role-fb',      ['op2.ratio', 'op2.level', 'op2.feedback', 'op2.detune']));
-    opsRight.appendChild(mkOpCell('op1', 'OP1', 'CARRIER', 'fm-role-carrier', ['op1.ratio', 'op1.level', 'op1.detune']));
-
-    topRow.appendChild(opsRight);
-
-    // Output level knob — below schematic canvas
-    const outRow = document.createElement('div');
-    outRow.className = 'fm-out-row';
-    const outKnob = mkKnob('output.level', 44);
-    if (outKnob) outRow.appendChild(outKnob.el);
-    schLeft.appendChild(outRow);
+    if (schDetails.open) _drawSchematic(schCanvas, schWrap);
+    schDetails.addEventListener('toggle', () => {
+      if (schDetails.open) _drawSchematic(schCanvas, schWrap);
+    });
 
     container.appendChild(wrap);
   }

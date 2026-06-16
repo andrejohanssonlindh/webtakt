@@ -61,25 +61,25 @@ export class NoiseMachine extends Machine {
   // 'color' is modulatable but JS-only (no AudioParam): it sets Q on both
   // bandpass filters via apply. 'crush' rebuilds the waveshaper curve.
   static SPEC = {
-    'color':        { label: 'Color', type: 'number', min: 0, max: 1, default: 0.3,
+    'color':        { label: 'Color', type: 'number', min: 0, max: 1, default: 0.3, group: 'COLOR',
                       modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'js',
                       apply: (v, t, m) => {
                         m._colorBP.Q.setTargetAtTime(m._colorQ(), t, 0.01);
                         m._bodyBP.Q.setTargetAtTime(m._bodyQ(), t, 0.01);
                       } },
-    'color.freq':   { label: 'Color Freq', type: 'number', min: 200, max: 8000, default: 2000,
+    'color.freq':   { label: 'Color Freq', type: 'number', min: 200, max: 8000, default: 2000, group: 'COLOR',
                       modulatable: true, lfoMin: 200, lfoMax: 8000,
                       target: m => m._colorBP.frequency, schedule: 'setTarget', tc: 0.01 },
-    'body.freq':    { label: 'Body Freq', type: 'number', min: 80, max: 2000, default: 400,
+    'body.freq':    { label: 'Body Freq', type: 'number', min: 80, max: 2000, default: 400, group: 'BODY',
                       modulatable: true, lfoMin: 80, lfoMax: 2000,
                       target: m => m._bodyBP.frequency, schedule: 'setTarget', tc: 0.01 },
-    'body.level':   { label: 'Body', type: 'number', min: 0, max: 1, default: 0.5,
+    'body.level':   { label: 'Body', type: 'number', min: 0, max: 1, default: 0.5, group: 'BODY',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m._bodyGain.gain, schedule: 'setTarget', tc: 0.01 },
-    'crush':        { label: 'Crush', type: 'number', min: 0, max: 1, default: 0.0, plockMode: 'js',
+    'crush':        { label: 'Crush', type: 'number', min: 0, max: 1, default: 0.0, group: 'SHAPE', plockMode: 'js',
                       apply: (v, t, m) => { m._crusher.curve = _buildCrusherCurve(v); } },
-    'decay':        { label: 'Decay', type: 'number', min: 0.01, max: 4.0, default: 0.25, plockMode: 'js' },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8,
+    'decay':        { label: 'Decay', type: 'number', min: 0.01, max: 4.0, default: 0.25, group: 'SHAPE', plockMode: 'js' },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8, group: 'OUTPUT',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

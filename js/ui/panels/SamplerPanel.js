@@ -118,13 +118,33 @@ export class SamplerPanel {
     canvasWrap.appendChild(this._canvasEl);
     wrap.appendChild(canvasWrap);
 
-    // ── Params row ───────────────────────────────────────────
-    const paramRow = document.createElement('div');
-    paramRow.className = 'sampler-param-row';
-
+    // ── Param sections ───────────────────────────────────────
+    // Same labelled-section layout as DefaultMachinePanel (`.param-group`), so
+    // the sampler reflows 3-up desktop → 2-up iPad → 1-up phone like every other
+    // machine. Each group gets a `.param-group-body` to drop knobs/toggles into.
     const m = this.machine;
 
-    const addKnob = (path, label, min, max, fmt) => {
+    // Row container so the groups reflow side-by-side (the wrap itself is a
+    // column). Matches DefaultMachinePanel's `.panel-content` flex-row of groups.
+    const groupsRow = document.createElement('div');
+    groupsRow.className = 'sampler-groups';
+    wrap.appendChild(groupsRow);
+
+    const makeGroup = (label) => {
+      const g = document.createElement('div');
+      g.className = 'param-group';
+      const lbl = document.createElement('div');
+      lbl.className = 'param-group-label';
+      lbl.textContent = label;
+      g.appendChild(lbl);
+      const body = document.createElement('div');
+      body.className = 'param-group-body';
+      g.appendChild(body);
+      groupsRow.appendChild(g);
+      return body;
+    };
+
+    const addKnob = (dst, path, label, min, max, fmt) => {
       const knob = new KnobWidget({
         label,
         min,
@@ -141,29 +161,29 @@ export class SamplerPanel {
           this._drawWaveform();
         },
       });
-      paramRow.appendChild(knob.el);
+      dst.appendChild(knob.el);
       this.ctx.activeWidgets.push(knob);
       return knob;
     };
 
-    this._startKnob     = addKnob('sample.start',     'START',   0, 1,   v => Math.round(v * 100) + '%');
-    this._endKnob       = addKnob('sample.end',       'END',     0, 1,   v => Math.round(v * 100) + '%');
-    this._loopStartKnob = addKnob('sample.loopStart', 'LOOP ST', 0, 1,   v => Math.round(v * 100) + '%');
-    addKnob('sample.speed', 'SPEED', 0.125, 4,  v => v.toFixed(2) + 'x');
-    addKnob('sample.gain',  'GAIN',  0, 20,     v => v.toFixed(1) + 'x');
-    addKnob('sample.root',  'ROOT',  0, 127,    v => this._midiName(Math.round(v)));
-    addKnob('output.level', 'LEVEL', 0, 1,      v => Math.round(v * 100) + '%');
+    const trimG = makeGroup('TRIM');
+    this._startKnob     = addKnob(trimG, 'sample.start',     'START',   0, 1, v => Math.round(v * 100) + '%');
+    this._endKnob       = addKnob(trimG, 'sample.end',       'END',     0, 1, v => Math.round(v * 100) + '%');
+    this._loopStartKnob = addKnob(trimG, 'sample.loopStart', 'LOOP ST', 0, 1, v => Math.round(v * 100) + '%');
 
-    // Toggles
-    paramRow.appendChild(this._makeToggle('PITCH', 'sample.pitch'));
-    paramRow.appendChild(this._makeToggle('REV',   'sample.reverse'));
-    paramRow.appendChild(this._makeToggle('LOOP',  'sample.loop'));
+    const playG = makeGroup('PLAYBACK');
+    addKnob(playG, 'sample.speed', 'SPEED', 0.125, 4, v => v.toFixed(2) + 'x');
+    addKnob(playG, 'sample.gain',  'GAIN',  0, 20,    v => v.toFixed(1) + 'x');
+    addKnob(playG, 'sample.root',  'ROOT',  0, 127,   v => this._midiName(Math.round(v)));
+    playG.appendChild(this._makeToggle('PITCH', 'sample.pitch'));
+    playG.appendChild(this._makeToggle('REV',   'sample.reverse'));
+    playG.appendChild(this._makeToggle('LOOP',  'sample.loop'));
 
+    const outG = makeGroup('OUTPUT');
+    addKnob(outG, 'output.level', 'LEVEL', 0, 1, v => Math.round(v * 100) + '%');
     // SAMPLE LEN button — sets trig length to match the trimmed sample duration
     this._sampleLenBtn = this._makeSampleLenBtn();
-    paramRow.appendChild(this._sampleLenBtn);
-
-    wrap.appendChild(paramRow);
+    outG.appendChild(this._sampleLenBtn);
 
     this.container.appendChild(wrap);
 

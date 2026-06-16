@@ -65,28 +65,28 @@ export class StringsMachine extends Machine {
   // voice ensemble spread is preserved), NOT a direct auto-schedule. 'mode' and
   // 'ensemble' are JS side-effects that recompute the section via _applyTuning.
   static SPEC = {
-    'mode':         { label: 'Mode', type: 'enum', options: MODE_NAMES, default: 'viola',
+    'mode':         { label: 'Mode', type: 'enum', options: MODE_NAMES, default: 'viola', group: 'VOICE',
                       plockMode: 'js', apply: (v, t, m) => m._applyTuning(m._rootFreq, t) },
     'osc.detune':   { label: 'Detune', type: 'number', min: -100, max: 100, default: 0, hidden: true,
                       modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam',
                       target: m => m._oscs[0].detune, manualTarget: true,
                       apply: (v, t, m) => m._applyTuning(m._rootFreq, t) },
-    'ensemble':     { label: 'Ensemble', type: 'number', min: 0, max: 60, default: 14,
+    'ensemble':     { label: 'Ensemble', type: 'number', min: 0, max: 60, default: 14, group: 'VOICE',
                       modulatable: true, lfoMin: 0, lfoMax: 60, plockMode: 'js',
                       apply: (v, t, m) => m._applyTuning(m._rootFreq, t) },
-    'tone':         { label: 'Tone', type: 'number', min: 300, max: 12000, default: 4000,
+    'tone':         { label: 'Tone', type: 'number', min: 300, max: 12000, default: 4000, group: 'TONE',
                       modulatable: true, lfoMin: 300, lfoMax: 12000,
                       target: m => m._tone.frequency, schedule: 'setTarget', tc: 0.01 },
-    'body':         { label: 'Body', type: 'number', min: 150, max: 3000, default: 800,
+    'body':         { label: 'Body', type: 'number', min: 150, max: 3000, default: 800, group: 'TONE',
                       modulatable: true, lfoMin: 150, lfoMax: 3000,
                       target: m => m._body.frequency, schedule: 'setTarget', tc: 0.01 },
-    'resonance':    { label: 'Resonance', type: 'number', min: 0.3, max: 10, default: 1.2,
+    'resonance':    { label: 'Resonance', type: 'number', min: 0.3, max: 10, default: 1.2, group: 'TONE',
                       modulatable: true, lfoMin: 0.3, lfoMax: 10,
                       target: m => m._body.Q, schedule: 'setTarget', tc: 0.01 },
-    'bow':          { label: 'Bow', type: 'number', min: 0, max: 1, default: 0.15,
+    'bow':          { label: 'Bow', type: 'number', min: 0, max: 1, default: 0.15, group: 'TONE',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m._bowGain.gain, schedule: 'setTarget', tc: 0.01 },
-    'vibrato':      { label: 'Vibrato', type: 'number', min: 0, max: 50, default: 6,
+    'vibrato':      { label: 'Vibrato', type: 'number', min: 0, max: 50, default: 6, group: 'VIBRATO',
                       modulatable: true, lfoMin: 0, lfoMax: 50,
                       target: m => m._vibratoGain.gain, schedule: 'setTarget', tc: 0.02 },
     // Vibrato rate is a unified MS↔BPM (here Hz↔BPM) sync knob: in 'hz' mode the
@@ -95,7 +95,7 @@ export class StringsMachine extends Machine {
     // (1/32 period count) + the track tempo. manualTarget keeps the AudioParam
     // exposed to the LFO/resolveAudioParam while `_applyVibratoRate` owns the
     // actual write (so BPM mode wins when active). See design/audio-signal-chain.md (Unified Sync-Knob Model).
-    'vibrato.rate': { label: 'Vib Rate', type: 'number', min: 0.5, max: 12, default: 5.0,
+    'vibrato.rate': { label: 'Vib Rate', type: 'number', min: 0.5, max: 12, default: 5.0, group: 'VIBRATO',
                       modulatable: true, lfoMin: 0.5, lfoMax: 12, plockMode: 'audioParam',
                       target: m => m._vibratoOsc.frequency, manualTarget: true,
                       apply: (v, t, m) => m._applyVibratoRate(t) },
@@ -106,7 +106,7 @@ export class StringsMachine extends Machine {
                             hidden: true, plockMode: 'js', apply: (v, t, m) => m._applyVibratoRate(t) },
     'vibrato.bpmCount32': { label: 'Vib Div', type: 'number', min: 1, max: 128, default: 8,
                             hidden: true, plockMode: 'js', apply: (v, t, m) => m._applyVibratoRate(t) },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.7,
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.7, group: 'OUTPUT',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

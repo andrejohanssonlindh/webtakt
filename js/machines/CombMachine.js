@@ -39,12 +39,12 @@ export class CombMachine extends Machine {
   // 'decay'/'mix' are modulatable but plockMode:'js' (no AudioParam target);
   // 'ratio'/'decay2'/'strike' emit modulatable:false explicitly.
   static SPEC = {
-    'ratio':        { label: 'Ratio', type: 'number', min: 0.5, max: 8, default: 2.756, modulatable: false, plockMode: 'js' },
-    'decay':        { label: 'Decay', type: 'number', min: 0.1, max: 8, default: 1.8, modulatable: true, lfoMin: 0.1, lfoMax: 8, plockMode: 'js' },
-    'decay2':       { label: 'Decay 2', type: 'number', min: 0.1, max: 2, default: 0.35, modulatable: false, plockMode: 'js' },
-    'mix':          { label: 'Mix', type: 'number', min: 0, max: 1, default: 0.4, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'js' },
-    'strike':       { label: 'Strike', type: 'number', min: 0, max: 1, default: 0.6, modulatable: false, plockMode: 'js' },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8,
+    'ratio':        { label: 'Ratio', type: 'number', min: 0.5, max: 8, default: 2.756, group: 'TUBE', modulatable: false, plockMode: 'js' },
+    'decay':        { label: 'Decay', type: 'number', min: 0.1, max: 8, default: 1.8, group: 'TUBE', modulatable: true, lfoMin: 0.1, lfoMax: 8, plockMode: 'js' },
+    'decay2':       { label: 'Decay 2', type: 'number', min: 0.1, max: 2, default: 0.35, group: 'TUBE', modulatable: false, plockMode: 'js' },
+    'mix':          { label: 'Mix', type: 'number', min: 0, max: 1, default: 0.4, group: 'VOICE', modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'js' },
+    'strike':       { label: 'Strike', type: 'number', min: 0, max: 1, default: 0.6, group: 'VOICE', modulatable: false, plockMode: 'js' },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8, group: 'OUTPUT',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

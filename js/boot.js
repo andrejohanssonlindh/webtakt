@@ -208,6 +208,17 @@ const keyboard   = new Keyboard(
   state
 );
 
+// ── Phone default surface: STEPS ──────────────────────────
+// On a phone the step grid and synth panel are mutually-exclusive surfaces
+// toggled by the STEPS pseudo-tab (see SynthPanel + the Surface-C CSS). Sequencing
+// is the primary action, so land on STEPS. Match the 640px CSS breakpoint. Pure
+// boot-time default — no resize listener; rotating/resizing past the breakpoint
+// is an edge case the tabs themselves handle (tap STEPS / any tab).
+if (window.matchMedia('(max-width: 640px)').matches) {
+  document.body.classList.add('phone-show-steps');
+  synthPanel.render();   // reflect STEPS as the active tab
+}
+
 // ── Settings (global prefs: BPM grid, mod-wheel sensitivity, keybinds, layout) ──
 // Apply the persisted finest-division snap resolution at boot, and re-render
 // open panels whenever a setting changes (so synced knobs pick up new snaps).

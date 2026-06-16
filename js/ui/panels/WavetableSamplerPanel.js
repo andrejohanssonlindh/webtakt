@@ -17,7 +17,7 @@
 import { KnobWidget } from '../KnobWidget.js';
 import { formatCount32, MUSICAL_SNAP_32 } from '../../util/BpmSync.js';
 
-const WAVE_H  = 96;  // canvas CSS height per slot
+const WAVE_H  = 72;  // canvas CSS height per slot (matches .wt-sampler-waveform)
 const SNAP_PX = 10;  // pixel snap zone for handle pick-up
 
 export class WavetableSamplerPanel {
@@ -63,62 +63,63 @@ export class WavetableSamplerPanel {
     }
     wrap.appendChild(slotsRow);
 
-    // ── Params row ───────────────────────────────────────────
-    const paramRow = document.createElement('div');
-    paramRow.className = 'wt-sampler-params';
-
+    // ── Param sections ───────────────────────────────────────
+    // Grouped (MORPH / SLOT A / SLOT B / SWEEP) in a `.sampler-groups` row so
+    // they reflow 3-up → 2-up → 1-up via the shared `.param-group` media
+    // queries, matching SamplerPanel and every DefaultMachinePanel machine.
     const m = this.machine;
 
-    const addKnob = (path, label, min, max, fmt, size = 56) => {
+    const groupsRow = document.createElement('div');
+    groupsRow.className = 'sampler-groups';
+    wrap.appendChild(groupsRow);
+
+    const makeGroup = (label) => {
+      const g = document.createElement('div');
+      g.className = 'param-group';
+      const lbl = document.createElement('div');
+      lbl.className = 'param-group-label';
+      lbl.textContent = label;
+      g.appendChild(lbl);
+      const body = document.createElement('div');
+      body.className = 'param-group-body';
+      g.appendChild(body);
+      groupsRow.appendChild(g);
+      return body;
+    };
+
+    const addKnob = (dst, path, label, min, max, fmt, size = 56) => {
       const knob = new KnobWidget({
         label, min, max, size, fmt,
         value: m.getParam(path),
         onChange: v => this.ctx.writeValue(m, path, v, false),
         onRelease: () => this.ctx.emitStep?.(),
       });
-      paramRow.appendChild(knob.el);
+      dst.appendChild(knob.el);
       this.ctx.activeWidgets.push(knob);
       return knob;
     };
 
-    addKnob('morph',        'MORPH',  0,     1,   v => Math.round(v * 100) + '%', 64);
-    addKnob('sample.speed', 'SPEED',  0.125, 4,   v => v.toFixed(2) + 'x');
-    addKnob('output.level', 'LEVEL',  0,     1,   v => Math.round(v * 100) + '%');
+    // MORPH — the wavetable crossfade + global playback controls.
+    const morphG = makeGroup('MORPH');
+    addKnob(morphG, 'morph',        'MORPH',  0,     1, v => Math.round(v * 100) + '%', 64);
+    addKnob(morphG, 'sample.speed', 'SPEED',  0.125, 4, v => v.toFixed(2) + 'x');
+    addKnob(morphG, 'output.level', 'LEVEL',  0,     1, v => Math.round(v * 100) + '%');
+    morphG.appendChild(this._makeToggle('PITCH', 'sample.pitch'));
+    morphG.appendChild(this._makeToggle('LOOP',  'sample.loop'));
+    morphG.appendChild(this._makeToggle('REV',   'sample.reverse'));
 
-    paramRow.appendChild(this._makeToggle('PITCH', 'sample.pitch'));
-    paramRow.appendChild(this._makeToggle('LOOP',  'sample.loop'));
-    paramRow.appendChild(this._makeToggle('REV',   'sample.reverse'));
-
-    wrap.appendChild(paramRow);
-
-    // ── Root + Gain row ──────────────────────────────────────
-    const rootRow = document.createElement('div');
-    rootRow.className = 'wt-sampler-root-row';
-
+    // Per-slot Root / Gain / Loop-start.
     for (const slot of ['A', 'B']) {
       const color = slot === 'A' ? '#4caf50' : '#ffb300';
+      const slotG = makeGroup(`SLOT ${slot}`);
 
-      const rootKnob = new KnobWidget({
-        label: `Root ${slot}`, min: 0, max: 127, size: 44,
-        value: m.getParam(`sample.root${slot}`),
-        fmt: v => this._midiName(Math.round(v)),
-        onChange: v => this.ctx.writeValue(m, `sample.root${slot}`, v, false),
-        onRelease: () => this.ctx.emitStep?.(),
-      });
+      const rootKnob = addKnob(slotG, `sample.root${slot}`, `Root ${slot}`, 0, 127,
+                               v => this._midiName(Math.round(v)), 44);
       rootKnob.el.style.setProperty('--knob-label-color', color);
-      rootRow.appendChild(rootKnob.el);
-      this.ctx.activeWidgets.push(rootKnob);
 
-      const gainKnob = new KnobWidget({
-        label: `Gain ${slot}`, min: 0, max: 4, size: 44,
-        value: m.getParam(`sample.gain${slot}`),
-        fmt: v => v.toFixed(2) + 'x',
-        onChange: v => this.ctx.writeValue(m, `sample.gain${slot}`, v, false),
-        onRelease: () => this.ctx.emitStep?.(),
-      });
+      const gainKnob = addKnob(slotG, `sample.gain${slot}`, `Gain ${slot}`, 0, 4,
+                               v => v.toFixed(2) + 'x', 44);
       gainKnob.el.style.setProperty('--knob-label-color', color);
-      rootRow.appendChild(gainKnob.el);
-      this.ctx.activeWidgets.push(gainKnob);
 
       const loopStartKnob = new KnobWidget({
         label: `LpSt ${slot}`, min: 0, max: 1, size: 44,
@@ -131,25 +132,14 @@ export class WavetableSamplerPanel {
         onRelease: () => this.ctx.emitStep?.(),
       });
       loopStartKnob.el.style.setProperty('--knob-label-color', '#00bcd4');
-      rootRow.appendChild(loopStartKnob.el);
+      slotG.appendChild(loopStartKnob.el);
       this.ctx.activeWidgets.push(loopStartKnob);
       this._loopStartKnob[slot] = loopStartKnob;
     }
-    wrap.appendChild(rootRow);
 
-    // ── Sweep row ────────────────────────────────────────────
-    const sweepRow = document.createElement('div');
-    sweepRow.className = 'wt-sampler-root-row';
-
-    const sweepDepthKnob = new KnobWidget({
-      label: 'SWP DEPTH', min: 0, max: 1, size: 48,
-      value: m.getParam('sweep.depth'),
-      fmt: v => Math.round(v * 100) + '%',
-      onChange: v => this.ctx.writeValue(m, 'sweep.depth', v, false),
-      onRelease: () => this.ctx.emitStep?.(),
-    });
-    sweepRow.appendChild(sweepDepthKnob.el);
-    this.ctx.activeWidgets.push(sweepDepthKnob);
+    // SWEEP — wavetable-position LFO.
+    const sweepG = makeGroup('SWEEP');
+    addKnob(sweepG, 'sweep.depth', 'SWP DEPTH', 0, 1, v => Math.round(v * 100) + '%', 48);
 
     // SWP SPEED is a unified Hz↔BPM sync knob: double-click the centre to flip
     // mode. Hz mode drives sweep.speed; BPM mode drives sweep.bpmCount32 (1/32
@@ -176,10 +166,9 @@ export class WavetableSamplerPanel {
       onChange: v => this.ctx.writeValue(m, sweepActivePath, v, false),
       onRelease: () => this.ctx.emitStep?.(),
     });
-    sweepRow.appendChild(sweepSpeedKnob.el);
+    sweepG.appendChild(sweepSpeedKnob.el);
     this.ctx.activeWidgets.push(sweepSpeedKnob);
 
-    wrap.appendChild(sweepRow);
     this.container.appendChild(wrap);
 
     // Initial draw after layout settles
@@ -291,8 +280,10 @@ export class WavetableSamplerPanel {
     const dpr = window.devicePixelRatio || 1;
     const w   = canvas.parentElement?.clientWidth || 200;
     const h   = WAVE_H;
-    canvas.width  = w * dpr;
-    canvas.height = h * dpr;
+    canvas.width        = w * dpr;
+    canvas.height       = h * dpr;
+    canvas.style.width  = '100%';
+    canvas.style.height = h + 'px';
     const gc = canvas.getContext('2d');
     gc.setTransform(1, 0, 0, 1, 0, 0);
     gc.scale(dpr, dpr);

@@ -31,16 +31,16 @@ export class SynthMachine extends Machine {
   // Declarative param spec — see Machine._initSpec/setParam/getParamList.
   static SPEC = {
     'osc.waveform': { label: 'Waveform', type: 'enum', options: ['sine','sawtooth','square','triangle'],
-                      default: 'sawtooth', plockMode: 'js', apply: (v, t, m) => { m._oscMain.type = v; } },
+                      default: 'sawtooth', group: 'OSC', plockMode: 'js', apply: (v, t, m) => { m._oscMain.type = v; } },
     'osc.detune':   { label: 'Detune', type: 'number', min: -100, max: 100, default: 0, hidden: true,
                       modulatable: true, lfoMin: -100, lfoMax: 100,
                       target: m => m._oscMain.detune, schedule: 'setTarget', tc: 0.005 },
-    'sub.level':    { label: 'Sub Level', type: 'number', min: 0, max: 1, default: 0.3,
+    'sub.level':    { label: 'Sub Level', type: 'number', min: 0, max: 1, default: 0.3, group: 'SUB',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m._subGain.gain, schedule: 'setTarget', tc: 0.005 },
     'sub.waveform': { label: 'Sub Waveform', type: 'enum', options: ['sine','sawtooth','square','triangle'],
-                      default: 'square', plockMode: 'js', apply: (v, t, m) => { m._oscSub.type = v; } },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8,
+                      default: 'square', group: 'SUB', plockMode: 'js', apply: (v, t, m) => { m._oscSub.type = v; } },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8, group: 'OUTPUT',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

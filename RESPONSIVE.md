@@ -86,7 +86,123 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
       group inline + hides the toggle (no change); only at `<=640px` does it
       collapse into a dropdown. BPM slider capped at 90px so it never claims a
       full row. Result: phone transport stays <=2 rows.
-- [ ] **C — Synth panel** → one-panel-at-a-time + tab bar on narrow.
+- [~] **C — Synth panel** → narrow-screen reflow. The headline fix is
+      **step-grid-as-a-tab**; three pure-CSS compactions ride along.
+      0. **STEPS pseudo-tab (the real fix).** On phone the 4×4 step grid
+         (`#middle-row`, `flex-shrink:0`) claimed its full natural height and
+         crushed the `flex:1` `#synth-panel` to ~nothing — so the synth tabs/knobs
+         were invisible (this is why fluid/knob tweaks "did nothing"). Fix: step
+         grid + synth panel are **mutually-exclusive surfaces** toggled by a
+         phone-only `STEPS` tab (leftmost in the strip). Driven by a body class
+         `phone-show-steps` (not `state.activeTab`, so the `_renderContent` switch
+         + desktop semantics are untouched). Phone default surface = STEPS (set in
+         boot.js via `matchMedia`). Touches: `SynthPanel.js` (tab button +
+         `_syncTabActive`), `boot.js` (default), CSS.
+      1. **Header fluff:** hide oscilloscope + COPY/PASTE bar at `<=640px`.
+      2. **Tab strip:** 13 tabs scroll sideways (`overflow-x:auto`,
+         `flex-wrap:nowrap`, scrollbar hidden) instead of overflowing. P-lock
+         highlights ride along.
+      3. **3-knobs-wide:** scale `.knob-canvas` → 48px in CSS (KnobWidget bakes
+         64px in JS; the 2× backing store stays crisp). Applies to every
+         DefaultMachinePanel machine at once.
+      4. **Param sections (responsive section grid).** Opt-in `group` field on
+         SPEC → DefaultMachinePanel renders each group as a self-contained ROW
+         (selector + its knobs on one line, e.g. Moogish OSC 1 =
+         [Wave][Oct][Detune][Level]). Sections reflow side-by-side by viewport:
+         **3-up desktop → 2-up iPad(≤1024) → 1-up phone(≤640)** via
+         `.param-group` flex-basis. Same design language reused for the machine
+         picker next (see below). Generic; ungrouped machines unchanged.
+      5. **Vertical anchoring (phone).** `#app` → `100dvh` (was `100vh`
+         overshooting under the mobile URL bar = the under-keyboard gap). Exactly
+         one surface grows (synth-panel on SYNTH, middle-row on STEPS) so the
+         keyboard pins to the bottom and the growing surface scrolls internally
+         instead of shoving the bars above. Step grid aligns to the bottom of its
+         area (`align-items:flex-end`) so it sits just above the keyboard.
+      Pilot verify: MoogishMachine/analogue + a drum machine (Kick/HiHat).
+      Custom panels (FM/Sampler) deferred — they pin their own canvas sizes and
+      may need per-panel paths (Surface E / Phase 3).
+- [x] **C.1 — Machine picker.** Couldn't select machines on narrow: the wrap was
+      a fixed 3 group-cols × 3 card-cols = 9 cells wide. The DOM already groups by
+      family (`.machine-group` columns), so this was pure CSS — reflow
+      `.machine-grid-wrap` 3/2/1-up (same cadence as param sections) + drop cards
+      to 2-up on phone. No JS.
+- [x] **C.1b — MACHINE tab cohesion.** Group headings now match
+      `.param-group-label` (underlined section header) so MACHINE + param tabs
+      share one design language. Phone: 1 group/row, cards single-column (2-up
+      cramped the desc). iPad: groups 2-up. Desktop: groups 3-up.
+- [x] **C.1b-FIX — MACHINE reflow was dead (cascade order).** The machine media
+      queries sat EARLIER in the file than the base `.machine-grid-wrap` rule
+      (≈2390), so the base (equal specificity, later in source) always won → grid
+      stayed 3-wide at every width. Moved the overrides to immediately AFTER the
+      base. Lesson: responsive overrides must follow their base rule in source
+      order (media queries add no specificity). Left a comment at the old site.
+- [x] **C.1c — TRIG tab squish fix.** `.trig-panel` (min-width:280) +
+      `.trig-side-col` (min-width:180) + un-shrunk 64px knobs forced the synth
+      panel wider than a phone → squished/overflowed. On ≤640px: drop the
+      min-widths to 0 + full-width basis (columns stack), and include
+      `.trig-knobs-row .knob-canvas` in the 52px shrink. Pure CSS. (NB: the
+      "squished synth bar" the user reported was actually the STEPS surface, not
+      TRIG — see C.3 — but this TRIG hardening stands on its own.)
+- [x] **C.2 — Manual overlay (phone).** `.manual-list` header column was
+      `max-content` → long headers grabbed ~55%, starving the text. On ≤640px cap
+      it to `minmax(0,0.4fr)` + let headers wrap. Pure CSS.
+- [x] **C.3 — STEPS surface fill.** On the STEPS surface the collapsed
+      `#synth-panel` header + the width-driven square 4×4 grid left ~25% empty
+      space at the TOP of the grid area (the "squished synth bar" the user meant —
+      it was STEPS, not TRIG). Fix (user chose "stretch to fill"): on ≤640px when
+      STEPS is active, `#step-grid` align-items:stretch, `.step-grid-inner`
+      height:100% + grid-auto-rows:1fr, and `.step-cell` aspect-ratio:auto — cells
+      become rectangles and the grid fills the whole freed area, zero gap.
+      Keyboard stays bottom-pinned. Pure CSS.
+- [~] **C.4 — Roll param sections out to every machine.** Moogish proved the
+      `group:` SPEC field (Surface C step 4). Now tagged ALL 22 remaining
+      DefaultMachinePanel machines so the whole SYNTH tab shares one section
+      language (3-up desktop → 2-up iPad → 1-up phone, same `.param-group` CSS,
+      zero CSS/JS changes — pure SPEC additions). Per-machine groupings:
+      - Tonal — Synth: OSC/SUB; Bass: OSC/VOICE; Chord: CHORD/OSC; Strings:
+        VOICE/TONE/VIBRATO; Swarm: OSC/SWARM/NOISE; Karplus: STRING/EXCITE;
+        Marimba: DECAY/PARTIALS/MALLET; Wood: RESONATOR/STRIKE; Noise:
+        COLOR/BODY/SHAPE; Comb: TUBE/VOICE; Transient: BODY/CLICK.
+      - Drums (synth) — KickHard/KickSilk: TONE/PUNCH; Snare: TONE/NOISE; HiHat:
+        DECAY/TONE; Clapp: TONE/SHAPE; Cymbal: TONE/DECAY.
+      - Drums (analogue) — Kick: TONE/PUNCH; Snare: TONE/NOISE; HiHat: DECAY/TONE;
+        Clapp: TONE/SHAPE; Cymbal: TONE/DECAY; Tom: TONE/ATTACK.
+      Every machine gets a dedicated **OUTPUT** section (lone Level knob), matching
+      Moogish. Hidden params (osc.detune, vibrato sync-knob halves) left ungrouped
+      — they don't render. FM/Sampler/WT-Sampler/SampleSwarm/MIDI/Input untouched
+      (custom panels — FM is the deferred beast; fold into Surface E / Phase 3).
+      manual.js intentionally NOT touched: grouping is a layout hint, not a new or
+      renamed control. **Awaiting in-browser verify, NOT yet committed.**
+- [~] **C.5 — Sampler-family panels.** The three sample panels lay out
+      imperatively (custom panels, not DefaultMachinePanel) but were close. Pulled
+      them onto the same `.param-group` section language via a new `.sampler-groups`
+      flex-row (same wrap cadence as `.panel-content`, so groups inherit the
+      shared 3/2/1-up `.param-group` media queries — no new breakpoints).
+      - **Sampler:** waveform canvas 80→64px; params → TRIM / PLAYBACK (knobs +
+        pitch/rev/loop toggles) / OUTPUT (level + SMPL LEN).
+      - **SampleSwarm:** embeds SamplerPanel (inherits the above), swarm row →
+        SWARM / NOISE groups.
+      - **WT-Sampler:** the two sample slots now **stack vertically** (was
+        side-by-side — `.wt-sampler-slots` flex-direction:column), canvas fixed
+        72px; params → MORPH / SLOT A / SLOT B / SWEEP groups. Dead CSS removed
+        (`.sampler-param-row`, `.wt-sampler-params`, `.wt-sampler-root-row`).
+      **Awaiting in-browser verify, NOT yet committed.**
+- [~] **C.6 — FM panel (the beast).** Was schematic-left + 2×2 op-grid-right
+      (couldn't reflow narrow). Now:
+      - Each operator → its own `.param-group` (`.fm-op-group`) in a `.fm-ops-row`
+        flex-row → reflows 3/2/1-up via the shared `.param-group` queries. Body =
+        2 stacked knob rows (ratio/level/detune[/fb] + A/D/S/R). Carrier (OP1)
+        first so signal flow reads top-down when stacked.
+      - **OUTPUT** is its own section now (was tucked under the schematic).
+      - Per-op **ADSR shape canvas** → `<details>` ("shape"); **schematic** moved
+        to the **bottom** in a `<details>` ("Operator routing"). Both **collapse
+        on phone only** (open=true unless `matchMedia(max-width:640px)`); a
+        `toggle` listener redraws the canvas on expand (it has 0 size while
+        collapsed). matchMedia is read per-render so tab switches reapply.
+      Dead CSS removed (`.fm-top-row`, `.fm-ops-right`, `.fm-op-cell`,
+      `.fm-op-params-row`, `.fm-out-row`, `.fm-op-adsr-label`). The ADSR
+      knob/sync-knob logic + schematic drawing are unchanged.
+      **Awaiting in-browser verify, NOT yet committed.**
 - [ ] **D — Keyboard** → live-play strip on narrow.
 - [ ] **E — Knob/component sizes** (JS — `size:` passed in panel render code).
 - [ ] **Phase 2 — Mobile shell.** New `mobile.html` + tab-bar nav (one panel at a
@@ -101,15 +217,48 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
 - 2026-06-16: Phase 0 landed + pushed (commit "extract inline index.html boot").
 - 2026-06-16: Pivot to adaptive/reflow (fluid-alone too invisible here).
 - 2026-06-16: Surface A (step grid 16→8→4×4) + fluid type landed + pushed.
-- 2026-06-16: Surface B (transport wrap + overflow menu + compact BPM) — **done,
-  awaiting in-browser verify, NOT yet committed.**
+- 2026-06-16: Surface B (transport wrap + overflow menu + compact BPM) — landed +
+  committed (`e1595ca`).
+- 2026-06-16: Surface C v1 (header fluff + scrollable tab strip + knob→48px) —
+  landed but the synth panel was still invisible on phone.
+- 2026-06-16: Surface C v2 — root cause found: the 4×4 step grid was crushing the
+  flex:1 synth panel. Added **STEPS pseudo-tab** so the grid + synth panel are
+  mutually-exclusive surfaces on phone (default = STEPS).
+- 2026-06-16: Surface C v3 (real-device feedback) — (a) STEPS lockout fixed:
+  hiding #synth-panel hid the tab strip with no way back; now STEPS collapses
+  only the panel BODY (.panel-content + .fx-bar), header/tabs stay on screen.
+  (b) Step grid no longer crimps the bar above (flex:0 1 auto + max-height:65vh,
+  was greedy flex:1). (c) Knobs 48→52px. (d) **Param groups:** opt-in `group`
+  field on SPEC → DefaultMachinePanel renders labelled rows. Moogish tagged
+  OSC 1/2/3 + TEXTURE + OUTPUT (each osc row led by its waveform dropdown).
+  Generic + applies on desktop too; machines with no groups unchanged.
+  **Done, awaiting in-browser verify, NOT yet committed.**
+- 2026-06-16: Surface C.4 — rolled `group:` out to all 22 other
+  DefaultMachinePanel machines (tonal + synth drums + analogue drums). Every
+  machine now sections + has its own OUTPUT row, matching Moogish. Pure SPEC
+  additions (no CSS/JS); hidden params untouched; FM/Sampler/etc deferred.
+  **Awaiting in-browser verify, NOT yet committed.**
+- 2026-06-16: Surface C.5 — sampler-family custom panels onto the `.param-group`
+  section language via a new `.sampler-groups` row. Sampler canvas 80→64px
+  (TRIM/PLAYBACK/OUTPUT); SampleSwarm swarm row → SWARM/NOISE; WT-Sampler slots
+  now stack vertically (canvas 72px) + MORPH/SLOT A/SLOT B/SWEEP groups. Dead
+  CSS removed. **Awaiting in-browser verify, NOT yet committed.**
+- 2026-06-16: Surface C.6 — FM panel reflowed: operators → `.param-group`
+  sections (2 knob rows each), OUTPUT its own section, per-op ADSR canvas +
+  schematic moved to phone-collapsible `<details>` (schematic now at bottom).
+  Canvas redraws on `<details>` expand. Dead CSS removed. **Awaiting in-browser
+  verify, NOT yet committed.**
 
 ## Next up
 
-- **Surface C — Synth panel → one-panel-at-a-time + tab bar on narrow.** The hard
-  one (tab nav model; some panels encode desktop layout imperatively in JS render
-  code, so may need per-panel compact paths). Pause to agree the approach before
-  diving in. Files: `js/ui/SynthPanel.js`, `js/ui/panels/*`, panel CSS.
+- **Verify Surface C** at phone width (≤640px): app opens on STEPS; tapping
+  SYNTH/FILTER/etc swaps to the synth panel (grid hidden) and STEPS swaps back;
+  STEPS tab highlights when active; tab strip scrolls; scope/COPY-PASTE gone;
+  knobs sit 3-wide and legible on MoogishMachine/analogue + a drum machine.
+  Hard-refresh to dodge CSS module cache. Then commit.
+- **Custom synth panels (FM, Sampler) on phone.** They pin their own canvas sizes
+  and lay out imperatively — likely need per-panel compact paths. Fold into
+  Surface E (JS `size:`) or Phase 3.
 - Then D — Keyboard (live-play strip), E — knob/component sizes (JS `size:`).
 - Verify pattern: resize desktop browser across desktop/tablet/phone widths;
   user verifies in-browser (no headless). Hard-refresh to dodge CSS module cache.

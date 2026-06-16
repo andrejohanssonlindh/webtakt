@@ -28,15 +28,15 @@ const _getNoiseBuffer = ctx => getNoiseBuffer(ctx, _noiseCache, 0.5);
 
 export class ClappMachine extends Machine {
   static SPEC = {
-    'tone':         { label: 'Tone', type: 'number', min: 800, max: 6000, default: 3000,
+    'tone':         { label: 'Tone', type: 'number', min: 800, max: 6000, default: 3000, group: 'TONE',
                       modulatable: true, lfoMin: 800, lfoMax: 6000,
                       target: m => m._bp.frequency, schedule: 'setTarget', tc: 0.01 },
-    'snap':         { label: 'Snap', type: 'number', min: 0.3, max: 4, default: 1.2,
+    'snap':         { label: 'Snap', type: 'number', min: 0.3, max: 4, default: 1.2, group: 'TONE',
                       modulatable: true, lfoMin: 0.3, lfoMax: 4,
                       target: m => m._bp.Q, schedule: 'setTarget', tc: 0.01 },
-    'decay':        { label: 'Decay', type: 'number', min: 0.05, max: 1.0, default: 0.3, plockMode: 'js' },
-    'spread':       { label: 'Spread', type: 'number', min: 0, max: 30, default: 8, plockMode: 'js' },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85,
+    'decay':        { label: 'Decay', type: 'number', min: 0.05, max: 1.0, default: 0.3, group: 'SHAPE', plockMode: 'js' },
+    'spread':       { label: 'Spread', type: 'number', min: 0, max: 30, default: 8, group: 'SHAPE', plockMode: 'js' },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85, group: 'OUTPUT',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

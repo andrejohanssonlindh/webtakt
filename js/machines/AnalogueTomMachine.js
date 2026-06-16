@@ -49,18 +49,18 @@ function _makeShaperCurve(amount = 3, samples = 256) {
 
 export class AnalogueTomMachine extends Machine {
   static SPEC = {
-    'tune':         { label: 'Tune', type: 'number', min: 60, max: 400, default: 120,
+    'tune':         { label: 'Tune', type: 'number', min: 60, max: 400, default: 120, group: 'TONE',
                       modulatable: true, lfoMin: 60, lfoMax: 400, plockMode: 'audioParam',
                       target: m => m._tuneOsc.frequency, manualTarget: true,
                       apply: (v, t, m) => m._tuneOsc.frequency.setTargetAtTime(v, t, 0.01) },
-    'decay':        { label: 'Decay', type: 'number', min: 0.1, max: 1.5, default: 0.4, plockMode: 'js' },
-    'sweep':        { label: 'Sweep', type: 'number', min: 1, max: 4, default: 1.8, plockMode: 'js' },
-    'drive':        { label: 'Drive', type: 'number', min: 1, max: 4, default: 1.8, plockMode: 'js',
+    'decay':        { label: 'Decay', type: 'number', min: 0.1, max: 1.5, default: 0.4, group: 'TONE', plockMode: 'js' },
+    'sweep':        { label: 'Sweep', type: 'number', min: 1, max: 4, default: 1.8, group: 'TONE', plockMode: 'js' },
+    'drive':        { label: 'Drive', type: 'number', min: 1, max: 4, default: 1.8, group: 'TONE', plockMode: 'js',
                       apply: (v, t, m) => { m._shaper.curve = _makeShaperCurve(v); } },
-    'drift':        { label: 'Drift', type: 'number', min: 0, max: 1, default: 0.4, plockMode: 'js' },
-    'attack':       { label: 'Attack', type: 'number', min: 0, max: 1, default: 0.35, plockMode: 'js' },
-    'attack.decay': { label: 'Atk Decay', type: 'number', min: 0.005, max: 0.05, default: 0.015, plockMode: 'js' },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85,
+    'drift':        { label: 'Drift', type: 'number', min: 0, max: 1, default: 0.4, group: 'TONE', plockMode: 'js' },
+    'attack':       { label: 'Attack', type: 'number', min: 0, max: 1, default: 0.35, group: 'ATTACK', plockMode: 'js' },
+    'attack.decay': { label: 'Atk Decay', type: 'number', min: 0.005, max: 0.05, default: 0.015, group: 'ATTACK', plockMode: 'js' },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85, group: 'OUTPUT',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

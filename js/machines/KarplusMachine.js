@@ -36,12 +36,12 @@ import { noiseRandomValue } from '../util/AudioBuffers.js';
 export class KarplusMachine extends Machine {
   // All synthesis params are JS-only (read per-noteOn during buffer synthesis).
   static SPEC = {
-    'damping':      { label: 'Damping', type: 'number', min: 0, max: 1, default: 0.5, plockMode: 'js' },
-    'feedback':     { label: 'Feedback', type: 'number', min: 0.8, max: 0.999, default: 0.985, plockMode: 'js' },
-    'excite':       { label: 'Excite', type: 'number', min: 1, max: 50, default: 8, plockMode: 'js' },
-    'excite.tone':  { label: 'Excite Tone', type: 'number', min: 200, max: 20000, default: 8000, plockMode: 'js' },
-    'stretch':      { label: 'Stretch', type: 'number', min: -12, max: 12, default: 0, plockMode: 'js' },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8,
+    'damping':      { label: 'Damping', type: 'number', min: 0, max: 1, default: 0.5, group: 'STRING', plockMode: 'js' },
+    'feedback':     { label: 'Feedback', type: 'number', min: 0.8, max: 0.999, default: 0.985, group: 'STRING', plockMode: 'js' },
+    'excite':       { label: 'Excite', type: 'number', min: 1, max: 50, default: 8, group: 'EXCITE', plockMode: 'js' },
+    'excite.tone':  { label: 'Excite Tone', type: 'number', min: 200, max: 20000, default: 8000, group: 'EXCITE', plockMode: 'js' },
+    'stretch':      { label: 'Stretch', type: 'number', min: -12, max: 12, default: 0, group: 'STRING', plockMode: 'js' },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8, group: 'OUTPUT',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

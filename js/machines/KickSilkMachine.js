@@ -29,14 +29,14 @@ const _getNoiseBuffer = ctx => getNoiseBuffer(ctx, _noiseCache, 0.25);
 
 export class KickSilkMachine extends Machine {
   static SPEC = {
-    'tune':         { label: 'Tune', type: 'number', min: 20, max: 200, default: 60,
+    'tune':         { label: 'Tune', type: 'number', min: 20, max: 200, default: 60, group: 'TONE',
                       modulatable: true, lfoMin: 20, lfoMax: 200,
                       target: m => m._tuneOsc.frequency, schedule: 'setTarget', tc: 0.01 },
-    'decay':        { label: 'Decay', type: 'number', min: 0.05, max: 2.0, default: 0.45, plockMode: 'js' },
-    'sweep':        { label: 'Sweep', type: 'number', min: 1, max: 8, default: 4.0, plockMode: 'js' },
-    'punch':        { label: 'Punch', type: 'number', min: 0, max: 1, default: 0.7, plockMode: 'js' },
-    'punch.decay':  { label: 'Punch Decay', type: 'number', min: 0.005, max: 0.08, default: 0.025, plockMode: 'js' },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.9,
+    'decay':        { label: 'Decay', type: 'number', min: 0.05, max: 2.0, default: 0.45, group: 'TONE', plockMode: 'js' },
+    'sweep':        { label: 'Sweep', type: 'number', min: 1, max: 8, default: 4.0, group: 'TONE', plockMode: 'js' },
+    'punch':        { label: 'Punch', type: 'number', min: 0, max: 1, default: 0.7, group: 'PUNCH', plockMode: 'js' },
+    'punch.decay':  { label: 'Punch Decay', type: 'number', min: 0.005, max: 0.08, default: 0.025, group: 'PUNCH', plockMode: 'js' },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.9, group: 'OUTPUT',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

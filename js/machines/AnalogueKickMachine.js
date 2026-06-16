@@ -58,22 +58,22 @@ export class AnalogueKickMachine extends Machine {
   // _tuneOsc.frequency; setParam sweeps both body + sub). 'drive' rebuilds the
   // waveshaper curve. 'drift' is JS-only (read by the DriftClock each tick).
   static SPEC = {
-    'tune':         { label: 'Tune', type: 'number', min: 20, max: 200, default: 55,
+    'tune':         { label: 'Tune', type: 'number', min: 20, max: 200, default: 55, group: 'TONE',
                       modulatable: true, lfoMin: 20, lfoMax: 200, plockMode: 'audioParam',
                       target: m => m._tuneOsc.frequency, manualTarget: true,
                       apply: (v, t, m) => {
                         m._tuneOsc.frequency.setTargetAtTime(v, t, 0.01);
                         m._subOsc.frequency.setTargetAtTime(v / 2, t, 0.01);
                       } },
-    'decay':        { label: 'Decay', type: 'number', min: 0.05, max: 2.0, default: 0.50, plockMode: 'js' },
-    'sweep':        { label: 'Sweep', type: 'number', min: 1, max: 8, default: 4.0, plockMode: 'js' },
-    'sub.level':    { label: 'Sub', type: 'number', min: 0, max: 1, default: 0.8, plockMode: 'js' },
-    'drive':        { label: 'Drive', type: 'number', min: 1, max: 6, default: 2.5, plockMode: 'js',
+    'decay':        { label: 'Decay', type: 'number', min: 0.05, max: 2.0, default: 0.50, group: 'TONE', plockMode: 'js' },
+    'sweep':        { label: 'Sweep', type: 'number', min: 1, max: 8, default: 4.0, group: 'TONE', plockMode: 'js' },
+    'sub.level':    { label: 'Sub', type: 'number', min: 0, max: 1, default: 0.8, group: 'TONE', plockMode: 'js' },
+    'drive':        { label: 'Drive', type: 'number', min: 1, max: 6, default: 2.5, group: 'TONE', plockMode: 'js',
                       apply: (v, t, m) => { m._shaper.curve = _makeShaperCurve(v); } },
-    'drift':        { label: 'Drift', type: 'number', min: 0, max: 1, default: 0.4, plockMode: 'js' },
-    'punch':        { label: 'Punch', type: 'number', min: 0, max: 1, default: 0.6, plockMode: 'js' },
-    'punch.decay':  { label: 'Punch Decay', type: 'number', min: 0.005, max: 0.08, default: 0.025, plockMode: 'js' },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.9,
+    'drift':        { label: 'Drift', type: 'number', min: 0, max: 1, default: 0.4, group: 'TONE', plockMode: 'js' },
+    'punch':        { label: 'Punch', type: 'number', min: 0, max: 1, default: 0.6, group: 'PUNCH', plockMode: 'js' },
+    'punch.decay':  { label: 'Punch Decay', type: 'number', min: 0.005, max: 0.08, default: 0.025, group: 'PUNCH', plockMode: 'js' },
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.9, group: 'OUTPUT',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

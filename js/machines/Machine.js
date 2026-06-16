@@ -144,6 +144,10 @@ export class Machine {
       if (s.modulatable)        { d.modulatable = true; d.lfoMin = s.lfoMin; d.lfoMax = s.lfoMax; }
       else if ('modulatable' in s) d.modulatable = false;   // samplers emit this explicitly
       if (s.hidden) d.hidden = true;
+      // Optional layout hint: panels (DefaultMachinePanel) cluster params sharing
+      // a `group` into a labelled row. No group → flows in the default run, so
+      // machines that don't declare it render exactly as before.
+      if (s.group) d.group = s.group;
       d.plockMode = s.plockMode ?? (s.target ? 'audioParam' : 'js');
       return d;
     });

@@ -34,16 +34,16 @@ const BASE_FREQ = 300;
 
 export class HiHatMachine extends Machine {
   static SPEC = {
-    'decay':        { label: 'Decay', type: 'number', min: 0.01, max: 0.25, default: 0.06, plockMode: 'js' },
-    'open.decay':   { label: 'Open Decay', type: 'number', min: 0.1, max: 2.0, default: 0.5, plockMode: 'js' },
-    'open':         { label: 'Open', type: 'boolean', default: false, plockMode: 'js' },
-    'cutoff':       { label: 'Cutoff', type: 'number', min: 500, max: 12000, default: 3000,
+    'decay':        { label: 'Decay', type: 'number', min: 0.01, max: 0.25, default: 0.06, group: 'DECAY', plockMode: 'js' },
+    'open.decay':   { label: 'Open Decay', type: 'number', min: 0.1, max: 2.0, default: 0.5, group: 'DECAY', plockMode: 'js' },
+    'open':         { label: 'Open', type: 'boolean', default: false, group: 'DECAY', plockMode: 'js' },
+    'cutoff':       { label: 'Cutoff', type: 'number', min: 500, max: 12000, default: 3000, group: 'TONE',
                       modulatable: true, lfoMin: 500, lfoMax: 12000,
                       target: m => m._hp.frequency, schedule: 'setTarget', tc: 0.01 },
-    'tone':         { label: 'Tone', type: 'number', min: 0, max: 8, default: 2.0,
+    'tone':         { label: 'Tone', type: 'number', min: 0, max: 8, default: 2.0, group: 'TONE',
                       modulatable: true, lfoMin: 0, lfoMax: 8,
                       target: m => m._hp.Q, schedule: 'setTarget', tc: 0.01 },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.75,
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.75, group: 'OUTPUT',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

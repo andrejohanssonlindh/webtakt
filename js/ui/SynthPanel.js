@@ -221,6 +221,22 @@ export class SynthPanel {
     this._tabBar = document.createElement('div');
     this._tabBar.className = 'tab-bar';
 
+    // STEPS pseudo-tab — phone only (CSS-hidden on desktop). On a phone the step
+    // grid and the synth panel can't both be on screen (the 4×4 grid crushes the
+    // flex:1 synth panel), so they become mutually-exclusive surfaces toggled
+    // here. This drives a body class rather than state.activeTab, so desktop
+    // semantics + the _renderContent switch stay untouched. Default surface on
+    // phone is STEPS (set in boot.js).
+    const stepsBtn = document.createElement('button');
+    stepsBtn.className   = 'tab-btn tab-steps';
+    stepsBtn.textContent = 'STEPS';
+    stepsBtn.dataset.tab = 'steps';
+    stepsBtn.addEventListener('click', () => {
+      document.body.classList.add('phone-show-steps');
+      this._syncTabActive();        // no tabChanged event fires for the pseudo-tab
+    });
+    this._tabBar.appendChild(stepsBtn);
+
     // Voice tabs only — FX moved to right-side toggles
     const leftTabs = ['machine', 'sounds', 'scales', 'trig', 'synth', 'arp', 'filter', 'amp', 'lfo', 'midi', 'mixer', 'deck'];
     leftTabs.forEach(tab => {
@@ -228,7 +244,12 @@ export class SynthPanel {
       btn.className   = 'tab-btn';
       btn.textContent = tab.toUpperCase();
       btn.dataset.tab = tab;
-      btn.addEventListener('click', () => this.state.setTab(tab));
+      // Selecting a real tab leaves the STEPS surface (phone); on desktop the
+      // class is never set so this is a harmless no-op.
+      btn.addEventListener('click', () => {
+        document.body.classList.remove('phone-show-steps');
+        this.state.setTab(tab);
+      });
       this._tabBar.appendChild(btn);
     });
 
@@ -301,10 +322,24 @@ export class SynthPanel {
     this.render();
   }
 
-  render() {
+  /**
+   * Sync the tab-bar `.active` highlight. On phone, the STEPS surface is its own
+   * active state (a body class, not activeTab): when it's showing, STEPS is the
+   * active tab and no voice tab is; otherwise the normal activeTab highlight
+   * applies (and STEPS is never active). On desktop the class is never set, so
+   * STEPS is simply never highlighted (and it's CSS-hidden anyway).
+   */
+  _syncTabActive() {
+    const showingSteps = document.body.classList.contains('phone-show-steps');
     this._tabBar.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.tab === this.state.activeTab);
+      const isSteps = btn.dataset.tab === 'steps';
+      btn.classList.toggle('active',
+        showingSteps ? isSteps : (!isSteps && btn.dataset.tab === this.state.activeTab));
     });
+  }
+
+  render() {
+    this._syncTabActive();
     // Only the FX-pipe button remains as a `.fx-toggle-wrap` (its active-tab
     // highlight). The per-FX toggles were replaced by the chain mini-outline.
     this._fxBar.querySelectorAll('.fx-toggle-wrap').forEach(wrap => {

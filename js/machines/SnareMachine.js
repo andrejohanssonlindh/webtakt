@@ -38,21 +38,21 @@ const _getNoiseBuffer = ctx => getNoiseBuffer(ctx, _noiseCache, 0.5);
 
 export class SnareMachine extends Machine {
   static SPEC = {
-    'tune':         { label: 'Tune', type: 'number', min: 100, max: 400, default: 200,
+    'tune':         { label: 'Tune', type: 'number', min: 100, max: 400, default: 200, group: 'TONE',
                       modulatable: true, lfoMin: 100, lfoMax: 400,
                       target: m => m._tuneOsc.frequency, schedule: 'setTarget', tc: 0.01 },
-    'decay':        { label: 'Decay', type: 'number', min: 0.05, max: 1.0, default: 0.18,
+    'decay':        { label: 'Decay', type: 'number', min: 0.05, max: 1.0, default: 0.18, group: 'TONE',
                       plockMode: 'js' },
-    'tone':         { label: 'Tone', type: 'number', min: 0, max: 1, default: 0.4,
+    'tone':         { label: 'Tone', type: 'number', min: 0, max: 1, default: 0.4, group: 'TONE',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m._toneGain.gain, schedule: 'setTarget', tc: 0.01 },
-    'snap':         { label: 'Snap', type: 'number', min: 0, max: 1, default: 0.8,
+    'snap':         { label: 'Snap', type: 'number', min: 0, max: 1, default: 0.8, group: 'NOISE',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m._snapGain.gain, schedule: 'setTarget', tc: 0.01 },
-    'noise.cutoff': { label: 'Noise Cut', type: 'number', min: 200, max: 8000, default: 2000,
+    'noise.cutoff': { label: 'Noise Cut', type: 'number', min: 200, max: 8000, default: 2000, group: 'NOISE',
                       modulatable: true, lfoMin: 200, lfoMax: 8000,
                       target: m => m._noiseHP.frequency, schedule: 'setTarget', tc: 0.01 },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85,
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85, group: 'OUTPUT',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

@@ -82,6 +82,11 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  /* dvh tracks the *visible* viewport (excludes the mobile URL bar), so the
+   * column ends exactly at the screen bottom instead of running under the
+   * browser chrome — that under-keyboard gap on phone was 100vh overshooting.
+   * Falls back to 100vh where dvh is unsupported. */
+  height: 100dvh;
   padding: 8px;
   gap: 6px;
 }
@@ -1350,6 +1355,65 @@ body {
 .panel-content::-webkit-scrollbar-track { background: transparent; }
 .panel-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
+/* ─── PARAM GROUPS ───────────────────────────────────────────
+ * Opt-in layout: a machine SPEC can tag params with `group: 'NAME'` and
+ * DefaultMachinePanel clusters them into one labelled row (e.g. Moogish's OSC 1
+ * / OSC 2 / OSC 3 / TEXTURE / OUTPUT). Each group is a full-width block so the
+ * groups stack vertically; inside, knobs/dropdowns flow-wrap like the panel run.
+ * Machines with no groups never emit these elements (unchanged). */
+/* A section is a self-contained row of controls (selector + its knobs, e.g.
+ * Moogish OSC 1 = [O1 Wave][O1 Oct][O1 Detune][O1 Level] on one line). Sections
+ * sit side-by-side and reflow by viewport: 3-up desktop → 2-up iPad → 1-up phone
+ * (breakpoints below). Width is `calc(% - gap)` so the .panel-content gap (12px
+ * column) doesn't push a third section onto the next line.
+ *   desktop: 3 across */
+.param-group {
+  flex: 1 1 calc(33.333% - 8px);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.param-group-label {
+  font-size: 0.727rem;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 2px;
+}
+/* Body is one non-wrapping row: selector + knobs stay on a single line. Knob
+ * cells don't shrink (so they stay legible); if a section is narrower than its
+ * row, it scrolls horizontally rather than squashing the knobs. */
+.param-group-body {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 8px 10px;
+  overflow-x: auto;
+}
+.param-group-body > .knob-cell {
+  flex: 0 0 auto;
+}
+
+/* iPad: 2 sections across */
+@media (max-width: 1024px) {
+  .param-group {
+    flex-basis: calc(50% - 6px);
+  }
+}
+/* Phone: 1 section across (full width) */
+@media (max-width: 640px) {
+  .param-group {
+    flex-basis: 100%;
+  }
+}
+/* NOTE: machine-grid responsive overrides do NOT live here — the base
+ * `.machine-grid-wrap` rule appears LATER in this file (≈line 2390), so a media
+ * query placed here would be overridden by it (equal specificity → later wins,
+ * media queries add no specificity). They live immediately AFTER the base rule
+ * instead. This bit me once: keep responsive overrides after their base. */
+
 /* ─── KNOB WIDGET ────────────────────────────────────────── */
 
 .knob-cell {
@@ -2305,6 +2369,11 @@ body {
 }
 
 /* Three-column outer layout: Drums | Melodic | Sampler */
+/* Machine groups (Drums / Melodic / Analogue / Sampler / I/O) as a section grid,
+ * same 3/2/1-up design language as the param sections: 3 group-columns on
+ * desktop → 2 on iPad → 1 on phone (breakpoints near the bottom of this file).
+ * Without the reflow, 3 group-cols × 3 card-cols = 9 cells wide → unusable on a
+ * phone (you couldn't select a machine — the reason for this change). */
 .machine-grid-wrap {
   width: 100%;
   display: grid;
@@ -2319,6 +2388,8 @@ body {
   min-width: 0;
 }
 
+/* Match .param-group-label so the MACHINE tab and the param sections share one
+ * visual language (underlined section header). */
 .machine-group-heading {
   font-size: 0.818rem;
   font-family: var(--font-label);
@@ -2327,6 +2398,8 @@ body {
   text-transform: uppercase;
   color: var(--text-dim);
   padding: 0 2px 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
 }
 
 .machine-grid {
@@ -2334,6 +2407,24 @@ body {
   grid-template-columns: repeat(3, 1fr);
   gap: 4px;
   width: 100%;
+}
+
+/* Responsive section reflow for the MACHINE tab — MUST be after the base rules
+ * above (same specificity → source order decides; these previously lived earlier
+ * in the file and lost to the base, so the grid stayed 3-wide on every size).
+ * Groups: 3-up desktop → 2-up iPad → 1-up phone, matching the param sections. */
+@media (max-width: 1024px) {
+  .machine-grid-wrap {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .machine-grid-wrap {
+    grid-template-columns: 1fr;     /* one group per row */
+  }
+  .machine-grid {
+    grid-template-columns: 1fr;     /* cards single-column (2-up cramped desc) */
+  }
 }
 
 .machine-card {
@@ -2414,24 +2505,31 @@ body {
   flex-direction: column;
   width: 100%;
   flex-basis: 100%;
+  gap: 8px;
+}
+
+/* Operator sections row — same wrap cadence as `.panel-content` so the OP
+ * `.param-group`s reflow 3-up desktop → 2-up iPad → 1-up phone via the shared
+ * `.param-group` flex-basis media queries. */
+.fm-ops-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 8px 12px;
+}
+
+/* Each operator section is a `.param-group`; body stacks two knob rows. */
+.fm-op-body {
+  display: flex;
+  flex-direction: column;
   gap: 4px;
 }
 
-/* Inner row: narrow schematic ~20%, op grid fills rest */
-.fm-top-row {
-  display: flex;
-  flex-direction: row;
-  gap: 6px;
-  width: 100%;
-  align-items: flex-start;
-}
-
+/* Schematic at the bottom — collapsible. The canvas keeps its own width. */
 .fm-left {
-  flex: 0 0 20%;
-  min-width: 80px;
-  max-width: 140px;
-  display: flex;
-  flex-direction: column;
+  display: block;
+  width: 100%;
+  max-width: 160px;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -2445,32 +2543,30 @@ body {
   height: 130px;
 }
 
-/* 2×2 operator grid — fills remaining ~90% */
-.fm-ops-right {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  min-width: 0;
+.fm-sch-details,
+.fm-op-env-details {
+  border-top: 1px solid var(--border-dim);
 }
 
-/* Each operator cell — stretches to fill grid row height */
-.fm-op-cell {
-  display: flex;
-  flex-direction: column;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 4px 5px 5px;
-  min-width: 0;
+.fm-sch-summary,
+.fm-op-env-summary {
+  cursor: pointer;
+  font-size: 0.636rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 2px 0;
+  list-style: revert;
+}
+
+.fm-op-env-details {
+  margin-top: 2px;
 }
 
 .fm-op-hdr {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding-bottom: 2px;
-  border-bottom: 1px solid var(--border-dim);
 }
 
 .fm-op-label {
@@ -2504,21 +2600,12 @@ body {
   justify-content: flex-start;
 }
 
-/* Per-op ADSR section — grows to fill space after param knobs */
+/* Per-op ADSR section (row 2 of the op body): knob row on top, collapsible
+ * shape canvas below. */
 .fm-op-adsr {
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 4px;
-  padding-left: 6px;
-  margin-left: 2px;
-  border-left: 1px solid var(--border-dim);
-  flex: 1;
-  min-width: 0;
-}
-
-.fm-op-adsr-label {
-  display: none;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .fm-op-env-krow {
@@ -2529,40 +2616,19 @@ body {
   align-items: flex-start;
 }
 
-/* Mini ADSR shape canvas — fills remaining width right of knobs */
+/* Mini ADSR shape canvas — full width of the op section. */
 .fm-op-env-canvas {
   display: block;
-  flex: 1;
-  min-width: 60px;
+  width: 100%;
   height: 46px;
   border-radius: 2px;
   background: rgba(0,0,0,0.2);
 }
 
-/* All knobs + ADSR in one single row, fills cell height */
-.fm-op-params-row {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  gap: 4px;
-  align-items: center;
-  flex: 1;
-}
-
-/* Compact knob overrides inside op cells */
-.fm-op-cell .knob-cell  { gap: 2px; }
-.fm-op-cell .knob-val   { font-size: 0.727rem; min-width: 26px; }
-.fm-op-cell .knob-label { font-size: 0.636rem; }
-
-/* Output level — sits inside fm-left below schematic canvas */
-.fm-out-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding-top: 4px;
-  border-top: 1px solid var(--border-dim);
-  margin-top: 2px;
-}
+/* Compact knob overrides inside op sections */
+.fm-op-group .knob-cell  { gap: 2px; }
+.fm-op-group .knob-val   { font-size: 0.727rem; min-width: 26px; }
+.fm-op-group .knob-label { font-size: 0.636rem; }
 
 /* ─── wt-select COMPONENT ────────────────────────────────── */
 
@@ -3535,7 +3601,7 @@ body {
 }
 
 .sampler-canvas-wrap {
-  height: 80px;
+  height: 64px;
   flex-shrink: 0;
   position: relative;
   border: 1px solid var(--border);
@@ -3550,12 +3616,15 @@ body {
   height: 100%;
 }
 
-.sampler-param-row {
+/* Row of `.param-group` sections (TRIM / PLAYBACK / OUTPUT). Same wrap cadence
+ * as `.panel-content` so groups reflow 3-up → 2-up → 1-up via the shared
+ * `.param-group` flex-basis media queries. */
+.sampler-groups {
   display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  flex-shrink: 0;
   flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 8px 12px;
+  flex-shrink: 0;
 }
 
 .sampler-toggle {
@@ -3613,13 +3682,13 @@ body {
 
 .wt-sampler-slots {
   display: flex;
+  flex-direction: column;
   gap: 6px;
-  flex: 1;
-  min-height: 0;
+  flex-shrink: 0;
 }
 
 .wt-sampler-slot {
-  flex: 1;
+  flex: none;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -3691,27 +3760,11 @@ body {
   white-space: nowrap;
 }
 
-.wt-sampler-root-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  flex-shrink: 0;
-  padding: 0 2px;
-}
-
 .wt-sampler-waveform {
   display: block;
   border-radius: 2px;
-  flex: 1;
-  min-height: 40px;
-}
-
-.wt-sampler-params {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  flex-shrink: 0;
-  flex-wrap: wrap;
+  width: 100%;
+  height: 72px;
 }
 
 /* ─── MIXER TAB ──────────────────────────────────────────── */
@@ -4699,5 +4752,153 @@ body {
   /* Anchor the dropdown to the transport bar. */
   #transport {
     position: relative;
+  }
+}
+
+/* The STEPS pseudo-tab is phone-only: on desktop the step grid and synth panel
+ * are both always visible, so the toggle has no meaning. Hidden by default;
+ * un-hidden inside the phone breakpoint below. */
+.tab-btn.tab-steps {
+  display: none;
+}
+
+/* ── Surface C — Synth panel (header + knob grid + step-grid-as-tab) ──
+ * The headline problem: on a phone the 4×4 step grid (`#middle-row`,
+ * flex-shrink:0) claims its full natural height and crushes the flex:1
+ * `#synth-panel` to nothing — so the synth tabs/knobs were effectively
+ * invisible. Fix: make the step grid and synth panel MUTUALLY EXCLUSIVE
+ * surfaces, toggled by the STEPS pseudo-tab (`body.phone-show-steps`).
+ *
+ * Plus three pure-CSS compactions:
+ *   1. Header fluff: oscilloscope + COPY/PASTE bar are desktop luxuries — hide
+ *      them so the tab strip owns the full width.
+ *   2. Tab strip: 13 tabs can't fit a phone row, so let it scroll sideways
+ *      (overflow-x:auto) instead of overflowing. P-lock highlights ride along.
+ *   3. Knob grid: KnobWidget bakes a 64px canvas in JS; scale the rendered
+ *      canvas to 48px in CSS (2× backing store stays crisp) so three knob cells
+ *      fit a ~360px phone. Rides on .panel-content's flex-wrap. */
+@media (max-width: 640px) {
+  /* 0 — step grid becomes a tab. Default: synth panel visible, grid hidden.
+   * STEPS active (body class): grid takes over the viewport, synth panel hidden.
+   * The grid fills + scrolls in its own area instead of crushing siblings. */
+  .tab-btn.tab-steps {
+    display: block;
+  }
+  #middle-row {
+    display: none;
+  }
+  body.phone-show-steps #middle-row {
+    display: flex;
+    /* Grow to fill the space between the (collapsed) synth header and the
+     * bottom-pinned keyboard. */
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+  }
+  /* Fill the grown area with zero top gap: stretch the grid to the full height of
+   * #step-grid and let its rows divide that height (grid-auto-rows:1fr). Cells
+   * drop their aspect-ratio:1 here, so they become rectangles rather than leaving
+   * a 25%-ish gap at the top. The grid was width-driven (square) which left
+   * leftover vertical space in this taller-than-wide area; this trades the square
+   * look for a full fill (user's choice). */
+  body.phone-show-steps #step-grid {
+    align-items: stretch;
+  }
+  body.phone-show-steps .step-grid-inner {
+    height: 100%;
+    grid-auto-rows: 1fr;
+  }
+  body.phone-show-steps .step-cell {
+    aspect-ratio: auto;     /* let rows stretch to fill the height */
+  }
+  /* Bottom-anchoring (points 1 & 2). On phone the column is: transport /
+   * track-row / synth-panel / middle-row / keyboard-row. The keyboard is the
+   * last rigid child, so as long as exactly ONE surface grows (synth-panel when
+   * synth, middle-row when steps) the keyboard is pushed to the bottom and the
+   * growing surface scrolls internally instead of shoving the bars above it.
+   * Keep the rigid rows rigid and let the synth panel scroll, not expand. */
+  #track-row,
+  #keyboard-row {
+    flex-shrink: 0;
+  }
+  #synth-panel {
+    min-height: 0;          /* allow it to scroll internally, not push siblings */
+  }
+  /* SYNTH active (default phone state): synth panel is the grower, keyboard pins
+   * below it. (When STEPS is active the rules below collapse it instead.) */
+
+  /* STEPS active: DON'T hide #synth-panel — the tab strip lives in its header,
+   * and hiding it would lock you on the step grid with no way back (the original
+   * bug, mirrored). Instead collapse it to just the header: stop it growing
+   * (flex:0) and hide only its body (.panel-content) + the FX bar. The tabs stay
+   * on screen and tappable; #middle-row gets the freed space via its flex:1. */
+  body.phone-show-steps #synth-panel {
+    flex: 0 0 auto;
+  }
+  body.phone-show-steps #synth-panel .panel-content,
+  body.phone-show-steps #synth-panel .fx-bar {
+    display: none;
+  }
+  /* 1 — drop header fluff so the tabs get the width */
+  .panel-header .oscilloscope,
+  .panel-header .clip-bar {
+    display: none;
+  }
+
+  /* 2 — scrollable tab strip instead of an overflowing row */
+  .tab-bar {
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-wrap: nowrap;
+    scrollbar-width: none;          /* Firefox — strip the scrollbar chrome */
+  }
+  .tab-bar::-webkit-scrollbar {
+    display: none;                  /* WebKit — same */
+  }
+  .tab-btn {
+    flex: 0 0 auto;                 /* don't let tabs squeeze; scroll instead */
+    white-space: nowrap;
+  }
+
+  /* 3 — shrink the knob canvas so cells fit 3-wide.
+   * Panels that already pin a smaller canvas (FM/filter/amp/lfo via their own
+   * !important rules) keep their sizes — this only catches the default 64px.
+   * 52px: a touch larger than the first 48px pass (still fits 3-wide on ~360px
+   * with the panel padding + gap, verified on a real phone). */
+  .panel-content > .knob-cell > .knob-canvas,
+  .panel-content > .param-group .knob-cell > .knob-canvas,
+  .trig-knobs-row .knob-cell > .knob-canvas {
+    width: 52px !important;
+    height: 52px !important;
+  }
+
+  /* TRIG tab squished the synth panel: .trig-panel/.trig-side-col carry desktop
+   * min-widths (280/180px) that, with 64px knobs, forced the panel wider than a
+   * phone and overflowed. Drop the floors so the columns reflow to full width and
+   * stack (the side col already wraps below). Knobs shrink via the rule above. */
+  .trig-panel {
+    flex-basis: 100%;
+    min-width: 0;
+  }
+  .trig-side-col {
+    flex-basis: 100%;
+    min-width: 0;
+  }
+  /* Let the always-knobs row wrap cleanly at 52px (it already has flex-wrap). */
+  .trig-knobs-row {
+    gap: 8px 10px;
+  }
+
+  /* Manual overlay: on desktop the header column is `max-content` (short
+   * keybinds), but on phone long headers let it claim ~55% and starve the text.
+   * Cap the header column and let headers wrap so the description gets the width
+   * (≈ headers 40% / text 60% instead of 55/45). */
+  .manual-list {
+    grid-template-columns: minmax(0, 0.4fr) 1fr;
+    column-gap: 10px;
+  }
+  .manual-list dt {
+    white-space: normal;      /* allow long headers to wrap instead of widening */
+    overflow-wrap: anywhere;
   }
 }
