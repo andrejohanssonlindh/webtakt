@@ -42,6 +42,9 @@ export class FXPanel {
       if (p.type === 'sync') {
         this._renderSync(ctx, fxObj, p, knobRow, fmtOverrides);
 
+      } else if (p.type === 'pattern') {
+        this._renderPattern(ctx, fxObj, p, knobRow);
+
       } else if (p.type === 'enum') {
         // Render as a labelled button group inside the knob row
         const cell = document.createElement('div');
@@ -161,7 +164,9 @@ export class FXPanel {
       // Double-click the knob center to toggle modes. Center shows the current
       // mode; offLabel lets rate-style sync knobs read 'HZ' instead of 'MS'.
       centerLabel: isBpm ? 'BPM' : (p.offLabel ?? 'MS'),
-      onCenterClick: () => {
+      // `noToggle` sync knobs are BPM-only (gate/stutter slice size) — there is no
+      // MS mode to switch to, so the center double-click is suppressed.
+      onCenterClick: p.noToggle ? null : () => {
         fxObj.setParam(p.modePath, isBpm ? 'ms' : 'bpm');
         renderContent();   // rebuild so the knob picks up the new range/value
       },
@@ -192,5 +197,44 @@ export class FXPanel {
     knobRow.appendChild(cell);
     activeWidgets.push(knob);
     knobByPath.set(activePath, knob);
+  }
+
+  /**
+   * Render a step on/off pattern (GateFX): a row of toggle cells whose '1'/'0'
+   * mask is the param value. Track-level (no p-lock) — clicking a cell flips it
+   * and writes the whole mask back via setParam.
+   */
+  _renderPattern(ctx, fxObj, p, knobRow) {
+    const slots = p.slots ?? 16;
+    let mask = String(fxObj.getParam(p.path) ?? p.default ?? '').padEnd(slots, '0').slice(0, slots);
+
+    const cell = document.createElement('div');
+    cell.className = 'fx-pattern-cell';
+
+    const lbl = document.createElement('div');
+    lbl.className = 'fx-enum-label';
+    lbl.textContent = p.label;
+    cell.appendChild(lbl);
+
+    const grid = document.createElement('div');
+    grid.className = 'fx-pattern-grid';
+
+    const cells = [];
+    for (let i = 0; i < slots; i++) {
+      const b = document.createElement('button');
+      b.className = 'btn fx-pattern-step' + (mask[i] === '1' ? ' active' : '');
+      b.addEventListener('click', () => {
+        const arr = mask.split('');
+        arr[i] = arr[i] === '1' ? '0' : '1';
+        mask = arr.join('');
+        b.classList.toggle('active', mask[i] === '1');
+        fxObj.setParam(p.path, mask);
+      });
+      grid.appendChild(b);
+      cells.push(b);
+    }
+
+    cell.appendChild(grid);
+    knobRow.appendChild(cell);
   }
 }

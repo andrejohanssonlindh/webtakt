@@ -49,6 +49,9 @@ export class FXInstance {
   connect(dest)        { return this.fx.connect(dest); }
   connectInput(src)    { return this.fx.connectInput?.(src); }
   disconnect()         { return this.fx.disconnect(); }
+  // Permanent teardown (kills worklet processors). Falls back to disconnect for
+  // blocks that don't implement it.
+  destroy()            { return (this.fx.destroy ?? this.fx.disconnect).call(this.fx); }
   setEnabled(on)       { return this.fx.setEnabled?.(on); }
   setBpm(bpm)          { return this.fx.setBpm?.(bpm); }
 

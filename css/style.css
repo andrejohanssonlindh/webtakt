@@ -847,16 +847,35 @@ body {
   left: 0;
   z-index: 20;
   margin-top: 2px;
-  width: 100%;
+  min-width: 100%;
+  width: max-content;
+  max-width: 240px;
+  /* The list grew long (20+ effects). Cap height and scroll instead of running
+     off the panel; categories (fxpipe-add-header) keep it scannable. */
+  max-height: 320px;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   background: var(--surface-2);
   border: 1px solid #7ec8c8;
   border-radius: 3px;
-  overflow: hidden;
 }
 
 .fxpipe-add-menu.hidden { display: none; }
+
+/* Category section header inside the add-FX popout. */
+.fxpipe-add-header {
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  color: var(--accent-dim);
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 5px 8px 3px;
+  border-bottom: 1px solid var(--border);
+}
 
 .fxpipe-add-item {
   border: none;
@@ -2736,6 +2755,34 @@ body {
 .fx-enum-btn.active {
   background: var(--accent);
   color: var(--bg);
+}
+
+/* Step on/off pattern grid (GateFX). A compact 2-row × 8 toggle grid matching
+   the enum cell's column layout so it sits inline in the FX knob row. */
+.fx-pattern-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.fx-pattern-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+}
+
+.fx-pattern-step {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  font-size: 0;
+  border-radius: 2px;
+}
+
+.fx-pattern-step.active {
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 /* Unified MS/BPM sync knob cell. Mode toggles by clicking the knob center

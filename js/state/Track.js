@@ -84,6 +84,17 @@ import { CompressorFX }  from '../signal/CompressorFX.js';
 import { PhaserFX }      from '../signal/PhaserFX.js';
 import { FXFilter }      from '../signal/FXFilter.js';
 import { NormalizerFX }  from '../signal/NormalizerFX.js';
+import { EQ3FX }         from '../signal/EQ3FX.js';
+import { AutoPanFX }     from '../signal/AutoPanFX.js';
+import { GateFX }        from '../signal/GateFX.js';
+import { WidthFX }       from '../signal/WidthFX.js';
+import { LimiterFX }     from '../signal/LimiterFX.js';
+import { RingModFX }     from '../signal/RingModFX.js';
+import { TapeFX }        from '../signal/TapeFX.js';
+import { CombFX }        from '../signal/CombFX.js';
+import { ShimmerFX }     from '../signal/ShimmerFX.js';
+import { Crush2FX }      from '../signal/Crush2FX.js';
+import { StutterFX }     from '../signal/StutterFX.js';
 import { FXInstance }    from '../signal/FXInstance.js';
 import { Arpeggiator }   from '../signal/Arpeggiator.js';
 import { LiveArp }       from '../signal/LiveArp.js';
@@ -136,24 +147,43 @@ const FX_TYPES = {
   reverb:   ReverbFX,
   distortion: DistortionFX,
   compressor: CompressorFX,
-  // phaser: PhaserFX,  // parked — the effect was too subtle to be useful; may
-  //                       revisit (see PhaserFX.js header + design/fx.md). Old
-  //                       saves referencing a 'phaser' instance degrade gracefully
-  //                       (_restoreFXInstances skips unknown types).
+  phaser:   PhaserFX,        // un-parked: now stereo (counter-sweep) + wider range.
   filter:   FXFilter,
   normalizer: NormalizerFX,
+  eq3:      EQ3FX,
+  autopan:  AutoPanFX,
+  gate:     GateFX,
+  width:    WidthFX,
+  limiter:  LimiterFX,
+  ringmod:  RingModFX,
+  tape:     TapeFX,
+  comb:     CombFX,
+  shimmer:  ShimmerFX,
+  crush2:   Crush2FX,
+  stutter:  StutterFX,
 };
 
 /** Human labels for the Add-FX menu (order = menu order). */
 export const FX_TYPE_LABELS = {
   filter:     'Filter',
+  eq3:        'EQ',
   delay:      'Delay',
-  crush:      'Crush',
+  tape:       'Tape',
   chorus:     'Chorus',
+  phaser:     'Phaser',
+  autopan:    'AutoPan',
+  ringmod:    'RingMod',
   reverb:     'Reverb',
+  shimmer:    'Shimmer',
+  comb:       'Comb',
+  crush:      'Crush',
+  crush2:     'Crush+',
   distortion: 'Distortion',
+  gate:       'Gate',
+  stutter:    'Stutter',
+  width:      'Width',
   compressor: 'Compressor',
-  // phaser:  'Phaser',   // parked — see FX_TYPES note above.
+  limiter:    'Limiter',
   normalizer: 'Normalizer',
 };
 
@@ -650,7 +680,8 @@ export class Track {
     // never torn down — they stay registered).
     for (const id of Object.keys(this._fxBlocks)) {
       if (!this._fxBaseIds.includes(id)) {
-        try { this._fxBlocks[id]?.disconnect?.(); } catch (_) {}
+        // destroy() — these instances are being thrown away, so kill any worklet.
+        try { this._fxBlocks[id]?.destroy?.(); } catch (_) {}
         delete this._fxBlocks[id];
       }
     }
@@ -796,7 +827,10 @@ export class Track {
         if (k.startsWith(`${id}.`)) s.plocks.delete(k);
       }
     });
-    try { inst?.disconnect?.(); } catch (_) {}
+    // destroy() (not just disconnect) so worklet-backed blocks kill their
+    // processor on real removal. disconnect() is audio-detach only now — it must
+    // NOT kill, because _rewireFXChain calls it on every chain change.
+    try { inst?.destroy?.(); } catch (_) {}
     delete this._fxBlocks[id];
     this._fxOrder = this._fxOrder.filter(x => x !== id);
     this._rewireFXChain();
@@ -990,7 +1024,10 @@ export class Track {
     // _fxOrder feeds the bus; disconnect every block (order-independent) plus
     // the fixed upstream nodes.
     for (const id of this.getFXBlockIds()) {
-      try { this._fxBlocks[id]?.disconnect?.(); } catch (_) {}
+      // dispose() is permanent (deck unload) → destroy() to kill worklets and free
+      // CPU; base blocks have no destroy(), so fall back to disconnect().
+      const blk = this._fxBlocks[id];
+      try { (blk?.destroy ?? blk?.disconnect)?.call(blk); } catch (_) {}
     }
     try { this.pannerNode?.disconnect?.(); } catch (_) {}
     try { this.outputGain?.disconnect?.(); } catch (_) {}
@@ -1348,6 +1385,23 @@ export class Track {
     for (const g of fxGroups) groups.push(g);
     if (this.arp.enabled)    groups.push({ group: 'Arp', items: arpItems });
     return groups;
+  }
+
+  /**
+   * Like getAssignableParams() but restricted to LFO-valid destinations. The LFO
+   * connects to an AudioParam (or a recognised JS-only target like trig.tone/
+   * arp.rate); a composite FX param with no AudioParam (e.g. comb.freq, pan.shape,
+   * tape.wow) can't be LFO-driven, so it is dropped here — while staying available
+   * to the mod-wheel / MIDI-CC dropdowns (those apply via setParam and DO support
+   * such params). Empty groups are removed.
+   */
+  getLFOAssignableParams() {
+    return this.getAssignableParams()
+      .map(g => ({
+        group: g.group,
+        items: g.items.filter(it => this._resolveAudioParam(it.path) != null),
+      }))
+      .filter(g => g.items.length);
   }
 
   toJSON() {

@@ -111,6 +111,8 @@ No other JS-only destinations exist. `osc.detune` routes to a real AudioParam.
 
 `amp.pan` is resolved directly in `_resolveAudioParam` (not via machine). All other paths delegate to `machine.resolveAudioParam` → `filter.resolveAudioParam` → FX chain in order.
 
+**LFO dropdown uses `getLFOAssignableParams()`**, not the raw `getAssignableParams()`. It is the same list filtered to destinations the LFO can actually drive: an AudioParam-backed param, or a recognised JS-only target (`trig.tone`/`trig.velocity`/`arp.*`). Composite FX params that are `modulatable` but have no `resolveAudioParam` — e.g. `comb.freq` (value is a frequency, node param is a delay time), `pan.shape`, `tape.wow`/`spread`, `gate.depth`/`smooth` — are **dropped from the LFO dropdown** (they'd be dead targets) but **stay in the mod-wheel / MIDI-CC dropdowns** (`getAssignableParams`), which apply via `setParam` and so support them.
+
 ---
 
 ## Lifecycle

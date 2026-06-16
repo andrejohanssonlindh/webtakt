@@ -136,7 +136,7 @@ export class LFOPanel {
     destWrap.appendChild(btnEl);
     destWrap.appendChild(listEl);
 
-    const groups = track.getAssignableParams();
+    const groups = track.getLFOAssignableParams();
     let foundLabel = '';
     groups.forEach(group => {
       const hdr = document.createElement('div');

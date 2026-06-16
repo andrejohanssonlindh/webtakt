@@ -38,7 +38,18 @@ export const TYPE_GLYPH = {
   delay: '⟳', crush: '▦', chorus: '≈', reverb: '◊',
   distortion: '◢', compressor: '◧', phaser: '∿', filter: '⏚',
   normalizer: '⊿',
+  eq3: '⊻', autopan: '↔', gate: '⊟', width: '⇔', limiter: '⊼',
+  ringmod: '⊗', tape: '⊚', comb: '♯', shimmer: '✦', crush2: '▩',
+  stutter: '⋮',
 };
+
+// Add-menu categories: groups the (now long) FX list into scannable sections.
+// Order here = section order in the popout. Any type not listed falls into 'More'.
+const ADD_FX_CATEGORIES = [
+  { label: 'Tone & Space',     types: ['filter', 'eq3', 'reverb', 'shimmer', 'tape', 'delay', 'chorus', 'phaser', 'autopan', 'comb'] },
+  { label: 'Character',        types: ['distortion', 'crush', 'crush2', 'ringmod', 'gate', 'stutter'] },
+  { label: 'Dynamics & Util',  types: ['compressor', 'limiter', 'width', 'normalizer'] },
+];
 
 export class FXPipelinePanel {
   // Selected block id is stored on `state` (this panel is recreated on every
@@ -109,10 +120,13 @@ export class FXPipelinePanel {
       menu.appendChild(item);
     });
 
-    Object.entries(FX_TYPE_LABELS).forEach(([type, label]) => {
+    // Categorised, scrollable sections (the flat list grew too long). Each known
+    // type is placed in its category; any new/unlisted type lands in a trailing
+    // "More" section so nothing is ever dropped from the menu.
+    const addItem = (type) => {
       const item = document.createElement('button');
       item.className = 'fxpipe-add-item';
-      item.textContent = `${TYPE_GLYPH[type] ?? ''} ${label}`.trim();
+      item.textContent = `${TYPE_GLYPH[type] ?? ''} ${FX_TYPE_LABELS[type] ?? type}`.trim();
       item.addEventListener('click', () => {
         const id = this._track.addFX(type);
         menu.classList.add('hidden');
@@ -120,7 +134,24 @@ export class FXPipelinePanel {
         this._renderContent();
       });
       menu.appendChild(item);
+    };
+    const addHeader = (text) => {
+      const h = document.createElement('div');
+      h.className = 'fxpipe-add-header';
+      h.textContent = text;
+      menu.appendChild(h);
+    };
+
+    const categorised = new Set(ADD_FX_CATEGORIES.flatMap(c => c.types));
+    ADD_FX_CATEGORIES.forEach(cat => {
+      const present = cat.types.filter(t => FX_TYPE_LABELS[t]);
+      if (!present.length) return;
+      addHeader(cat.label);
+      present.forEach(addItem);
     });
+    // Trailing catch-all for any registered type not in a category above.
+    const leftovers = Object.keys(FX_TYPE_LABELS).filter(t => !categorised.has(t));
+    if (leftovers.length) { addHeader('More'); leftovers.forEach(addItem); }
     addBtn.addEventListener('click', () => menu.classList.toggle('hidden'));
     addWrap.appendChild(addBtn);
     addWrap.appendChild(menu);

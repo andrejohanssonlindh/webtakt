@@ -42,6 +42,54 @@ export function formatParam(p, v) {
   if (p.path.endsWith('norm.target'))     return v.toFixed(2);
   if (p.path.endsWith('norm.range'))      return Math.round(v * 100) + '%';
   if (p.path.endsWith('norm.speed'))      return Math.round(v * 100) + '%';
+  // EQ3
+  if (p.path.endsWith('eq3.lowGain') || p.path.endsWith('eq3.midGain') || p.path.endsWith('eq3.highGain'))
+                                          return (v >= 0 ? '+' : '') + v.toFixed(1) + 'dB';
+  if (p.path.endsWith('eq3.midFreq'))     return Math.round(v) + 'Hz';
+  if (p.path.endsWith('eq3.midQ'))        return v.toFixed(1);
+  // AutoPan
+  if (p.path.endsWith('pan.depth'))       return Math.round(v * 100) + '%';
+  if (p.path.endsWith('pan.shape'))       return Math.round(v * 100) + '%';
+  if (p.path.endsWith('pan.rate'))        return v.toFixed(2) + 'Hz';
+  // Gate
+  if (p.path.endsWith('gate.depth'))      return Math.round(v * 100) + '%';
+  if (p.path.endsWith('gate.smooth'))     return Math.round(v * 100) + '%';
+  // Width
+  if (p.path.endsWith('width.amount'))    return Math.round(v * 100) + '%';
+  // Limiter
+  if (p.path.endsWith('lim.threshold'))   return Math.round(v) + 'dB';
+  if (p.path.endsWith('lim.release'))     return Math.round(v * 1000) + 'ms';
+  if (p.path.endsWith('lim.ceiling'))     return v.toFixed(1) + 'dB';
+  // RingMod
+  if (p.path.endsWith('ring.freq'))       return Math.round(v) + 'Hz';
+  if (p.path.endsWith('ring.wet'))        return Math.round(v * 100) + '%';
+  // Tape
+  if (p.path.endsWith('tape.time'))       return v >= 1 ? v.toFixed(2) + 's' : Math.round(v * 1000) + 'ms';
+  if (p.path.endsWith('tape.feedback'))   return Math.round(v * 100) + '%';
+  if (p.path.endsWith('tape.tone'))       return Math.round(v) + 'Hz';
+  if (p.path.endsWith('tape.wow'))        return Math.round(v * 100) + '%';
+  if (p.path.endsWith('tape.drive'))      return 'x' + v.toFixed(1);
+  if (p.path.endsWith('tape.spread'))     return Math.round(v * 100) + '%';
+  if (p.path.endsWith('tape.wet'))        return Math.round(v * 100) + '%';
+  // Comb
+  if (p.path.endsWith('comb.freq'))       return Math.round(v) + 'Hz';
+  if (p.path.endsWith('comb.feedback'))   return Math.round(v * 100) + '%';
+  if (p.path.endsWith('comb.damp'))       return Math.round(v) + 'Hz';
+  if (p.path.endsWith('comb.wet'))        return Math.round(v * 100) + '%';
+  // Shimmer
+  if (p.path.endsWith('shim.decay'))      return v.toFixed(2) + 's';
+  if (p.path.endsWith('shim.shimmer'))    return Math.round(v * 100) + '%';
+  if (p.path.endsWith('shim.damp'))       return Math.round(v) + 'Hz';
+  if (p.path.endsWith('shim.preHP'))      return Math.round(v) + 'Hz';
+  if (p.path.endsWith('shim.wet'))        return Math.round(v * 100) + '%';
+  // Crush+ (worklet)
+  if (p.path.endsWith('crush2.bits'))     return Math.round(v) + ' bit';
+  if (p.path.endsWith('crush2.downsamp')) return '/' + Math.round(v);
+  if (p.path.endsWith('crush2.wet'))      return Math.round(v * 100) + '%';
+  // Stutter (worklet)
+  if (p.path.endsWith('stut.wet'))        return Math.round(v * 100) + '%';
+  if (p.path.endsWith('stut.chance'))     return Math.round(v * 100) + '%';
+  if (p.path.endsWith('stut.repeats'))    return Math.round(v) + 'x';
 
   if (p.path === 'filter.cutoff')    return Math.round(v) + 'Hz';
   if (p.path === 'filter.resonance') return v.toFixed(1);

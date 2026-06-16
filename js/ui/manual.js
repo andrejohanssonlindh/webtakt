@@ -435,13 +435,16 @@ export const MANUAL_CONTENT = {
                  'chain — or use the ✕ on the tile. Added effects are deleted; ' +
                  'the base four (Delay/Crush/Chorus/Reverb) are just detached and ' +
                  'can be re-added from + ADD FX (they keep their settings).'],
-      ['Add FX', 'The + ADD FX menu adds another effect to the chain — including ' +
-                 'a Filter (carve the mix post-effects), Distortion, Compressor, ' +
-                 'a Normalizer (auto-levels the signal at that point so a loud ' +
-                 'effect earlier in the chain doesn\'t blow up the level), or a ' +
-                 'second copy of any base effect (e.g. two reverbs). A base effect ' +
-                 'you removed reappears here as "(re-add)". Added effects can be ' +
-                 'reordered and removed freely.'],
+      ['Add FX', 'The + ADD FX menu adds another effect to the chain. Tone & space: ' +
+                 'Filter, EQ (3-band), Reverb, Shimmer (octave reverb + freeze), ' +
+                 'Tape (ping-pong echo), Delay, Chorus, Phaser (stereo), AutoPan/ ' +
+                 'Tremolo, Comb (tuned resonator). Character & destruction: ' +
+                 'Distortion, Crush, Crush+ (real bitcrush), RingMod, Gate ' +
+                 '(trance-gate), Stutter (beat-repeat). Dynamics & utility: ' +
+                 'Compressor, Limiter, Width (mid/side), Normalizer (auto-level). ' +
+                 'You can also add a second copy of any base effect (e.g. two ' +
+                 'reverbs). A base effect you removed reappears as "(re-add)". ' +
+                 'Added effects can be reordered and removed freely.'],
       ['Save', 'SAVE stores the whole pipeline (order + every effect\'s settings ' +
                  '+ added instances) as a named, tagged global preset.'],
       ['Load / presets popup', 'LOAD opens the FX-preset manager — a SOUNDS-style ' +
@@ -571,7 +574,9 @@ export const MANUAL_CONTENT = {
            'hollow, "jet plane" shimmer (think Small Stone / Phase 90 on guitars, ' +
            'pads, or drums). The effect lives in the SWEEP, so it is most obvious ' +
            'on sustained, harmonically rich sounds; on a short blip you mostly hear ' +
-           'a tonal colour. Raise Wet from 0 to hear it (must be ON).',
+           'a tonal colour. Raise Wet from 0 to hear it (must be ON). This phaser ' +
+           'is STEREO: the left and right notches sweep in opposite directions, so ' +
+           'it also widens the image.',
     items: [
       ['Rate', 'Speed of the sweep LFO (0.05–8 Hz). Slow = a long, lazy swoosh; ' +
                 'fast = a wobbly, vibrato-like churn.'],
@@ -583,6 +588,186 @@ export const MANUAL_CONTENT = {
       ['Wet', 'Mix of the phased copy against the dry (0–100%). The notches cancel ' +
                 'deepest near 100% — start there to hear the effect, then back off ' +
                 'to taste. At 0 the phaser is silent (pure dry).'],
+    ],
+  },
+
+  eq3: {
+    title: 'EQ (3-BAND)',
+    blurb: 'An added FX block (+ ADD FX). A simple, musical 3-band equaliser: a low ' +
+           'shelf, a sweepable mid bell, and a high shelf. Use it to carve or boost ' +
+           'broad tonal regions anywhere in the chain — roll off lows before a ' +
+           'reverb, dip a harsh mid, lift some air up top. It is always in-line ' +
+           '(no wet knob); bypassing it flattens every band to 0 dB.',
+    items: [
+      ['Low', 'Low-shelf gain (±18 dB) below ~250 Hz. Cut to tighten, boost for weight.'],
+      ['Mid', 'Peaking bell gain (±18 dB) at the M.Freq centre. The main tone carver.'],
+      ['M.Freq', 'Centre frequency of the mid bell (200 Hz–6 kHz).'],
+      ['M.Q', 'Width of the mid bell (0.3 = broad, 8 = narrow/surgical).'],
+      ['High', 'High-shelf gain (±18 dB) above ~4 kHz. Boost for air, cut to dull.'],
+    ],
+  },
+
+  autopan: {
+    title: 'AUTOPAN / TREMOLO',
+    blurb: 'An added FX block (+ ADD FX). One LFO that moves the sound in the stereo ' +
+           'field (auto-pan) and/or pulses its volume (tremolo) — the Pan↔Trem knob ' +
+           'blends between the two. Rate locks to tempo or runs free in Hz. Great ' +
+           'for width, rhythmic movement, and helicopter/throb textures.',
+    items: [
+      ['Depth', 'Overall amount of movement (0–100%). At 0 nothing moves.'],
+      ['Pan↔Trem', 'Blends the LFO destination: full left = pure auto-pan ' +
+                '(position), full right = pure tremolo (volume), middle = both.'],
+      ['Rate', 'LFO speed. Double-click the knob to toggle HZ (free) vs BPM ' +
+                '(tempo-locked division).'],
+    ],
+  },
+
+  gate: {
+    title: 'GATE (TRANCE-GATE)',
+    blurb: 'An added FX block (+ ADD FX). A tempo-locked rhythmic gate: a repeating ' +
+           '16-step on/off pattern chops the signal in time, turning a sustained ' +
+           'pad or chord into a pulsing, stuttered rhythm (the classic trance/ ' +
+           'sidechain-style pump). Must be ON. Each slot is the Slot division long.',
+    items: [
+      ['Depth', 'How far OFF slots duck (0–100%). 100% = full silence between hits; ' +
+                'lower values give a softer pulse.'],
+      ['Smooth', 'Edge ramp on each on/off transition (0–100% of a slot). Low = hard ' +
+                'chops/clicks; high = gentle swells.'],
+      ['Slot', 'Length of each pattern step as a tempo division (e.g. 1/16).'],
+      ['Pattern', 'The 16-step on/off grid. Click a cell to toggle whether that slot ' +
+                'passes (lit) or gates (dark).'],
+    ],
+  },
+
+  width: {
+    title: 'STEREO WIDTH',
+    blurb: 'An added FX block (+ ADD FX). Adjusts the stereo width by scaling the ' +
+           'side (difference) signal against the mid (mono) signal. Narrow toward ' +
+           'mono for focus and mono-compatibility, or widen for a bigger image. ' +
+           'Bypassing it leaves the signal at unity (unchanged). NOTE: it can only ' +
+           'act on material that is ALREADY stereo (e.g. after a Chorus, Shimmer, ' +
+           'or AutoPan) — on a plain mono source there is no side signal to widen, ' +
+           'so it will sound unchanged.',
+    items: [
+      ['Width', '0% = full mono, 100% = unchanged, 200% = extra wide. Push past 100% ' +
+                'with care — very wide settings can sound thin or phasey in mono.'],
+    ],
+  },
+
+  limiter: {
+    title: 'LIMITER',
+    blurb: 'An added FX block (+ ADD FX). A brickwall peak limiter: it catches peaks ' +
+           'fast and holds a ceiling, so you can drive the level up without ' +
+           'clipping. Unlike the Compressor (musical, blendable dynamics) this is a ' +
+           'loudness/safety tool — always full-strength. Place it late in the chain.',
+    items: [
+      ['Thresh', 'Where limiting starts (−40–0 dB). Lower = more peaks caught = ' +
+                'louder, denser, more squashed.'],
+      ['Release', 'How quickly it recovers after a peak (0.01–0.5 s). Fast can pump; ' +
+                'slow is smoother but can duck.'],
+      ['Ceiling', 'The output cap (−12–0 dB). The signal never exceeds this — set ' +
+                'just below 0 to leave headroom.'],
+    ],
+  },
+
+  ringmod: {
+    title: 'RING MOD',
+    blurb: 'An added FX block (+ ADD FX). Multiplies the signal by a carrier ' +
+           'oscillator, producing metallic, bell-like, clangorous sum-and-difference ' +
+           'tones. Low carrier frequencies give tremolo; up in the audio range it ' +
+           'turns pitched material inharmonic and robotic. Raise Wet to hear it.',
+    items: [
+      ['Freq', 'Carrier frequency. Double-click to toggle HZ (free, full ring-mod ' +
+                'range) vs BPM (tempo-locked, tremolo-ish at low divisions).'],
+      ['Wet', 'Mix of the ring-modulated copy against dry (0–100%).'],
+    ],
+  },
+
+  tape: {
+    title: 'TAPE ECHO',
+    blurb: 'An added FX block (+ ADD FX). A dub-style tape delay with vintage ' +
+           'character: the echoes bounce left↔right (ping-pong), each repeat gets ' +
+           'darker (tape HF loss), and a wow/flutter wobble plus tape saturation ' +
+           'add age and motion. Raise Wet to hear it (must be ON).',
+    items: [
+      ['Time', 'Echo spacing. Double-click to toggle MS (free) vs BPM (tempo-locked).'],
+      ['Feedbk', 'How many repeats (0–95%). High values ring on for a long time; ' +
+                'near the top it can build into a wash.'],
+      ['Tone', 'Lowpass on the feedback path — how dark each repeat gets. Lower = ' +
+                'faster decay into mush (dubby); higher = brighter, cleaner repeats.'],
+      ['Wow', 'Wow & flutter depth — the pitch wobble of an old tape machine.'],
+      ['Drive', 'Tape saturation warmth on the way in.'],
+      ['Spread', 'How hard the ping-pong is panned (0 = centred, 1 = full L/R bounce).'],
+      ['Wet', 'Mix of the echoes against dry (0–100%).'],
+    ],
+  },
+
+  comb: {
+    title: 'COMB RESONATOR',
+    blurb: 'An added FX block (+ ADD FX). A very short tuned feedback line that RINGS ' +
+           'at a pitch — feed it a drum or transient and it adds a metallic, ' +
+           'plucked, Karplus-string resonance at the chosen note. P-lock the Pitch ' +
+           'per step and it becomes a little melodic voice riding your sequence.',
+    items: [
+      ['Pitch', 'The resonant note (40–2000 Hz). This is the pitch the comb rings at; ' +
+                'p-lock it per step for melodies.'],
+      ['Sustain', 'Feedback amount (0–99%) — how long the ring lasts. High = long, ' +
+                'singing tails.'],
+      ['Damp', 'Lowpass in the feedback path — brighter (high) vs softer/duller (low) ' +
+                'ring, and shorter decay as you lower it.'],
+      ['Wet', 'Mix of the resonant copy against dry (0–100%).'],
+    ],
+  },
+
+  shimmer: {
+    title: 'SHIMMER REVERB',
+    blurb: 'An added FX block (+ ADD FX). A reverb with an octave-up layer mixed in, ' +
+           'for a glassy, angelic, ambient-cathedral wash. FREEZE holds the current ' +
+           'tail for a long sustained pad. Raise Wet to hear it (must be ON).',
+    items: [
+      ['Decay', 'Reverb tail length in seconds (0.3–10 s).'],
+      ['Shimmer', 'How much octave-up tail is fed back (0–100%). More = a brighter, ' +
+                'faster-climbing shimmer.'],
+      ['Damp', 'Lowpass on the tail — tames the top so the shimmer stays smooth.'],
+      ['Pre-HP', 'Highpass on the wet signal before the reverb — keeps low end out of ' +
+                'the wash so it doesn\'t turn muddy.'],
+      ['Freeze', 'ON loops the current tail indefinitely (infinite sustain pad); OFF ' +
+                'returns to normal shimmer.'],
+      ['Wet', 'Mix of the reverb against dry (0–100%).'],
+    ],
+  },
+
+  crush2: {
+    title: 'CRUSH+ (REAL BITCRUSH)',
+    blurb: 'An added FX block (+ ADD FX). A true bitcrusher: it reduces the bit depth ' +
+           '(stair-steps the amplitude) and the sample rate (holds each sample for ' +
+           'several samples), giving the harsh, gritty, aliased lo-fi sound of old ' +
+           'samplers and consoles. Harder and dirtier than the original Crush, which ' +
+           'only approximated the rate reduction. Raise Wet to hear it (must be ON).',
+    items: [
+      ['Bits', 'Output bit depth (1–16). Lower = coarser stair-stepping and more ' +
+                'quantisation grit; 16 ≈ clean.'],
+      ['Down', 'Sample-and-hold factor (1–64). Higher holds each sample longer = ' +
+                'lower effective sample rate = more aliasing and digital crunch.'],
+      ['Wet', 'Mix of the crushed copy against dry (0–100%) — parallel crush below ' +
+                '100%.'],
+    ],
+  },
+
+  stutter: {
+    title: 'STUTTER (BEAT-REPEAT)',
+    blurb: 'An added FX block (+ ADD FX). A glitch / beat-repeat: it grabs the most ' +
+           'recent tempo-synced slice of audio and loops it, producing stutters and ' +
+           'rolls. Use Chance for hands-free random glitching, or the Latch toggle ' +
+           'to grab-and-repeat on demand. Raise Wet to hear it (must be ON).',
+    items: [
+      ['Wet', 'Mix of the stuttered copy against dry (0–100%).'],
+      ['Chance', 'Probability of auto-firing a stutter at each slice boundary (0 = ' +
+                'never, 100% = constant rolls).'],
+      ['Repeats', 'How many times a grabbed slice loops before releasing (1–16).'],
+      ['Slice', 'Length of the captured/looped slice as a tempo division (e.g. 1/16).'],
+      ['Latch', 'ON immediately grabs and loops the current slice; OFF releases. The ' +
+                'manual, play-it-live grab.'],
     ],
   },
 };

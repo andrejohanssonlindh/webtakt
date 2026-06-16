@@ -19,7 +19,15 @@
  *   .ladderLoaded     — bool, true once the ladder worklet is registered
  */
 
-const LADDER_WORKLET_PATH = 'js/worklets/patina-ladder-processor.js';
+const LADDER_WORKLET_PATH   = 'js/worklets/patina-ladder-processor.js';
+// FX worklets registered at boot so `new AudioWorkletNode(ctx, 'bitcrush'|'stutter')`
+// is synchronous by the time a user adds Crush+ / Stutter to a chain (always long
+// after boot). Each FX block falls back to a dry passthrough if its node can't be
+// constructed (see Crush2FX / StutterFX), so a slow/failed load never breaks audio.
+const FX_WORKLET_PATHS = [
+  'js/worklets/bitcrush-processor.js',
+  'js/worklets/stutter-processor.js',
+];
 
 export class AudioEngine {
   constructor() {
@@ -38,6 +46,13 @@ export class AudioEngine {
       ? this.context.audioWorklet.addModule(LADDER_WORKLET_PATH)
           .then(() => { this.ladderLoaded = true; })
           .catch(err => { console.warn('AudioEngine: analogue ladder worklet load failed', err); })
+      : Promise.resolve();
+
+    // FX worklets (Crush+ / Stutter). Fire-and-forget like the ladder.
+    this.fxWorkletsReady = this.context.audioWorklet
+      ? Promise.all(FX_WORKLET_PATHS.map(path =>
+          this.context.audioWorklet.addModule(path)
+            .catch(err => console.warn('AudioEngine: FX worklet load failed', path, err))))
       : Promise.resolve();
 
     // FX bus placeholder — passthrough for now
