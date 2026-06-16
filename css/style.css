@@ -39,6 +39,17 @@
   --font-ui:      'JetBrains Mono', monospace;
   --font-label:   'Rajdhani', 'JetBrains Mono', sans-serif;
   --radius:       3px;
+
+  /* ── Fluid type scale (Phase 1, responsive refactor — see RESPONSIVE.md) ──
+   * Font sizes throughout are expressed in rem and ride this single root size.
+   * The desktop design was hand-tuned at an 11px base, so 1rem === 11px there.
+   * Below the desktop width the base shrinks gently with the viewport (clamped),
+   * which is what lets the whole type/spacing system scale down toward tablet.
+   * Borders and radii deliberately stay in px (a 1px hairline must not blur).
+   * --ui-scale is a manual multiplier reserved for a future explicit zoom knob;
+   * it defaults to 1 and currently has no UI. */
+  --ui-scale: 1;
+  --font-root: 11px;
 }
 
 * {
@@ -47,11 +58,19 @@
   padding: 0;
 }
 
+html {
+  /* One knob drives the whole rem-based type scale. The desktop ceiling is 11px
+   * (--font-root); below ~1024px the base eases down so type tracks the viewport.
+   * Steeper than the first attempt so the change is actually visible as you
+   * narrow. --ui-scale lets a future setting nudge the whole system. */
+  font-size: calc(clamp(8px, 0.7vw + 3.6px, var(--font-root)) * var(--ui-scale));
+}
+
 body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-ui);
-  font-size: 11px;
+  font-size: 1rem;   /* 11px on desktop, scales via html root */
   height: 100vh;
   overflow: hidden;
   user-select: none;
@@ -82,7 +101,7 @@ body {
 }
 
 #transport .transport-title {
-  font-size: 12px;
+  font-size: 1.091rem;
   font-weight: 700;
   color: var(--accent);
   letter-spacing: 0.12em;
@@ -101,7 +120,7 @@ body {
   background: transparent;
   border: 1px solid transparent;
   color: var(--text-dim);
-  font-size: 14px;
+  font-size: 1.273rem;
   line-height: 1;
   padding: 3px 5px;
   margin-right: 2px;
@@ -134,18 +153,18 @@ body {
   border-radius: var(--radius);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   padding: 12px;
-  font-size: 11px;
+  font-size: 1rem;
   color: var(--text);
 }
 .settings-title {
-  font-size: 11px;
+  font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0.12em;
   color: var(--accent);
   margin-bottom: 10px;
 }
 .settings-subtitle {
-  font-size: 10px;
+  font-size: 0.909rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   color: var(--text-dim);
@@ -170,7 +189,7 @@ body {
   color: var(--text-bright);
   border-radius: var(--radius);
   padding: 2px 4px;
-  font-size: 11px;
+  font-size: 1rem;
 }
 .settings-slider-wrap {
   display: flex;
@@ -200,7 +219,7 @@ body {
   color: var(--text-bright);
   border-radius: var(--radius);
   padding: 3px 8px;
-  font-size: 11px;
+  font-size: 1rem;
   cursor: pointer;
 }
 .settings-keybind-btn:hover { border-color: var(--accent); }
@@ -211,7 +230,7 @@ body {
 }
 .settings-keybind-conflict {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   color: #c8a04a;
   background: rgba(200, 160, 74, 0.1);
   border-left: 2px solid #c8a04a;
@@ -220,7 +239,7 @@ body {
   border-radius: 2px;
 }
 .settings-keybind-note {
-  font-size: 10px;
+  font-size: 0.909rem;
   line-height: 1.5;
   color: var(--text-dim);
   background: var(--surface-2);
@@ -244,7 +263,7 @@ body {
   color: var(--text-dim);
   border-radius: var(--radius);
   padding: 5px;
-  font-size: 10px;
+  font-size: 0.909rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   cursor: pointer;
@@ -262,7 +281,7 @@ body {
   color: var(--text-bright);
   border-radius: var(--radius);
   padding: 4px;
-  font-size: 10px;
+  font-size: 0.909rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   cursor: pointer;
@@ -301,7 +320,7 @@ body {
   pointer-events: none;   /* keys re-enable it; lets gaps fall through */
 }
 .kb-editor-key {
-  font-size: 11px;
+  font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
   border-radius: 0 0 var(--radius) var(--radius);
@@ -333,7 +352,7 @@ body {
   pointer-events: auto;
   z-index: 2;
   padding-bottom: 4px;
-  font-size: 10px;
+  font-size: 0.909rem;
 }
 .kb-editor-key:hover { border-color: var(--accent); }
 .kb-editor-key.capturing {
@@ -404,13 +423,13 @@ body {
 
 .bpm-label {
   color: var(--text-dim);
-  font-size: 9px;
+  font-size: 0.818rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 #bpm-display {
-  font-size: 16px;
+  font-size: 1.455rem;
   font-weight: 700;
   color: var(--text-bright);
   min-width: 36px;
@@ -440,13 +459,13 @@ body {
 
 .track-count-label {
   color: var(--text-dim);
-  font-size: 9px;
+  font-size: 0.818rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 #track-count-display {
-  font-size: 16px;
+  font-size: 1.455rem;
   font-weight: 700;
   color: var(--text-bright);
   min-width: 20px;
@@ -457,7 +476,7 @@ body {
   width: 22px;
   height: 22px;
   padding: 0;
-  font-size: 14px;
+  font-size: 1.273rem;
   line-height: 1;
   display: flex;
   align-items: center;
@@ -487,7 +506,7 @@ body {
   color: var(--text-dim);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   transition: border-color 0.1s, background 0.1s;
   position: relative;
   overflow: hidden;
@@ -518,14 +537,14 @@ body {
 }
 
 .track-num {
-  font-size: 13px;
+  font-size: 1.182rem;
   font-weight: 700;
   color: inherit;
   line-height: 1;
 }
 
 .track-type {
-  font-size: 8px;
+  font-size: 0.727rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -536,7 +555,7 @@ body {
 }
 
 .track-sound {
-  font-size: 7px;
+  font-size: 0.636rem;
   letter-spacing: 0.04em;
   color: var(--accent);
   max-width: calc(100% - 8px);
@@ -555,7 +574,7 @@ body {
   position: absolute;
   top: 3px;
   right: 4px;
-  font-size: 9px;
+  font-size: 0.818rem;
   font-weight: 600;
   color: var(--text-dim);
   cursor: pointer;
@@ -578,7 +597,7 @@ body {
   position: absolute;
   bottom: 3px;
   left: 4px;
-  font-size: 9px;
+  font-size: 0.818rem;
   font-weight: 600;
   color: var(--text-dim);
   line-height: 1.2;
@@ -593,7 +612,7 @@ body {
 }
 
 .follow-ind {
-  font-size: 8px;
+  font-size: 0.727rem;
   color: var(--step-plock);
   position: absolute;
   bottom: 3px;
@@ -625,7 +644,7 @@ body {
 
 .tab-btn {
   padding: 4px 10px;
-  font-size: 9px;
+  font-size: 0.818rem;
   letter-spacing: 0.1em;
   border-radius: 2px 2px 0 0;
   color: var(--text-dim);
@@ -757,7 +776,7 @@ body {
   background: var(--surface-3);
   color: #7ec8c8;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 1.182rem;
   line-height: 1;
   width: 24px;
   height: 24px;
@@ -792,7 +811,7 @@ body {
   color: var(--text-dim);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   transition: background 0.1s, color 0.1s, border-color 0.1s;
@@ -870,7 +889,7 @@ body {
   background: var(--surface-2);
   color: var(--accent-dim);
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 0.727rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 5px 8px 3px;
@@ -884,7 +903,7 @@ body {
   color: var(--text);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 0.909rem;
   text-align: left;
   padding: 6px 8px;
 }
@@ -925,7 +944,7 @@ body {
 .fxpreset-title {
   color: #7ec8c8;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 1.182rem;
   font-weight: 700;
   letter-spacing: 0.12em;
 }
@@ -936,7 +955,7 @@ body {
   background: var(--surface-3);
   color: var(--text-dim);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 1.091rem;
   padding: 2px 8px;
 }
 .fxpreset-close:hover { color: var(--text); border-color: var(--accent-dim); }
@@ -963,7 +982,7 @@ body {
 .fxpreset-audit-hint {
   color: var(--text-dim);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   line-height: 1.4;
 }
 
@@ -982,7 +1001,7 @@ body {
   color: var(--text-dim);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   letter-spacing: 0.05em;
   padding: 3px 9px;
 }
@@ -1004,7 +1023,7 @@ body {
 .fxpreset-empty {
   color: var(--text-dim);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 0.909rem;
   padding: 18px 8px;
   text-align: center;
 }
@@ -1030,7 +1049,7 @@ body {
 .fxpreset-card-name {
   color: var(--text);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 1rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1039,7 +1058,7 @@ body {
 .fxpreset-card-tags {
   color: var(--text-dim);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1048,7 +1067,7 @@ body {
 .fxpreset-card-badge {
   color: #7ec8c8;
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 0.727rem;
   letter-spacing: 0.05em;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1063,7 +1082,7 @@ body {
 }
 
 .fxpreset-card-btn {
-  font-size: 10px;
+  font-size: 0.909rem;
   padding: 4px 8px;
 }
 .fxpreset-card-btn-audit { border-color: #7ec8c8 !important; color: #7ec8c8 !important; }
@@ -1076,7 +1095,7 @@ body {
   color: var(--text-dim);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 0.909rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   padding: 7px 4px;
@@ -1108,11 +1127,11 @@ body {
   transition: border-color 0.1s, background 0.1s, color 0.1s;
 }
 
-.fxpipe-bin-icon { font-size: 18px; line-height: 1; }
+.fxpipe-bin-icon { font-size: 1.636rem; line-height: 1; }
 
 .fxpipe-bin-label {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 0.727rem;
   font-weight: 700;
   letter-spacing: 0.1em;
 }
@@ -1150,7 +1169,7 @@ body {
 
 .fxpipe-params-head {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 0.909rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   color: #7ec8c8;
@@ -1159,14 +1178,14 @@ body {
 
 .fxpipe-params-hint {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   line-height: 1.6;
   color: var(--text-dim);
 }
 
 .fxpipe-terminal {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 0.909rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--accent);
@@ -1178,7 +1197,7 @@ body {
 
 .fxpipe-arrow {
   color: var(--text-dim);
-  font-size: 14px;
+  font-size: 1.273rem;
   user-select: none;
 }
 
@@ -1213,7 +1232,7 @@ body {
   background: var(--surface-2);
   color: var(--text-dim);
   cursor: pointer;
-  font-size: 9px;
+  font-size: 0.818rem;
   line-height: 1;
   padding: 0;
   display: flex;
@@ -1247,7 +1266,7 @@ body {
 }
 
 .fxpipe-block-glyph {
-  font-size: 18px;
+  font-size: 1.636rem;
   line-height: 1;
 }
 
@@ -1257,7 +1276,7 @@ body {
   color: inherit;
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   letter-spacing: 0.06em;
   padding: 1px 2px;
 }
@@ -1273,7 +1292,7 @@ body {
   color: inherit;
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 0.727rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   padding: 2px 6px;
@@ -1298,7 +1317,7 @@ body {
   color: var(--text-dim);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 0.727rem;
   letter-spacing: 0.04em;
   padding: 1px 2px;
   margin-top: 1px;
@@ -1338,7 +1357,7 @@ body {
 }
 
 .knob-val {
-  font-size: 10px;
+  font-size: 0.909rem;
   font-weight: 500;
   color: var(--accent);
   font-family: var(--font-mono);
@@ -1348,7 +1367,7 @@ body {
 }
 
 .knob-label {
-  font-size: 9px;
+  font-size: 0.818rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -1386,7 +1405,7 @@ body {
 /* ─── FILTER ENV SECTION (in Filter tab) ─────────────────── */
 
 .filter-env-label {
-  font-size: 8px;
+  font-size: 0.727rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--step-plock);
@@ -1451,8 +1470,8 @@ body {
 
 .filter-fenv-sec .knob-cell  { gap: 2px; }
 .filter-fenv-sec .knob-canvas { width: 44px !important; height: 44px !important; }
-.filter-fenv-sec .knob-val    { font-size: 9px; min-width: 32px; }
-.filter-fenv-sec .knob-label  { font-size: 7px; }
+.filter-fenv-sec .knob-val    { font-size: 0.818rem; min-width: 32px; }
+.filter-fenv-sec .knob-label  { font-size: 0.636rem; }
 .filter-fenv-sec .knob-row    { gap: 4px; padding-top: 2px; }
 
 
@@ -1484,8 +1503,8 @@ body {
 /* Match compact knob size to filter-fenv-sec */
 .amp-adsr-sec .knob-cell  { gap: 2px; }
 .amp-adsr-sec .knob-canvas { width: 44px !important; height: 44px !important; }
-.amp-adsr-sec .knob-val    { font-size: 9px; min-width: 32px; }
-.amp-adsr-sec .knob-label  { font-size: 7px; }
+.amp-adsr-sec .knob-val    { font-size: 0.818rem; min-width: 32px; }
+.amp-adsr-sec .knob-label  { font-size: 0.636rem; }
 .amp-adsr-sec .knob-row    { gap: 4px; padding-top: 2px; }
 
 /* ─── LEGACY PARAM ROW (enum / boolean) ──────────────────── */
@@ -1499,7 +1518,7 @@ body {
 
 .param-label {
   color: var(--text-dim);
-  font-size: 9px;
+  font-size: 0.818rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1514,7 +1533,7 @@ body {
   border-radius: var(--radius);
   color: var(--text);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   padding: 3px 4px;
   cursor: pointer;
   outline: none;
@@ -1526,7 +1545,7 @@ body {
 
 .placeholder-msg {
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 0.909rem;
   padding: 8px;
   font-style: italic;
   width: 100%;
@@ -1545,7 +1564,7 @@ body {
 }
 
 .lfo-sub-btn {
-  font-size: 9px;
+  font-size: 0.818rem;
   padding: 3px 8px;
 }
 
@@ -1581,7 +1600,7 @@ body {
 
 .mod-wheel-select {
   width: 100%;
-  font-size: 7px;
+  font-size: 0.636rem;
   font-family: 'JetBrains Mono', monospace;
   background: var(--surface-2);
   color: var(--text-dim);
@@ -1606,7 +1625,7 @@ body {
 
 .mod-wheel-select option,
 .mod-wheel-select optgroup {
-  font-size: 11px;
+  font-size: 1rem;
   background: var(--surface-2);
   color: var(--text);
 }
@@ -1671,7 +1690,7 @@ body {
 }
 
 .step-num {
-  font-size: 13px;
+  font-size: 1.182rem;
   font-weight: 700;
   color: var(--step-num-color);
   line-height: 1;
@@ -1803,7 +1822,7 @@ body {
 }
 
 #track-nav-page-counter {
-  font-size: 9px;
+  font-size: 0.818rem;
   font-family: var(--font-mono);
   color: var(--text-dim);
   text-align: center;
@@ -1814,7 +1833,7 @@ body {
 
 .track-nav-btn {
   flex: 1;
-  font-size: 8px;
+  font-size: 0.727rem;
   letter-spacing: 0.1em;
   padding: 0 2px;
   text-align: center;
@@ -1838,7 +1857,7 @@ body {
 }
 
 .length-popup-label {
-  font-size: 8px;
+  font-size: 0.727rem;
   letter-spacing: 0.14em;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -1846,7 +1865,7 @@ body {
 }
 
 .length-popup-steps {
-  font-size: 20px;
+  font-size: 1.818rem;
   font-weight: 700;
   color: var(--accent);
   text-align: center;
@@ -1861,7 +1880,7 @@ body {
 
 .length-popup-btn {
   flex: 1;
-  font-size: 9px;
+  font-size: 0.818rem;
   padding: 4px 2px;
   text-align: center;
 }
@@ -1963,7 +1982,7 @@ body {
   right: 0;
   text-align: center;
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 0.727rem;
   font-weight: 500;
   letter-spacing: 0;
   pointer-events: none;
@@ -1977,7 +1996,7 @@ body {
 .key.black-key .key-label {
   color: #888;
   bottom: 4px;
-  font-size: 7px;
+  font-size: 0.636rem;
 }
 
 .key.white-key.scale-blocked .key-label {
@@ -2000,14 +2019,14 @@ body {
 
 .octave-btn {
   flex: 1;
-  font-size: 9px;
+  font-size: 0.818rem;
   letter-spacing: 0.08em;
 }
 
 .octave-display {
   text-align: center;
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 0.909rem;
   padding: 2px;
 }
 
@@ -2020,7 +2039,7 @@ body {
   color: var(--text);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 0.909rem;
   padding: 4px 6px;
   transition: border-color 0.1s, background 0.1s;
 }
@@ -2042,7 +2061,7 @@ body {
 
 .label {
   color: var(--text-dim);
-  font-size: 9px;
+  font-size: 0.818rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -2091,7 +2110,7 @@ body {
 }
 
 .trig-voice-note {
-  font-size: 13px;
+  font-size: 1.182rem;
   font-weight: 700;
   color: var(--text-bright);
   font-family: var(--font-mono);
@@ -2099,14 +2118,14 @@ body {
 }
 
 .trig-voice-len {
-  font-size: 10px;
+  font-size: 0.909rem;
   color: var(--text-dim);
   font-family: var(--font-mono);
   min-width: 28px;
 }
 
 .trig-voice-nudge {
-  font-size: 10px;
+  font-size: 0.909rem;
   color: var(--accent-dim);
   font-family: var(--font-mono);
   flex: 1;
@@ -2117,7 +2136,7 @@ body {
   background: none;
   border: none;
   color: var(--text-dim);
-  font-size: 14px;
+  font-size: 1.273rem;
   line-height: 1;
   cursor: pointer;
   padding: 0 2px;
@@ -2162,7 +2181,7 @@ body {
 
 .trig-no-step {
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 0.909rem;
   padding: 8px;
   font-style: italic;
 }
@@ -2176,7 +2195,7 @@ body {
 }
 
 .trig-note-label {
-  font-size: 11px;
+  font-size: 1rem;
   color: var(--text-dim);
   font-family: var(--font-label);
   letter-spacing: 0.08em;
@@ -2185,7 +2204,7 @@ body {
 }
 
 .trig-note-value {
-  font-size: 14px;
+  font-size: 1.273rem;
   font-weight: 700;
   color: var(--text-bright);
   font-family: var(--font-mono);
@@ -2198,7 +2217,7 @@ body {
 }
 
 .trig-btn-row .btn {
-  font-size: 9px;
+  font-size: 0.818rem;
   padding: 4px 10px;
 }
 
@@ -2212,7 +2231,7 @@ body {
    margin pulls its button row closer than the panel's default 10px gap so the
    label visually groups with its buttons. */
 .trig-fill-label {
-  font-size: 9px;
+  font-size: 0.818rem;
   color: var(--text-dim);
   letter-spacing: 0.08em;
   margin-bottom: -4px;
@@ -2233,7 +2252,7 @@ body {
 }
 
 .trig-section-label {
-  font-size: 8px;
+  font-size: 0.727rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -2258,7 +2277,7 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-bright);
-  font-size: 11px;
+  font-size: 1rem;
   font-family: var(--font-mono);
   outline: none;
 }
@@ -2287,7 +2306,7 @@ body {
 }
 
 .machine-group-heading {
-  font-size: 9px;
+  font-size: 0.818rem;
   font-family: var(--font-label);
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -2328,7 +2347,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 8px;
+  font-size: 0.727rem;
   line-height: 1;
   color: var(--accent);
   background: var(--surface);
@@ -2355,7 +2374,7 @@ body {
 }
 
 .machine-card-label {
-  font-size: 11px;
+  font-size: 1rem;
   font-weight: 700;
   font-family: var(--font-mono);
   color: var(--text-bright);
@@ -2368,7 +2387,7 @@ body {
 }
 
 .machine-card-desc {
-  font-size: 8px;
+  font-size: 0.727rem;
   font-family: var(--font-label);
   color: var(--text-dim);
   letter-spacing: 0.04em;
@@ -2441,7 +2460,7 @@ body {
 }
 
 .fm-op-label {
-  font-size: 9px;
+  font-size: 0.818rem;
   font-weight: 700;
   font-family: var(--font-mono);
   color: var(--text-bright);
@@ -2449,7 +2468,7 @@ body {
 }
 
 .fm-op-role {
-  font-size: 6px;
+  font-size: 0.545rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   font-family: var(--font-label);
@@ -2518,8 +2537,8 @@ body {
 
 /* Compact knob overrides inside op cells */
 .fm-op-cell .knob-cell  { gap: 2px; }
-.fm-op-cell .knob-val   { font-size: 8px; min-width: 26px; }
-.fm-op-cell .knob-label { font-size: 7px; }
+.fm-op-cell .knob-val   { font-size: 0.727rem; min-width: 26px; }
+.fm-op-cell .knob-label { font-size: 0.636rem; }
 
 /* Output level — sits inside fm-left below schematic canvas */
 .fm-out-row {
@@ -2541,7 +2560,7 @@ body {
 }
 
 .wt-select-label {
-  font-size: 8px;
+  font-size: 0.727rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -2560,7 +2579,7 @@ body {
   color: var(--text);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   padding: 5px 7px;
   transition: border-color 0.1s;
   width: 100%;
@@ -2643,7 +2662,7 @@ body {
   border-bottom: 1px solid var(--border);
   color: var(--text);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   padding: 5px 8px;
   outline: none;
   width: 100%;
@@ -2660,7 +2679,7 @@ body {
 .wt-select-items::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 .wt-select-group {
-  font-size: 7px;
+  font-size: 0.636rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--accent-dim);
@@ -2673,7 +2692,7 @@ body {
 
 .wt-select-option {
   padding: 4px 8px 4px 14px;
-  font-size: 9px;
+  font-size: 0.818rem;
   font-family: var(--font-mono);
   color: var(--text);
   cursor: pointer;
@@ -2696,7 +2715,7 @@ body {
 
 .wt-select-none {
   padding: 8px;
-  font-size: 9px;
+  font-size: 0.818rem;
   color: var(--text-dim);
   font-style: italic;
   text-align: center;
@@ -2720,7 +2739,7 @@ body {
 }
 
 .fx-tab-note {
-  font-size: 8px;
+  font-size: 0.727rem;
   color: var(--text-dim);
   font-style: italic;
   letter-spacing: 0.04em;
@@ -2735,7 +2754,7 @@ body {
 }
 
 .fx-enum-label {
-  font-size: 8px;
+  font-size: 0.727rem;
   color: var(--text-dim);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2748,7 +2767,7 @@ body {
 }
 
 .fx-enum-btn {
-  font-size: 8px;
+  font-size: 0.727rem;
   padding: 3px 7px;
 }
 
@@ -2837,7 +2856,7 @@ body {
   color: var(--text-dim);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   padding: 4px 7px;
   transition: border-color 0.1s, color 0.1s, background 0.1s;
   min-width: 30px;
@@ -2864,7 +2883,7 @@ body {
 
 .scales-preview-note {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 0.909rem;
   padding: 3px 6px;
   border-radius: 3px;
   border: 1px solid var(--border);
@@ -2897,7 +2916,7 @@ body {
 
 .scales-fold-label {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   color: var(--text-dim);
@@ -2906,7 +2925,7 @@ body {
 
 .scales-fold-btn {
   padding: 3px 10px;
-  font-size: 9px;
+  font-size: 0.818rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   min-width: 38px;
@@ -2932,7 +2951,7 @@ body {
 
 .scales-fold-desc {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 0.727rem;
   color: var(--text-dim);
   opacity: 0.6;
   font-style: italic;
@@ -2957,7 +2976,7 @@ body {
 .lfo-remove-btn {
   margin-left: auto;
   color: var(--text-dim);
-  font-size: 9px;
+  font-size: 0.818rem;
   padding: 3px 7px;
 }
 .lfo-remove-btn:hover {
@@ -3003,7 +3022,7 @@ body {
 }
 
 .lfo-mode-btn {
-  font-size: 9px;
+  font-size: 0.818rem;
   padding: 3px 10px;
   flex: 1;
 }
@@ -3024,7 +3043,7 @@ body {
 }
 
 .lfo-group-label {
-  font-size: 8px;
+  font-size: 0.727rem;
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -3041,7 +3060,7 @@ body {
 .lfo-sync-btn,
 .lfo-div-btn,
 .lfo-src-btn {
-  font-size: 8px;
+  font-size: 0.727rem;
   padding: 3px 7px;
 }
 
@@ -3077,7 +3096,7 @@ body {
 }
 
 .lfo-adsr-sec-header {
-  font-size: 9px;
+  font-size: 0.818rem;
   font-weight: 700;
   color: var(--accent);
   letter-spacing: 0.08em;
@@ -3085,12 +3104,12 @@ body {
 }
 
 .lfo-adsr-cell .knob-cell  { gap: 2px; }
-.lfo-adsr-cell .knob-val   { font-size: 8px; min-width: 26px; }
-.lfo-adsr-cell .knob-label { font-size: 7px; }
+.lfo-adsr-cell .knob-val   { font-size: 0.727rem; min-width: 26px; }
+.lfo-adsr-cell .knob-label { font-size: 0.636rem; }
 
 .lfo-div-sel {
   width: 60px;
-  font-size: 9px;
+  font-size: 0.818rem;
 }
 
 /* ─── CONFIRM MODAL ──────────────────────────────────────── */
@@ -3117,7 +3136,7 @@ body {
 
 .modal-box p {
   color: var(--text-bright);
-  font-size: 11px;
+  font-size: 1rem;
   line-height: 1.5;
 }
 
@@ -3141,7 +3160,7 @@ body {
   border: 1px solid var(--border);
   color: var(--text-bright);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 1rem;
   padding: 5px 8px;
   width: 100%;
   outline: none;
@@ -3184,7 +3203,7 @@ body {
 .manual-title {
   color: var(--accent);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 1.182rem;
   font-weight: 700;
   letter-spacing: 0.12em;
 }
@@ -3193,7 +3212,7 @@ body {
   background: transparent;
   border: 1px solid transparent;
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: 1.182rem;
   line-height: 1;
   padding: 2px 6px;
   border-radius: var(--radius);
@@ -3207,7 +3226,7 @@ body {
 
 .manual-blurb {
   color: var(--text-bright);
-  font-size: 11px;
+  font-size: 1rem;
   line-height: 1.6;
   margin-bottom: 14px;
   white-space: pre-line;     /* honour intentional \n\n breaks in blurbs */
@@ -3215,7 +3234,7 @@ body {
 
 .manual-tip {
   color: var(--accent-dim);
-  font-size: 10px;
+  font-size: 0.909rem;
   font-style: italic;
   line-height: 1.5;
   margin-bottom: 12px;
@@ -3226,7 +3245,7 @@ body {
 
 .manual-empty {
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 1rem;
   font-style: italic;
 }
 
@@ -3241,7 +3260,7 @@ body {
 .manual-list dt {
   color: var(--accent);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 0.909rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   white-space: nowrap;
@@ -3251,7 +3270,7 @@ body {
 .manual-list dd {
   margin: 0;
   color: var(--text);
-  font-size: 11px;
+  font-size: 1rem;
   line-height: 1.55;
 }
 
@@ -3302,7 +3321,7 @@ body {
   color: var(--text-dim);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   letter-spacing: 0.08em;
   padding: 3px 9px;
   text-transform: uppercase;
@@ -3341,7 +3360,7 @@ body {
 
 .sl-empty {
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 0.909rem;
   padding: 16px 4px;
   text-align: center;
 }
@@ -3373,7 +3392,7 @@ body {
 
 .sl-card-name {
   color: var(--text-bright);
-  font-size: 11px;
+  font-size: 1rem;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3382,7 +3401,7 @@ body {
 
 .sl-card-tags {
   color: var(--text-dim);
-  font-size: 9px;
+  font-size: 0.818rem;
   letter-spacing: 0.06em;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3391,7 +3410,7 @@ body {
 
 .sl-card-badge {
   color: var(--accent-dim);
-  font-size: 8px;
+  font-size: 0.727rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -3403,7 +3422,7 @@ body {
 }
 
 .sl-card-btn {
-  font-size: 9px;
+  font-size: 0.818rem;
   padding: 3px 8px;
   letter-spacing: 0.06em;
 }
@@ -3447,7 +3466,7 @@ body {
 }
 
 .sampler-load-btn {
-  font-size: 11px;
+  font-size: 1rem;
   padding: 4px 10px;
   cursor: pointer;
   background: var(--surface-2);
@@ -3462,7 +3481,7 @@ body {
 }
 
 .sampler-rec-btn {
-  font-size: 11px;
+  font-size: 1rem;
   padding: 4px 10px;
 }
 
@@ -3473,7 +3492,7 @@ body {
 }
 
 .sampler-dl-btn {
-  font-size: 11px;
+  font-size: 1rem;
   padding: 4px 10px;
 }
 
@@ -3483,7 +3502,7 @@ body {
 }
 
 .sampler-reset-btn {
-  font-size: 11px;
+  font-size: 1rem;
   padding: 4px 10px;
 }
 
@@ -3493,7 +3512,7 @@ body {
 }
 
 .sampler-name {
-  font-size: 11px;
+  font-size: 1rem;
   color: var(--text-dim);
   flex: 1;
   overflow: hidden;
@@ -3532,7 +3551,7 @@ body {
 }
 
 .sampler-toggle-btn {
-  font-size: 10px;
+  font-size: 0.909rem;
   padding: 2px 8px;
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -3547,14 +3566,14 @@ body {
 }
 
 .sampler-toggle-label {
-  font-size: 9px;
+  font-size: 0.818rem;
   color: var(--text-dim);
   text-align: center;
   margin-top: 2px;
 }
 
 .sampler-action-btn {
-  font-size: 10px;
+  font-size: 0.909rem;
   padding: 2px 8px;
   background: var(--surface-2);
   border: 1px solid var(--accent-dim);
@@ -3605,13 +3624,13 @@ body {
 }
 
 .wt-sampler-slot-badge {
-  font-size: 12px;
+  font-size: 1.091rem;
   font-weight: bold;
   letter-spacing: 0.05em;
 }
 
 .wt-sampler-load-btn {
-  font-size: 10px;
+  font-size: 0.909rem;
   padding: 2px 7px;
   cursor: pointer;
   background: var(--surface-2);
@@ -3628,7 +3647,7 @@ body {
 
 .wt-sampler-play-btn,
 .wt-sampler-rec-btn {
-  font-size: 10px;
+  font-size: 0.909rem;
   padding: 2px 6px;
   flex-shrink: 0;
   background: var(--surface-2);
@@ -3650,7 +3669,7 @@ body {
 }
 
 .wt-sampler-slot-name {
-  font-size: 10px;
+  font-size: 0.909rem;
   color: var(--text-dim);
   flex: 1;
   overflow: hidden;
@@ -3715,7 +3734,7 @@ body {
 }
 
 .mixer-strip-label {
-  font-size: 11px;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--text-bright);
   letter-spacing: 0.06em;
@@ -3727,7 +3746,7 @@ body {
 }
 
 .mixer-strip-type {
-  font-size: 7px;
+  font-size: 0.636rem;
   letter-spacing: 0.08em;
   color: var(--text-dim);
   text-transform: uppercase;
@@ -3748,12 +3767,12 @@ body {
 }
 
 .mixer-strip .knob-val {
-  font-size: 8px;
+  font-size: 0.727rem;
   min-width: 30px;
 }
 
 .mixer-strip .knob-label {
-  font-size: 7px;
+  font-size: 0.636rem;
 }
 
 .mixer-fx-toggles {
@@ -3766,7 +3785,7 @@ body {
   flex: 1;
   padding: 2px 0;
   font-family: var(--font-ui);
-  font-size: 7px;
+  font-size: 0.636rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   background: var(--surface);
@@ -3789,7 +3808,7 @@ body {
 .midi-unavailable {
   color: var(--text-dim);
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: 0.818rem;
   padding: 10px 6px;
   letter-spacing: 0.05em;
 }
@@ -3803,7 +3822,7 @@ body {
 
 .midi-section-label {
   font-family: var(--font-ui);
-  font-size: 8px;
+  font-size: 0.727rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   color: var(--text-dim);
@@ -3816,7 +3835,7 @@ body {
   border-radius: var(--radius);
   color: var(--text);
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: 0.818rem;
   padding: 3px 5px;
   cursor: pointer;
   max-width: 260px;
@@ -3855,7 +3874,7 @@ body {
   border-radius: var(--radius);
   color: var(--text);
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: 0.818rem;
   padding: 3px 4px;
   text-align: center;
 }
@@ -3867,7 +3886,7 @@ body {
 
 .midi-cc-arrow {
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: 0.818rem;
   color: var(--text-dim);
 }
 
@@ -3876,12 +3895,12 @@ body {
 }
 
 .midi-cc-rm {
-  font-size: 9px;
+  font-size: 0.818rem;
   padding: 2px 5px;
 }
 
 .midi-cc-add {
-  font-size: 8px;
+  font-size: 0.727rem;
   padding: 3px 7px;
   margin-top: 4px;
 }
@@ -3914,7 +3933,7 @@ body {
 }
 
 .midi-transpose-btn {
-  font-size: 9px;
+  font-size: 0.818rem;
   padding: 2px 6px;
   flex-shrink: 0;
 }
@@ -3923,7 +3942,7 @@ body {
   flex: 1;
   text-align: center;
   font-family: var(--font-mono, monospace);
-  font-size: 11px;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--text);
   cursor: default;
@@ -3948,7 +3967,7 @@ body {
   flex-direction: column;
   gap: 1px;
   font-family: var(--font-mono, monospace);
-  font-size: 8px;
+  font-size: 0.727rem;
 }
 
 .midi-console::-webkit-scrollbar { width: 4px; }
@@ -3965,7 +3984,7 @@ body {
 .midi-console-ts {
   color: var(--text-dim);
   flex-shrink: 0;
-  font-size: 7px;
+  font-size: 0.636rem;
 }
 
 .midi-console-msg {
@@ -3976,7 +3995,7 @@ body {
 .midi-console-row--off .midi-console-msg { color: var(--text-dim); }
 
 .midi-console-clear {
-  font-size: 8px;
+  font-size: 0.727rem;
   padding: 2px 6px;
   margin-top: 4px;
   align-self: flex-start;
@@ -3987,7 +4006,7 @@ body {
 .input-unavailable {
   color: var(--text-dim);
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: 0.818rem;
   padding: 10px 6px;
   letter-spacing: 0.05em;
 }
@@ -4001,7 +4020,7 @@ body {
 
 .input-section-label {
   font-family: var(--font-ui);
-  font-size: 8px;
+  font-size: 0.727rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   color: var(--text-dim);
@@ -4014,7 +4033,7 @@ body {
   border-radius: var(--radius);
   color: var(--text);
   font-family: var(--font-ui);
-  font-size: 9px;
+  font-size: 0.818rem;
   padding: 3px 5px;
   cursor: pointer;
   max-width: 260px;
@@ -4033,7 +4052,7 @@ body {
 .input-error {
   color: var(--accent);
   font-family: var(--font-ui);
-  font-size: 8px;
+  font-size: 0.727rem;
   letter-spacing: 0.04em;
   min-height: 10px;
 }
@@ -4059,7 +4078,7 @@ body {
 
 .input-latency {
   font-family: var(--font-ui);
-  font-size: 8px;
+  font-size: 0.727rem;
   letter-spacing: 0.05em;
   color: var(--text-dim);
 }
@@ -4115,7 +4134,7 @@ body {
   color: var(--text-dim);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   padding: 4px 8px;
@@ -4146,7 +4165,7 @@ body {
 
 .trig-follow-row .param-label {
   min-width: 90px;
-  font-size: 9px;
+  font-size: 0.818rem;
 }
 
 /* ── ARPEGGIATOR TAB ─────────────────────────────────────── */
@@ -4167,7 +4186,7 @@ body {
   color: var(--text-dim);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   padding: 4px 10px;
@@ -4229,7 +4248,7 @@ body {
   color: var(--text-dim);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   padding: 3px 8px;
@@ -4262,7 +4281,7 @@ body {
 
 .arp-input-hint {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 0.909rem;
   line-height: 1.5;
   color: var(--text-dim, #8a8a8a);
   background: rgba(255, 255, 255, 0.04);
@@ -4273,7 +4292,7 @@ body {
 
 .arp-small-label {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 0.727rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   color: var(--text-dim);
@@ -4293,7 +4312,7 @@ body {
   color: var(--text);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   padding: 4px 6px;
   min-width: 80px;
 }
@@ -4309,7 +4328,7 @@ body {
   color: var(--text-dim);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   padding: 4px 8px;
@@ -4348,7 +4367,7 @@ body {
   color: var(--text-dim);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   padding: 3px 7px;
@@ -4393,7 +4412,7 @@ body {
   color: var(--text-dim);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 1rem;
   padding: 2px 6px;
   align-self: center;
   margin-bottom: 2px;
@@ -4411,7 +4430,7 @@ body {
   color: var(--text-dim);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 0.818rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   padding: 5px 10px;
@@ -4458,7 +4477,7 @@ body {
 }
 
 .deck-label {
-  font-size: 13px;
+  font-size: 1.182rem;
   font-weight: 700;
   color: var(--text-bright);
   letter-spacing: 0.08em;
@@ -4467,7 +4486,7 @@ body {
 .deck-col.deck-controlled .deck-label { color: var(--accent); }
 
 .deck-filename {
-  font-size: 9px;
+  font-size: 0.818rem;
   color: var(--text-dim);
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -4478,7 +4497,7 @@ body {
 }
 
 .deck-state {
-  font-size: 8px;
+  font-size: 0.727rem;
   letter-spacing: 0.1em;
   font-weight: 700;
   text-transform: uppercase;
@@ -4495,7 +4514,7 @@ body {
   color: var(--text-dim);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 0.909rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   padding: 7px 8px;
@@ -4537,7 +4556,7 @@ body {
 }
 
 .deck-fader-title {
-  font-size: 8px;
+  font-size: 0.727rem;
   letter-spacing: 0.12em;
   font-weight: 700;
   color: var(--text-dim);
@@ -4555,12 +4574,50 @@ body {
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  font-size: 10px;
+  font-size: 0.909rem;
   font-weight: 700;
   color: var(--text-dim);
 }
 .deck-fader-readout {
-  font-size: 9px;
+  font-size: 0.818rem;
   color: var(--accent);
   letter-spacing: 0.04em;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+ * ADAPTIVE LAYOUT — breakpoints (responsive refactor, see RESPONSIVE.md)
+ *
+ * Breakpoints:
+ *   tablet : <= 1024px  — fluid type already engaged; begin reflow
+ *   phone  : <=  640px  — single-column, stacked surfaces
+ *
+ * Rolled out one surface at a time. Each surface's overrides live in its own
+ * block below so they stay independently reviewable/revertable.
+ * ════════════════════════════════════════════════════════════════════ */
+
+/* ── Step grid: 16-wide row → 4×4 grid ───────────────────────────────
+ * The grid is just `repeat(16, 1fr)` of aspect-ratio:1 cells, so a 4-col
+ * override squares it up automatically. The middle row's fixed 120px height
+ * can't contain a 4×4 block, so it goes auto-height here and the page scrolls
+ * if needed. Track-nav drops beside/below without its desktop height lock. */
+@media (max-width: 1024px) {
+  #middle-row {
+    height: auto;
+  }
+  .step-grid-inner {
+    grid-template-columns: repeat(8, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  #middle-row {
+    flex-direction: column;
+  }
+  .step-grid-inner {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  #track-nav {
+    flex-direction: row;
+    width: 100%;
+  }
 }

@@ -48,8 +48,38 @@ phase is fully landed and verified — keep churn out of the canonical doc.
       module (`js/boot.js`) imported by index.html. Behavior byte-identical;
       desktop unaffected. Unlocks a reusable entry point for the mobile shell.
       *(Optional follow-up later: split boot.js into transport.js / trackNav.js.)*
-- [ ] **Phase 1 — Fluid sizing pass.** `rem`/`clamp` + root-scale variable.
+- [~] **Phase 1 — Fluid sizing pass.** `rem`/`clamp` + root-scale variable.
       Reaches iPad-landscape + large screens. Reversible, testable on desktop.
+      - [x] **Step 1a — root scale + font-sizes.** Added `html { font-size:
+            clamp(...) * --ui-scale }` (1rem === 11px on desktop). Converted all
+            184 `font-size: Npx` → `rem` (verified: 0 px font-sizes left, no other
+            px property touched). Borders/radii stay px. `--ui-scale` reserved for
+            a future zoom setting (no UI yet). `letter-spacing` em values scale
+            correctly; no px line-heights to worry about.
+      - [x] **Step 1a.1 — fix timid clamp.** First clamp stayed pinned at 11px
+            until <768px, so narrowing did nothing visible. New curve
+            `clamp(8px, 0.7vw + 3.6px, 11px)` eases from ~1100px down. Desktop
+            still 11px.
+
+## PIVOT (2026-06-16)
+
+Step 1a (font-only) was nearly invisible because this layout is **box/grid-
+driven, not text-driven** (keyboard keys are `%`, knobs/panes are px boxes).
+Fluid scaling alone is low-value here. The real win is **reflow** — rearranging
+big containers at breakpoints. So the ambition is restated plainly: an
+**adaptive UI**, rolled out **one surface at a time**, each committed separately
+so any step is easy to revert.
+
+Breakpoints: tablet `<=1024px`, phone `<=640px`.
+
+### Adaptive surfaces (in order)
+- [x] **A — Step grid reflow.** 16-wide → 8-wide (tablet) → 4×4 (phone).
+      Pure CSS: `.step-grid-inner` col-count override; `#middle-row` height:auto
+      then column at phone. Cells are `aspect-ratio:1` so they stay square.
+- [ ] **B — Transport bar** wrap/stack at narrow.
+- [ ] **C — Synth panel** → one-panel-at-a-time + tab bar on narrow.
+- [ ] **D — Keyboard** → live-play strip on narrow.
+- [ ] **E — Knob/component sizes** (JS — `size:` passed in panel render code).
 - [ ] **Phase 2 — Mobile shell.** New `mobile.html` + tab-bar nav (one panel at a
       time), 4×4 step grid, live-only keyboard, tap-step → note-picker. Reuses
       engine, state, most panels.
