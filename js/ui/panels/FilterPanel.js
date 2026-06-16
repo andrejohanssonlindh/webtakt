@@ -33,23 +33,37 @@ export class FilterPanel {
     const getFilterParam = path => (hasStep && step.plocks.has(path)) ? step.plocks.get(path) : track.filter.getParam(path);
     const getEnvParam    = path => (hasStep && step.plocks.has(path)) ? step.plocks.get(path) : track.envelope.getParam(path);
 
-    // ── Outer wrapper ────────────────────────────────────────
-    const wrapper = document.createElement('div');
-    wrapper.className = 'filter-tab-wrapper';
-    container.appendChild(wrapper);
+    // ── Sections ─────────────────────────────────────────────
+    // The FILTER tab is built from `.param-group` sections placed directly in
+    // .panel-content (same idiom as DefaultMachinePanel / FMPanel), so they
+    // reflow 3-up desktop → 2-up iPad → 1-up phone via the shared `.param-group`
+    // media queries. Sections: FILTER (type + main knobs) · RESPONSE (viz) ·
+    // BASE (LPF/HPF) · FILTER ENV (ADSR).
+    //
+    // Small helper to spin up a labelled section with a body row.
+    const mkSection = (label, extraClass) => {
+      const sec = document.createElement('div');
+      sec.className = 'param-group' + (extraClass ? ' ' + extraClass : '');
+      const lbl = document.createElement('div');
+      lbl.className = 'param-group-label';
+      lbl.textContent = label;
+      sec.appendChild(lbl);
+      const body = document.createElement('div');
+      body.className = 'param-group-body';
+      sec.appendChild(body);
+      container.appendChild(sec);
+      return body;
+    };
 
-    // ── SINGLE ROW: knobs | viz | fenv+base ──────────────────
-    const topRow = document.createElement('div');
-    topRow.className = 'filter-top-row';
-    wrapper.appendChild(topRow);
-
+    // FILTER section: engine/type dropdowns + the main knob row. Dropdowns sit
+    // above the knobs, so this body stacks vertically (filter-controls).
+    const filterBody = mkSection('FILTER', 'filter-group');
     const knobSec = document.createElement('div');
-    knobSec.className = 'filter-knob-sec';
-    topRow.appendChild(knobSec);
+    knobSec.className = 'filter-controls';
+    filterBody.appendChild(knobSec);
 
-    const vizSec = document.createElement('div');
-    vizSec.className = 'filter-viz-sec';
-    topRow.appendChild(vizSec);
+    // RESPONSE section: the FilterViz curve.
+    const vizSec = mkSection('RESPONSE', 'filter-viz-group');
 
     const mainViz = new FilterViz({
       getFilter:   () => track.filter,
@@ -216,10 +230,8 @@ export class FilterPanel {
     }
     applyEngineVisibility(getFilterParam('filter.engine'));
 
-    // ── Base filter knobs — below main knobs in the left column
-    const baseKnobRow = document.createElement('div');
-    baseKnobRow.className = 'filter-knob-row';
-    knobSec.appendChild(baseKnobRow);
+    // ── BASE section: fixed LPF/HPF that bracket the main filter ──
+    const baseKnobRow = mkSection('BASE', 'filter-base-group');
 
     [
       { path:'base.lpf', label:'LPF', min:200, max:20000, default:20000 },
@@ -248,19 +260,8 @@ export class FilterPanel {
       knobByPath.set(p.path, knob);
     });
 
-    // ── Right column: filter env ADSR only ───────────────────
-    const rightCol = document.createElement('div');
-    rightCol.className = 'filter-right-col';
-    topRow.appendChild(rightCol);
-
-    const fenvSec = document.createElement('div');
-    fenvSec.className = 'filter-fenv-sec';
-    rightCol.appendChild(fenvSec);
-
-    const fenvLabel = document.createElement('div');
-    fenvLabel.className = 'filter-env-label';
-    fenvLabel.textContent = 'FILTER ENV';
-    fenvSec.appendChild(fenvLabel);
+    // ── FILTER ENV section: the filter-envelope ADSR ──────────
+    const fenvSec = mkSection('FILTER ENV', 'filter-fenv-group');
 
     const fenv = new ADSRWidget({
       prefix:   'fenv',

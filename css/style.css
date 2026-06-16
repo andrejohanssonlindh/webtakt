@@ -1182,12 +1182,18 @@ body {
   background: rgba(0, 0, 0, 0.12);
 }
 
+/* The selected-effect params header. Aligned with the synth pane's section
+ * headers (`.param-group-label`): uppercase, letter-spaced, underlined with a
+ * bottom border — so the FX param block reads as a titled section like OSC 1 /
+ * OUTPUT etc. Keeps the FX teal accent so it's still clearly an effect. */
 .fxpipe-params-head {
-  font-family: var(--font-mono);
-  font-size: 0.909rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  font-family: var(--font-label);
+  font-size: 0.727rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: #7ec8c8;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 2px;
   margin-bottom: 8px;
 }
 
@@ -1340,6 +1346,133 @@ body {
 
 .fxpipe-block-bind:hover { color: var(--text); border-color: var(--accent-dim); }
 
+/* ── FX pane — phone reflow (Surface F) ──────────────────────────
+ * Desktop is left/tray + right(path-over-params). On phone that doesn't fit:
+ * go single-column — a horizontal function row (ADD / LOAD / SAVE) on top, then
+ * a vertical INPUT→OUTPUT card stack. Each card is full-width with bigger tap
+ * targets; ▲/▼ buttons replace drag (built phone-only in JS); the selected
+ * card's params expand inline beneath it (the `.fxpipe-block-unit` wrapper).
+ * The bin is drag-only → hidden here (the per-card ✕ covers removal). */
+@media (max-width: 640px) {
+  .fxpipe-wrap {
+    flex-direction: column;
+    gap: 10px;
+  }
+  /* Tray → top function row. */
+  .fxpipe-tray {
+    flex: 0 0 auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 6px;
+  }
+  /* ADD takes its own full-width row so its dropdown (positioned relative to
+   * .fxpipe-add) spans the whole pane; LOAD + SAVE share the row below it. */
+  .fxpipe-add { flex: 1 1 100%; }
+  .fxpipe-tray-btn { flex: 1 1 0; }
+  .fxpipe-add-btn,
+  .fxpipe-tray-btn { width: 100%; }
+  /* The add-menu is absolutely positioned; let it sit under the ADD button and
+   * span (nearly) the full pane width — the desktop `max-width:240px` /
+   * `width:max-content` left it cramped and tiny on a phone. Larger tap targets
+   * + two readable columns of effects. */
+  .fxpipe-add-menu {
+    left: 0;
+    right: 0;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    max-height: 60vh;
+    /* Two readable columns of effects across the wide menu; category headers
+     * span both. */
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .fxpipe-add-header { grid-column: 1 / -1; }
+  .fxpipe-add-item {
+    font-size: 1rem;
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  /* Bin is a drag target — useless on touch; ✕ on each card removes instead. */
+  .fxpipe-bin { display: none; }
+
+  /* Path → vertical stack, arrows point down. */
+  .fxpipe-path {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+  .fxpipe-arrow {
+    text-align: center;
+    transform: rotate(90deg);   /* → becomes ↓ between stacked cards */
+  }
+  .fxpipe-terminal { text-align: center; }
+
+  /* Block → full-width card: glyph + name on the left, controls on the right. */
+  /* Selected cards return a wrapper (block + inline params). It's the flex child
+   * of the stretch column, so force full width — otherwise a card whose inline
+   * params have a narrow intrinsic width (e.g. a re-added base FX with few/short
+   * params) lets the column shrink-wrap the unit to its content (~60% wide)
+   * instead of filling, while wider-param cards happen to fill. width:100%
+   * pins every card the same regardless of its param content. */
+  .fxpipe-block-unit {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+  }
+  .fxpipe-block {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    padding: 8px 10px;
+  }
+  .fxpipe-block-glyph { font-size: 1.4rem; }
+  .fxpipe-block-name { flex: 1 1 auto; text-align: left; }
+  .fxpipe-block-toggle { flex: 0 0 auto; }
+  /* Bind dropdown shouldn't claim a full row on a card — let it size to content. */
+  .fxpipe-block-bind { width: auto; margin-top: 0; flex: 0 0 auto; }
+
+  /* ▲/▼ move buttons (phone-only). */
+  .fxpipe-block-move { display: flex; gap: 4px; flex: 0 0 auto; }
+  .fxpipe-block-move-btn {
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.818rem;
+    line-height: 1;
+    padding: 4px 8px;
+  }
+  .fxpipe-block-move-btn:disabled { opacity: 0.3; cursor: default; }
+
+  /* Inline (accordion) params under the selected card. FXPanel supplies its own
+   * `.fx-tab-wrapper` / `.fx-knob-row` flow inside, so this is just the framed
+   * container (matching the desktop `.fxpipe-params` box). */
+  .fxpipe-block-params {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.12);
+  }
+  /* Match the synth pane's phone knob size (52px) — the inline FX knobs are
+   * nested too deep for the .panel-content knob-shrink rule to reach them, so
+   * they'd otherwise stay at the baked 64px and look oversized vs the rest. */
+  .fxpipe-block-params .knob-canvas {
+    width: 52px !important;
+    height: 52px !important;
+  }
+  /* Touch-friendly enum buttons inside FX cards (e.g. Reverb mode, EQ shape). */
+  .fxpipe-block-params .fx-enum-btn {
+    font-size: 0.909rem;
+    padding: 5px 10px;
+  }
+}
+
 .panel-content {
   flex: 1;
   overflow-y: auto;
@@ -1476,36 +1609,15 @@ body {
   padding: 4px 0 0;
 }
 
-/* ─── FILTER ENV SECTION (in Filter tab) ─────────────────── */
+/* ─── FILTER TAB LAYOUT ──────────────────────────────────────
+ * The FILTER tab is now `.param-group` sections (FILTER · RESPONSE · BASE ·
+ * FILTER ENV) placed directly in .panel-content, so they reflow 3-up desktop →
+ * 2-up iPad → 1-up phone via the shared `.param-group` media queries — the same
+ * idiom as DefaultMachinePanel / FMPanel. Only the few panel-specific bits below
+ * (dropdown stacking, viz width, compact fenv knobs) remain. */
 
-.filter-env-label {
-  font-size: 0.727rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--step-plock);
-  font-family: var(--font-label);
-  margin-bottom: 4px;
-}
-
-/* ─── FILTER TAB LAYOUT ──────────────────────────────────── */
-
-.filter-tab-wrapper {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* Single row: knob-sec | viz | right-col (fenv + base) */
-.filter-top-row {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  width: 100%;
-}
-
-.filter-knob-sec {
-  flex-shrink: 0;
+/* FILTER section body stacks the engine/type dropdowns above the main knob row. */
+.filter-controls {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1517,37 +1629,25 @@ body {
   gap: 6px;
 }
 
-.filter-knob-row {
+/* Main + base knob rows wrap rather than scroll (these sections can hold up to
+ * 8 knobs in the analogue engine). */
+.filter-knob-row,
+.filter-base-group .param-group-body {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
 }
 
-.filter-viz-sec {
-  flex: 1;
-  min-width: 0;
-  max-width: 240px;
-}
+/* RESPONSE section: cap the viz width so it doesn't hog a wide section. */
+.filter-viz-group .param-group-body { overflow: visible; }
+.filter-viz-group .filter-viz-wrap { max-width: 240px; }
 
-/* Right column: filter env ADSR stacked above base filter knobs */
-.filter-right-col {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 180px;
-}
-
-.filter-fenv-sec {
-  flex: 0 0 auto;
-}
-
-.filter-fenv-sec .knob-cell  { gap: 2px; }
-.filter-fenv-sec .knob-canvas { width: 44px !important; height: 44px !important; }
-.filter-fenv-sec .knob-val    { font-size: 0.818rem; min-width: 32px; }
-.filter-fenv-sec .knob-label  { font-size: 0.636rem; }
-.filter-fenv-sec .knob-row    { gap: 4px; padding-top: 2px; }
-
+/* Compact filter-env knobs (matches the amp ADSR section). */
+.filter-fenv-group .knob-cell  { gap: 2px; }
+.filter-fenv-group .knob-canvas { width: 44px !important; height: 44px !important; }
+.filter-fenv-group .knob-val    { font-size: 0.818rem; min-width: 32px; }
+.filter-fenv-group .knob-label  { font-size: 0.636rem; }
+.filter-fenv-group .knob-row    { gap: 4px; padding-top: 2px; }
 
 .filter-viz-wrap {
   width: 100%;
@@ -1555,31 +1655,16 @@ body {
   overflow: hidden;
 }
 
-/* ─── AMP TAB LAYOUT ─────────────────────────────────────── */
-
-.amp-tab-row {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  width: 100%;
-}
-
-.amp-pan-sec {
-  flex-shrink: 0;
-}
-
-.amp-adsr-sec {
-  flex: 1;
-  min-width: 0;
-  max-width: 50%;
-}
-
-/* Match compact knob size to filter-fenv-sec */
-.amp-adsr-sec .knob-cell  { gap: 2px; }
-.amp-adsr-sec .knob-canvas { width: 44px !important; height: 44px !important; }
-.amp-adsr-sec .knob-val    { font-size: 0.818rem; min-width: 32px; }
-.amp-adsr-sec .knob-label  { font-size: 0.636rem; }
-.amp-adsr-sec .knob-row    { gap: 4px; padding-top: 2px; }
+/* ─── AMP TAB LAYOUT ─────────────────────────────────────────
+ * The AMP tab is now plain `.param-group` sections (AMP knobs + ENVELOPE ADSR)
+ * living directly in .panel-content, so it reflows 3/2/1-up via the shared
+ * `.param-group` media queries — same idiom as DefaultMachinePanel / FMPanel.
+ * Only the compact ADSR-knob sizing (matching the FILTER ENV section) is panel-specific. */
+.amp-adsr-group .knob-cell  { gap: 2px; }
+.amp-adsr-group .knob-canvas { width: 44px !important; height: 44px !important; }
+.amp-adsr-group .knob-val    { font-size: 0.818rem; min-width: 32px; }
+.amp-adsr-group .knob-label  { font-size: 0.636rem; }
+.amp-adsr-group .knob-row    { gap: 4px; padding-top: 2px; }
 
 /* ─── LEGACY PARAM ROW (enum / boolean) ──────────────────── */
 
@@ -4674,6 +4759,12 @@ body {
   .step-grid-inner {
     grid-template-columns: repeat(8, 1fr);
   }
+  /* Oscilloscope: the header strip has no room for it on iPad once the tab bar
+   * needs the width — it overlapped the synth pane on the right. Drop it here
+   * (the ≤640 phone block hides it too, alongside more header fluff). */
+  .panel-header .oscilloscope {
+    display: none;
+  }
 }
 
 @media (max-width: 640px) {
@@ -4749,16 +4840,25 @@ body {
   .transport-overflow .sep {
     display: none;
   }
+  /* IMPORT is a <label class="btn"> (wraps a hidden file input), not a <button>,
+   * so it lacks the button UA default `text-align:center` — in the full-width
+   * stacked dropdown its text sat left while the real buttons centered. Center
+   * every dropdown child so they're consistent. */
+  .transport-overflow > .btn {
+    text-align: center;
+  }
   /* Anchor the dropdown to the transport bar. */
   #transport {
     position: relative;
   }
 }
 
-/* The STEPS pseudo-tab is phone-only: on desktop the step grid and synth panel
- * are both always visible, so the toggle has no meaning. Hidden by default;
- * un-hidden inside the phone breakpoint below. */
-.tab-btn.tab-steps {
+/* The STEPS + FX pseudo-tabs are phone-only. STEPS: desktop shows the step grid
+ * and synth panel together, so the toggle has no meaning. FX: desktop opens the
+ * FX pane from the header FX bar, so the strip doesn't need an FX tab there.
+ * Both hidden by default; un-hidden inside the phone breakpoint below. */
+.tab-btn.tab-steps,
+.tab-btn.tab-fx {
   display: none;
 }
 
@@ -4781,7 +4881,8 @@ body {
   /* 0 — step grid becomes a tab. Default: synth panel visible, grid hidden.
    * STEPS active (body class): grid takes over the viewport, synth panel hidden.
    * The grid fills + scrolls in its own area instead of crushing siblings. */
-  .tab-btn.tab-steps {
+  .tab-btn.tab-steps,
+  .tab-btn.tab-fx {
     display: block;
   }
   #middle-row {
@@ -4830,18 +4931,37 @@ body {
   /* STEPS active: DON'T hide #synth-panel — the tab strip lives in its header,
    * and hiding it would lock you on the step grid with no way back (the original
    * bug, mirrored). Instead collapse it to just the header: stop it growing
-   * (flex:0) and hide only its body (.panel-content) + the FX bar. The tabs stay
-   * on screen and tappable; #middle-row gets the freed space via its flex:1. */
+   * (flex:0) and hide only its body (.panel-content). The tabs stay on screen
+   * and tappable; #middle-row gets the freed space via its flex:1. (The FX bar
+   * is already hidden on phone — point 1 below — so FX lives in the strip now.) */
   body.phone-show-steps #synth-panel {
     flex: 0 0 auto;
   }
-  body.phone-show-steps #synth-panel .panel-content,
-  body.phone-show-steps #synth-panel .fx-bar {
+  body.phone-show-steps #synth-panel .panel-content {
     display: none;
   }
-  /* 1 — drop header fluff so the tabs get the width */
+  /* Squish fix. On phone the header FX bar is hidden (point 1), so the header is
+   * ALWAYS just the tab strip — losing the height the taller FX bar used to give
+   * it. The tab buttons are styled to bleed DOWN into the content body (rounded
+   * top only, no bottom border, tab-bar padding `4px 4px 0`); with a short header
+   * and no body below them they jammed against the header's bottom border and
+   * read as squished upward. Center the header + give the strip symmetric
+   * vertical padding so the tabs sit centered with breathing room. Applies to the
+   * whole phone header (not just the STEPS surface) since the FX bar is always
+   * gone here and the header height is uniform. */
+  #synth-panel .panel-header {
+    align-items: center;
+  }
+  #synth-panel .tab-bar {
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+  /* 1 — drop header fluff so the tabs get the width. The FX bar moves into the
+   * strip as the FX tab on phone; oscilloscope + COPY/PASTE are desktop luxuries;
+   * the FX-chain mini-outline (inside .fx-bar) is likewise desktop-only. */
   .panel-header .oscilloscope,
-  .panel-header .clip-bar {
+  .panel-header .clip-bar,
+  .panel-header .fx-bar {
     display: none;
   }
 

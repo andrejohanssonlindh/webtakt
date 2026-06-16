@@ -17,14 +17,20 @@ export class AmpPanel {
     const step    = ctx.step;
     const hasStep = step !== null;
 
-    const row = document.createElement('div');
-    row.className = 'amp-tab-row';
-    container.appendChild(row);
-
-    // ── Pan knob (left) ────────────────────────────────────────
+    // ── AMP section (pan + velocity knobs) ─────────────────────
+    // `.param-group` sections (same idiom as DefaultMachinePanel / FMPanel):
+    // sit side-by-side in .panel-content and reflow 3-up desktop → 2-up iPad →
+    // 1-up phone via the shared `.param-group` media queries. No bespoke layout.
     const panSec = document.createElement('div');
-    panSec.className = 'amp-pan-sec';
-    row.appendChild(panSec);
+    panSec.className = 'param-group amp-group';
+    const panLbl = document.createElement('div');
+    panLbl.className = 'param-group-label';
+    panLbl.textContent = 'AMP';
+    panSec.appendChild(panLbl);
+    const panBody = document.createElement('div');
+    panBody.className = 'param-group-body';
+    panSec.appendChild(panBody);
+    container.appendChild(panSec);
 
     const hasPanPLock = hasStep && step.plocks.has('amp.pan');
     const panVal = () => {
@@ -62,7 +68,7 @@ export class AmpPanel {
       },
     });
     panKnob.setHasPLock(hasPanPLock);
-    panSec.appendChild(panKnob.el);
+    panBody.appendChild(panKnob.el);
     activeWidgets.push(panKnob);
     knobByPath.set('amp.pan', panKnob);
 
@@ -102,14 +108,21 @@ export class AmpPanel {
       },
     });
     velKnob.setHasPLock(hasVelPLock);
-    panSec.appendChild(velKnob.el);
+    panBody.appendChild(velKnob.el);
     activeWidgets.push(velKnob);
     knobByPath.set('env.velSens', velKnob);
 
-    // ── Amp ADSR (right, compact) ──────────────────────────────
+    // ── ENVELOPE section (amp ADSR) ────────────────────────────
     const adsrSec = document.createElement('div');
-    adsrSec.className = 'amp-adsr-sec';
-    row.appendChild(adsrSec);
+    adsrSec.className = 'param-group amp-adsr-group';
+    const adsrLbl = document.createElement('div');
+    adsrLbl.className = 'param-group-label';
+    adsrLbl.textContent = 'ENVELOPE';
+    adsrSec.appendChild(adsrLbl);
+    const adsrBody = document.createElement('div');
+    adsrBody.className = 'param-group-body';
+    adsrSec.appendChild(adsrBody);
+    container.appendChild(adsrSec);
 
     const adsr = new ADSRWidget({
       prefix:   'env',
@@ -141,7 +154,7 @@ export class AmpPanel {
       hasStep: () => hasStepNow(),
     });
 
-    adsrSec.appendChild(adsr.el);
+    adsrBody.appendChild(adsr.el);
     activeWidgets.push(adsr);
 
     requestAnimationFrame(() => adsr.refresh());

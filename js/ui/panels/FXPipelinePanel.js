@@ -65,6 +65,12 @@ export class FXPipelinePanel {
     this._ctx   = ctx;
     this._track = track;
     this._renderContent = ctx.renderContent;
+    // Phone reflow: the pane goes single-column (function row on top, then a
+    // vertical INPUT→OUTPUT card stack). Drag-reorder is unreliable on touch, so
+    // each card carries ▲/▼ move buttons instead, and the selected card's params
+    // expand INLINE beneath it (accordion) rather than in the separate area below.
+    // Read per-render so a tab switch / resize re-applies correctly.
+    this._isPhone = window.matchMedia('(max-width: 640px)').matches;
 
     const wrap = document.createElement('div');
     wrap.className = 'fxpipe-wrap';
@@ -82,7 +88,9 @@ export class FXPipelinePanel {
     this._paramArea = document.createElement('div');
     this._paramArea.className = 'fxpipe-params';
     right.appendChild(this._paramArea);
-    this._renderParamArea();
+    // On phone the selected block's params render inline (inside _block, an
+    // accordion under the card), so the shared area below the stack stays empty.
+    if (!this._isPhone) this._renderParamArea();
 
     wrap.appendChild(right);
     container.appendChild(wrap);
@@ -372,6 +380,31 @@ export class FXPipelinePanel {
     });
     el.appendChild(bindSel);
 
+    // Phone reorder: ▲/▼ buttons (touch-friendly alternative to drag, which the
+    // desktop layout still uses). Disabled at the ends of the chain. Hidden on
+    // desktop via CSS, but only built on phone to keep the DOM lean.
+    if (this._isPhone) {
+      const order = track.getFXOrder();
+      const pos   = order.indexOf(id);
+      const move  = document.createElement('div');
+      move.className = 'fxpipe-block-move';
+      const upBtn = document.createElement('button');
+      upBtn.className = 'fxpipe-block-move-btn';
+      upBtn.textContent = '▲';
+      upBtn.title = 'Move earlier in the chain';
+      upBtn.disabled = pos <= 0;
+      upBtn.addEventListener('click', (e) => { e.stopPropagation(); this._moveByOffset(id, -1); });
+      const downBtn = document.createElement('button');
+      downBtn.className = 'fxpipe-block-move-btn';
+      downBtn.textContent = '▼';
+      downBtn.title = 'Move later in the chain';
+      downBtn.disabled = pos < 0 || pos >= order.length - 1;
+      downBtn.addEventListener('click', (e) => { e.stopPropagation(); this._moveByOffset(id, 1); });
+      move.appendChild(upBtn);
+      move.appendChild(downBtn);
+      el.appendChild(move);
+    }
+
     // Click body: select this block (edit its params inline below the path), or
     // DESELECT it if it's already selected. With nothing selected the inline
     // editor clears and the manual key shows the FX-pane overview; with a block
@@ -382,6 +415,28 @@ export class FXPipelinePanel {
     });
 
     this._wireBlockDrag(el, id);
+
+    // Phone: when this card is selected, its params expand INLINE right under it
+    // (accordion). The block + its params are wrapped together so they read as
+    // one unit in the vertical stack. Returns the wrapper instead of the bare el.
+    if (this._isPhone && this._selectedId === id) {
+      const fx = track.getFXBlock(id);
+      if (fx) {
+        const unit = document.createElement('div');
+        unit.className = 'fxpipe-block-unit';
+        unit.appendChild(el);
+
+        const inline = document.createElement('div');
+        inline.className = 'fxpipe-block-params';
+        const head = document.createElement('div');
+        head.className = 'fxpipe-params-head';
+        head.textContent = (FX_TYPE_LABELS[type] ?? type).toUpperCase() + ' — PARAMS';
+        inline.appendChild(head);
+        new FXPanel().render({ ...this._ctx, container: inline }, fx);
+        unit.appendChild(inline);
+        return unit;
+      }
+    }
     return el;
   }
 
@@ -439,6 +494,18 @@ export class FXPipelinePanel {
       if (!dragged || dragged === id) return;
       this._moveBefore(dragged, id);
     });
+  }
+
+  /** Shift block `id` by `dir` (-1 earlier / +1 later) in the chain. Touch-
+   * friendly reorder for phone (the ▲/▼ buttons); no-op past either end. */
+  _moveByOffset(id, dir) {
+    const order = this._track.getFXOrder();
+    const i = order.indexOf(id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= order.length) return;
+    [order[i], order[j]] = [order[j], order[i]];
+    this._track.setFXOrder(order);
+    this._renderContent();
   }
 
   /** Drop `dragged` immediately before `target` in the chain (reorder only). */

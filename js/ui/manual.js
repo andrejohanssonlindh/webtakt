@@ -408,19 +408,25 @@ export const MANUAL_CONTENT = {
            'reverb before crush sounds very different from crush before reverb. ' +
            'Opened with the FX button in the header FX bar; the icon row beside ' +
            'that button mirrors the chain (click an icon to jump here with that ' +
-           'effect selected).',
+           'effect selected). On phone the header FX bar is hidden — FX is a tab ' +
+           'in the strip instead, and the pane reflows to a single column: a ' +
+           'function row (ADD / LOAD / SAVE) on top, then a vertical INPUT→OUTPUT ' +
+           'card stack.',
     items: [
-      ['Signal path', 'Each tile is one effect, shown in chain order. Drag a ' +
-                 'tile onto another to place it before that one; drop on empty ' +
-                 'path space to move it to the end. The whole chain is always ' +
-                 'shown so you can see and rearrange every effect.'],
+      ['Signal path', 'Each tile is one effect, shown in chain order. On desktop, ' +
+                 'drag a tile onto another to place it before that one; drop on ' +
+                 'empty path space to move it to the end. On phone, use the ▲/▼ ' +
+                 'buttons on each card to move it earlier/later (drag is unreliable ' +
+                 'on touch). The whole chain is always shown so you can see and ' +
+                 'rearrange every effect.'],
       ['ON / OFF', 'Each tile has an ON/OFF toggle that bypasses the effect ' +
                  'without removing it from the chain. Bypassed tiles are dimmed ' +
                  'but stay on the path (and dim in the header icon row too).'],
       ['Edit params', 'Click any tile — base effect or added — to select it; its ' +
-                 'knobs appear inline below the path. Click the selected tile again ' +
-                 'to deselect it. (The old per-FX header tabs were removed in ' +
-                 'favour of this one editor.)'],
+                 'knobs appear inline below the path (on phone they expand directly ' +
+                 'under the selected card). Click the selected tile again to ' +
+                 'deselect it. (The old per-FX header tabs were removed in favour ' +
+                 'of this one editor.)'],
       ['Per-effect manual', 'With an effect tile selected, open this manual (📖 or ' +
                  'its key) to read THAT effect\'s own page; with no tile selected ' +
                  'it shows this FX-pipeline overview. So select a card, hit the ' +
@@ -431,8 +437,9 @@ export const MANUAL_CONTENT = {
                  'assigned effect ON/OFF on the SELECTED track — so the same key ' +
                  'can drive a different effect on each track. A block holds at ' +
                  'most one bind; assigning a bind that\'s in use steals it.'],
-      ['Remove', 'Drag any tile to the BIN (under SAVE) to take it out of the ' +
-                 'chain — or use the ✕ on the tile. Added effects are deleted; ' +
+      ['Remove', 'Use the ✕ on any tile to take it out of the chain (on desktop ' +
+                 'you can also drag a tile to the BIN under SAVE; the bin is hidden ' +
+                 'on phone, where ✕ is the only way). Added effects are deleted; ' +
                  'the base four (Delay/Crush/Chorus/Reverb) are just detached and ' +
                  'can be re-added from + ADD FX (they keep their settings).'],
       ['Add FX', 'The + ADD FX menu adds another effect to the chain. Tone & space: ' +

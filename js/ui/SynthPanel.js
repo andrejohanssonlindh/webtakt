@@ -253,6 +253,21 @@ export class SynthPanel {
       this._tabBar.appendChild(btn);
     });
 
+    // FX tab — phone only (CSS-hidden on desktop, where the header FX bar owns
+    // the entry point). FX is already a real tab in the _renderContent switch
+    // (activeTab === 'fx'); on phone the whole FX bar is hidden, so the strip
+    // needs its own way in. Mirrors the STEPS pseudo-tab pattern. dataset.tab
+    // is 'fx' so _syncTabActive highlights it via the normal activeTab path.
+    const fxBtn = document.createElement('button');
+    fxBtn.className   = 'tab-btn tab-fx';
+    fxBtn.textContent = 'FX';
+    fxBtn.dataset.tab = 'fx';
+    fxBtn.addEventListener('click', () => {
+      document.body.classList.remove('phone-show-steps');
+      this.state.setTab('fx');
+    });
+    this._tabBar.appendChild(fxBtn);
+
     header.appendChild(this._tabBar);
 
     // Oscilloscope canvas — fills the gap between tab bar and FX block

@@ -203,6 +203,100 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
       `.fm-op-params-row`, `.fm-out-row`, `.fm-op-adsr-label`). The ADSR
       knob/sync-knob logic + schematic drawing are unchanged.
       **Awaiting in-browser verify, NOT yet committed.**
+- [~] **C.7 — FX as a phone tab + tab-strip squish fix (the real cause).**
+      Squish ROOT CAUSE (first pass was a band-aid): the header FX bar
+      (`.fx-bar` — FX-pipe button + chain mini-outline, ~24px icons) gave
+      `.panel-header` its height. On the STEPS surface the FX bar was hidden, so
+      the header collapsed to the bare (short) tab-bar height → the tab buttons
+      (which bleed DOWN into the content body: rounded-top only, no bottom border,
+      `tab-bar` padding `4px 4px 0`) jammed against the header's bottom border and
+      read as squished upward (the "STEPS / MACHINES / SOUNDS" strip). Also, hiding
+      the FX bar on STEPS meant **FX was unreachable** while on the step grid.
+      Fix (user chose "FX tab + hide FX bar"):
+      - **FX is now a phone tab** (`.tab-fx`, mirrors the STEPS pseudo-tab; CSS-
+        hidden on desktop where the header FX bar owns the entry point). FX was
+        already a real tab in the `_renderContent` switch (`activeTab==='fx'`) — it
+        just had no strip button. `dataset.tab='fx'` so `_syncTabActive` +
+        `_renderPLockTabIndicators` highlight it via the normal activeTab path (no
+        JS beyond adding the button). Handler removes `phone-show-steps` like the
+        voice tabs.
+      - **FX bar hidden on phone entirely** (added `.fx-bar` to the header-fluff
+        hide group with oscilloscope + clip-bar). So the phone header is ALWAYS
+        just the tab strip → uniform height, squish gone at its source. The
+        chain mini-outline is a desktop luxury (like the scope).
+      - Squish padding now applies to the whole phone header (`#synth-panel
+        .panel-header` centered, `.tab-bar` 5px top/bottom) — no longer scoped to
+        `phone-show-steps`, since the header is uniform on phone now.
+      Desktop unchanged (FX tab + the rules are inside the ≤640 block / desktop-
+      hidden). **Awaiting in-browser verify.**
+- [~] **C.8 — FILTER + AMP panes → `.param-group` sections.** Both tabs laid out
+      with bespoke flex rows (`.filter-top-row`/`.filter-knob-sec`/`.filter-right-col`,
+      `.amp-tab-row`/`.amp-pan-sec`/`.amp-adsr-sec`) that couldn't reflow narrow.
+      Refactored onto the shared `.param-group` section language (same idiom as
+      DefaultMachinePanel / FMPanel — sections live directly in `.panel-content` and
+      reflow 3-up desktop → 2-up iPad → 1-up phone via the existing `.param-group`
+      media queries; zero new breakpoints):
+      - **FILTER:** FILTER (engine/type dropdowns stacked over the main knob row via
+        `.filter-controls`) · RESPONSE (FilterViz, capped 240px) · BASE (LPF/HPF) ·
+        FILTER ENV (ADSR). The manual `.filter-env-label` div is gone (section uses
+        `.param-group-label`).
+      - **AMP:** AMP (pan + vel knobs) · ENVELOPE (amp ADSR). Compact ADSR-knob
+        sizing kept (retargeted `.amp-adsr-sec`→`.amp-adsr-group`).
+      Dead CSS removed (all the bespoke filter/amp layout classes +
+      `.filter-env-label`). `.filter-viz-wrap` kept (FilterViz still emits it).
+      Audio/p-lock/viz logic unchanged. **Awaiting in-browser verify, NOT committed.**
+- [~] **C.9 — Overflow-menu IMPORT alignment.** In the phone transport overflow
+      dropdown (`flex-direction:column; align-items:stretch`), IMPORT sat left-
+      aligned while every other entry centered. Cause: IMPORT is a
+      `<label class="btn">` (wraps a hidden file input), not a `<button>`, so it
+      lacks the button UA-default `text-align:center`. Fix:
+      `.transport-overflow > .btn { text-align:center }` (scoped to the dropdown).
+      Pure CSS. **Awaiting in-browser verify.**
+- [~] **C.10 — Oscilloscope hidden on iPad.** The header scope was only hidden at
+      ≤640px; on iPad (≤1024px) it still overlapped the synth pane on the right
+      where the tab bar needs the width. Added `.panel-header .oscilloscope {
+      display:none }` to the existing ≤1024 block (the ≤640 block still hides it
+      too, alongside more header fluff). Pure CSS.
+- [~] **F — FX pane phone reflow.** Desktop = left tray + right(path-over-params),
+      drag-to-reorder. That doesn't fit a phone and drag is unreliable on touch.
+      On ≤640px the pane goes single-column (user's design):
+      - **Function row on top:** `.fxpipe-tray` flips to a horizontal row (ADD /
+        LOAD / SAVE). The **bin is hidden** (drag-only; the per-card ✕ removes).
+      - **Vertical card stack:** `.fxpipe-path` flips to a column, arrows rotate to
+        ↓, blocks become **full-width cards** (glyph+name left, ON/OFF + ▲/▼ +
+        bind + ✕ right). Reads INPUT (top) → OUTPUT (bottom).
+      - **▲/▼ reorder** (phone-only, built in JS): each card gets move buttons →
+        new `_moveByOffset(id,dir)` (swaps in `getFXOrder`/`setFXOrder`), disabled
+        at the ends. Replaces drag on touch; desktop keeps drag untouched.
+      - **Inline params (accordion):** on phone the selected card's FXPanel knobs
+        expand INLINE under it (wrapped in `.fxpipe-block-unit` → `.fxpipe-block-
+        params`); the shared `.fxpipe-params` area below the stack is skipped.
+      JS gated on `matchMedia(≤640px)` read per-render (tab switch/resize reapply);
+      desktop DOM + behavior unchanged. manual.js updated (signal-path drag→▲/▼,
+      inline params, bin desktop-only, FX-as-phone-tab). **Awaiting in-browser
+      verify, NOT committed.**
+- [~] **F.1 — FX refinements (design alignment + add-menu width).**
+      - **+ADD FX menu was tiny on phone:** desktop caps it `max-width:240px` /
+        `width:max-content`. On ≤640px give ADD its own full-width tray row (so
+        its absolutely-positioned dropdown spans the whole pane), then the dropdown
+        goes `left/right:0; max-width:none; max-height:60vh` as a **2-column grid**
+        (category headers `grid-column:1/-1`) with bigger items (1rem / 9px pad).
+      - **Aligned FX cards with the synth pane:** the selected-effect params header
+        (`.fxpipe-params-head`) now matches the synth section headers
+        (`.param-group-label`) — uppercase, letter-spaced, **underlined** bottom
+        border — so an FX param block reads as a titled section like OSC 1 / OUTPUT
+        (kept the FX teal accent). Inline FX knobs shrunk to 52px to match the
+        synth-pane phone knob size (they're nested too deep for the .panel-content
+        shrink rule); FX enum buttons bumped to touch size inside cards. Pure CSS.
+      **Awaiting in-browser verify.**
+- [~] **F.2 — Card width bug (selected card shrink-wraps).** A selected card
+      returns the `.fxpipe-block-unit` wrapper (block + inline params), the flex
+      child of the `align-items:stretch` column path. The unit had no width, so
+      when its inline params had a narrow intrinsic width (e.g. a re-added base FX
+      with few/short params) the column shrink-wrapped the unit to ~60% instead of
+      filling; cards with wider params happened to fill — hence "re-add base
+      shrinks, new FX doesn't". Fix: `.fxpipe-block-unit { width:100% }` pins every
+      card full-width regardless of param content. Pure CSS. **Awaiting verify.**
 - [ ] **D — Keyboard** → live-play strip on narrow.
 - [ ] **E — Knob/component sizes** (JS — `size:` passed in panel render code).
 - [ ] **Phase 2 — Mobile shell.** New `mobile.html` + tab-bar nav (one panel at a
@@ -243,6 +337,31 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
   (TRIM/PLAYBACK/OUTPUT); SampleSwarm swarm row → SWARM/NOISE; WT-Sampler slots
   now stack vertically (canvas 72px) + MORPH/SLOT A/SLOT B/SWEEP groups. Dead
   CSS removed. **Awaiting in-browser verify, NOT yet committed.**
+- 2026-06-16: Surface C.7 — FX as a phone tab + squish ROOT CAUSE found. The
+  squish was the header losing the FX bar's height on STEPS, not just tab padding;
+  and hiding the FX bar there left FX unreachable. Now: FX is a phone tab
+  (`.tab-fx`, mirrors STEPS), the FX bar is hidden on phone entirely (header =
+  always just the tab strip → uniform height), and the squish padding applies to
+  the whole phone header. Desktop unchanged.
+- 2026-06-16: Surface C.8 — FILTER + AMP panes refactored onto `.param-group`
+  sections (FILTER/RESPONSE/BASE/FILTER ENV; AMP/ENVELOPE), matching FM/Default.
+  Bespoke flex-row layout classes + `.filter-env-label` removed. Logic unchanged.
+- 2026-06-16: Surface C.9 — overflow-menu IMPORT alignment: it's a `<label>` not
+  a `<button>`, so it missed the UA center default in the stretched dropdown;
+  center `.transport-overflow > .btn`. Pure CSS.
+- 2026-06-16: Surface C.10 — oscilloscope hidden on iPad (≤1024) too, not just
+  phone; it overlapped the synth pane on the right. Pure CSS.
+- 2026-06-16: Surface F — FX pane phone reflow: single column, ADD/LOAD/SAVE
+  function row on top, vertical INPUT→OUTPUT full-width card stack, ▲/▼ reorder
+  (phone-only, `_moveByOffset`), inline accordion params under the selected card,
+  bin hidden. Desktop unchanged. manual.js updated.
+- 2026-06-16: Surface F.1 — FX refinements: +ADD FX menu widened on phone (own
+  full-width row → dropdown spans pane, 2-col grid, bigger items); FX params
+  header aligned with the synth section headers (underlined `.param-group-label`
+  look); inline FX knobs→52px, enum buttons touch-sized. Pure CSS.
+- 2026-06-16: Surface F.2 — fixed selected FX card shrink-wrapping to ~60% when
+  its inline params were narrow (re-added base FX); `.fxpipe-block-unit` had no
+  width so the stretch column shrink-wrapped it. `width:100%` pins it. Pure CSS.
 - 2026-06-16: Surface C.6 — FM panel reflowed: operators → `.param-group`
   sections (2 knob rows each), OUTPUT its own section, per-op ADSR canvas +
   schematic moved to phone-collapsible `<details>` (schematic now at bottom).
