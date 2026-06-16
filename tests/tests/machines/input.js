@@ -59,7 +59,9 @@ suite('InputMachine', () => {
   test('gated mode leaves amp gate closed (envelope drives it)', async () => {
     const { track } = await makeOfflineTrack('input', 0.2);
     track.machine.setParam('input.gate', true);
-    track._applyInputGate();
+    // The gate toggle is an explicit re-baseline (see InputPanel gate button):
+    // continuous → gated must reset, else the gate stays pinned open at 1.
+    track._applyInputGate({ reset: true });
     eq(track.machine.gated, true, 'gate on');
     for (const env of track._pool.envelopes) {
       eq(env.ampGain.gain.value, 0, 'gated: ampGain closed until a note');

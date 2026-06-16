@@ -246,6 +246,8 @@ const EXPECTED = {
     { path: 'bow',          label: 'Bow',      type: 'number', min: 0,    max: 1,    default: 0.15, modulatable: true, lfoMin: 0,    lfoMax: 1,    plockMode: 'audioParam' },
     { path: 'vibrato',      label: 'Vibrato',  type: 'number', min: 0,    max: 50,   default: 6,    modulatable: true, lfoMin: 0,    lfoMax: 50,   plockMode: 'audioParam' },
     { path: 'vibrato.rate', label: 'Vib Rate', type: 'number', min: 0.5,  max: 12,   default: 5.0,  modulatable: true, lfoMin: 0.5,  lfoMax: 12,   plockMode: 'audioParam' },
+    { path: 'vibrato.syncMode',   label: 'Vib Sync', type: 'enum',   options: ['hz','bpm'],                                            hidden: true, plockMode: 'js' },
+    { path: 'vibrato.bpmCount32', label: 'Vib Div',  type: 'number', min: 1, max: 128, default: 8,                                     hidden: true, plockMode: 'js' },
     { path: 'output.level', label: 'Level',    type: 'number', min: 0,    max: 1,    default: 0.7,  modulatable: true, lfoMin: 0,    lfoMax: 1,    plockMode: 'audioParam' },
   ],
   moogish: [
