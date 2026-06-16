@@ -556,7 +556,9 @@ export const MANUAL_CONTENT = {
       ['Target', 'The level the loud parts are driven toward. One knob, both ways: ' +
                  'LOWER than the signal\'s level = turned DOWN (quieter), HIGHER = ' +
                  'lifted UP. A built-in ceiling caps extreme boost so near-silence ' +
-                 'isn\'t amplified into noise.'],
+                 'isn\'t amplified into noise. A fast brickwall at Target also catches ' +
+                 'the opening transient instantly, so there\'s no loud blast before the ' +
+                 'auto-gain settles.'],
       ['Range', 'How far it may push from no-change (0%) to full normalisation ' +
                 '(100%). 0 leaves the signal untouched; 100% drives fully to ' +
                 'Target. Scales both downward and upward correction.'],

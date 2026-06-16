@@ -23,7 +23,17 @@
  *
  * Signal chain (internal):
  *   input ─┬─→ analyser (measure only, not summed)
- *          └─→ autoGain ─→ output
+ *          └─→ autoGain ─→ ceiling ─→ output
+ *
+ * The rAF loop is the SLOW, musical leveller, but it runs on the UI thread at
+ * ~16–33 ms cadence + a smoothing time-constant, so a sudden loud transient
+ * sails through for a few ms before the auto-gain catches it (the classic
+ * "blast on the first hit / on a level jump"). The audio-thread `ceiling`
+ * stage — a fast brickwall `DynamicsCompressorNode`, the same node the limiter
+ * uses — sits AFTER the auto-gain and catches that transient sample-accurately:
+ * its threshold tracks **Target** (in dB), so anything the slow loop hasn't
+ * pulled down yet is clamped instantly to the target level. When the slow loop
+ * is already on target the ceiling is transparent (nothing exceeds threshold).
  *
  * Parameters:
  *   'norm.target' — target peak level 0.05–1.5, default 0.5. One knob: LOWER than
@@ -69,18 +79,27 @@ export class NormalizerFX {
     this.outputNode = context.createGain();
     this.outputNode.gain.value = 1;
 
-    // The auto-adjusted makeup gain — input passes through it to the output.
+    // The auto-adjusted makeup gain — input passes through it (slow leveller).
     this._autoGain = context.createGain();
     this._autoGain.gain.value = 1;
+
+    // Fast audio-thread brickwall: catches the transient that slips past the slow
+    // rAF loop before it can pull the gain down. Threshold tracks Target (dB).
+    this._ceiling = context.createDynamicsCompressor();
+    this._ceiling.ratio.value     = 20;     // brickwall-ish
+    this._ceiling.attack.value    = 0.001;  // fast — catch the transient
+    this._ceiling.release.value   = 0.05;
+    this._ceiling.knee.value      = 0;       // hard knee
+    this._ceiling.threshold.value = this._targetDb();
 
     // Tap for measurement only (NOT summed into the output path).
     this._analyser = context.createAnalyser();
     this._analyser.fftSize = 1024;
     this._buf = new Float32Array(this._analyser.fftSize);
 
-    // Wiring: signal passes input → autoGain → output; the analyser taps the
-    // input for measurement only (it is a dead-end, never feeding the output).
-    this.inputNode.connect(this._autoGain).connect(this.outputNode);
+    // Wiring: signal passes input → autoGain → ceiling → output; the analyser
+    // taps the input for measurement only (dead-end, never feeding the output).
+    this.inputNode.connect(this._autoGain).connect(this._ceiling).connect(this.outputNode);
     this.inputNode.connect(this._analyser);
 
     // Decaying peak envelope of the input level, and the smoothed gain estimate.
@@ -88,6 +107,11 @@ export class NormalizerFX {
     this._gain = 1;
     this._raf  = null;
     this._tick = this._tick.bind(this);
+  }
+
+  /** Target (linear amplitude) → dB threshold for the brickwall ceiling. */
+  _targetDb() {
+    return 20 * Math.log10(Math.max(this._params['norm.target'], 1e-4));
   }
 
   connect(destinationNode) { this.outputNode.connect(destinationNode); }
@@ -98,6 +122,9 @@ export class NormalizerFX {
 
   setEnabled(enabled) {
     this.enabled = enabled;
+    const t = this.context.currentTime;
+    // Bypassed → threshold 0 dB so the brickwall never engages (transparent).
+    this._ceiling.threshold.setTargetAtTime(enabled ? this._targetDb() : 0, t, 0.01);
     if (enabled) {
       // Seed the follower at the Target (not 0) so the very first frame computes a
       // gain near unity and ramps in from there, instead of spiking to MAX_GAIN
@@ -193,8 +220,11 @@ export class NormalizerFX {
 
   setParam(path, value /*, time */) {
     this._params[path] = value;
-    // All params are read live inside _tick — nothing to schedule here. Bypassed
-    // blocks ignore them until re-enabled.
+    // Range/Speed are read live inside _tick. Target also drives the audio-thread
+    // brickwall threshold, so push it through immediately when enabled.
+    if (path === 'norm.target' && this.enabled) {
+      this._ceiling.threshold.setTargetAtTime(this._targetDb(), this.context.currentTime, 0.01);
+    }
   }
 
   getParam(path) { return this._params[path]; }
