@@ -28,23 +28,28 @@
       <div class="transport-right">
         <button id="btn-hold" class="btn">HOLD</button>
         <div class="sep"></div>
-        <button id="btn-clear-notes" class="btn">CLR NOTES</button>
-        <button id="btn-clear-track" class="btn">CLR TRACK</button>
-        <button id="btn-clear-notes-all" class="btn">CLR NOTES ALL</button>
-        <button id="btn-clear-all" class="btn">CLR ALL</button>
-        <div class="sep"></div>
-        <div class="track-count-ctrl">
-          <span class="track-count-label">TRACKS</span>
-          <button id="btn-tracks-minus" class="btn track-count-btn">−</button>
-          <span id="track-count-display">8</span>
-          <button id="btn-tracks-plus" class="btn track-count-btn">+</button>
+        <!-- Overflow: rarely-used controls collapse behind ⋯ at phone width
+             (stays expanded inline on desktop). See transport-overflow CSS. -->
+        <button id="btn-overflow" class="btn transport-overflow-toggle" title="More" aria-label="More controls">⋯</button>
+        <div class="transport-overflow" id="transport-overflow">
+          <button id="btn-clear-notes" class="btn">CLR NOTES</button>
+          <button id="btn-clear-track" class="btn">CLR TRACK</button>
+          <button id="btn-clear-notes-all" class="btn">CLR NOTES ALL</button>
+          <button id="btn-clear-all" class="btn">CLR ALL</button>
+          <div class="sep"></div>
+          <div class="track-count-ctrl">
+            <span class="track-count-label">TRACKS</span>
+            <button id="btn-tracks-minus" class="btn track-count-btn">−</button>
+            <span id="track-count-display">8</span>
+            <button id="btn-tracks-plus" class="btn track-count-btn">+</button>
+          </div>
+          <div class="sep"></div>
+          <button id="btn-export" class="btn">EXPORT</button>
+          <label class="btn" style="cursor:pointer;">
+            IMPORT
+            <input id="btn-import" type="file" accept=".json" style="display:none" />
+          </label>
         </div>
-        <div class="sep"></div>
-        <button id="btn-export" class="btn">EXPORT</button>
-        <label class="btn" style="cursor:pointer;">
-          IMPORT
-          <input id="btn-import" type="file" accept=".json" style="display:none" />
-        </label>
       </div>
     </div>
 

@@ -356,6 +356,23 @@ btnTape.addEventListener('click', async () => {
   }
 });
 
+// ── Transport overflow (⋯) ────────────────────────────────
+// At phone width the rarely-used controls (clear, track-count, export/import)
+// collapse behind the ⋯ toggle. CSS hides the toggle on desktop and shows the
+// group inline; here we just flip an .open class the phone CSS reads. Clicking
+// outside closes it.
+const btnOverflow      = document.getElementById('btn-overflow');
+const transportOverflow = document.getElementById('transport-overflow');
+btnOverflow.addEventListener('click', (e) => {
+  e.stopPropagation();
+  transportOverflow.classList.toggle('open');
+});
+document.addEventListener('click', (e) => {
+  if (!transportOverflow.contains(e.target) && e.target !== btnOverflow) {
+    transportOverflow.classList.remove('open');
+  }
+});
+
 // ── Drum mode ─────────────────────────────────────────────
 const btnDrum = document.getElementById('btn-drum');
 

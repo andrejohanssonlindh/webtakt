@@ -92,7 +92,12 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 32px;
+  /* Wrap is content-driven, not breakpoint-driven: the row stays single at full
+   * width and breaks to a second row exactly when the (rigid) buttons would
+   * otherwise overflow off-screen. height:auto lets the extra row show. */
+  flex-wrap: wrap;
+  row-gap: 6px;
+  min-height: 32px;
   flex-shrink: 0;
   padding: 0 4px;
   background: var(--surface);
@@ -447,6 +452,11 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+  /* Wrap content-driven, same as #transport — so this cluster never overflows
+   * off-screen as a rigid line. margin-left:auto still right-aligns it when the
+   * row has spare room. */
+  flex-wrap: wrap;
+  row-gap: 6px;
 }
 
 /* ─── TRACK COUNT CONTROL ───────────────────────────────── */
@@ -2042,6 +2052,10 @@ body {
   font-size: 0.909rem;
   padding: 4px 6px;
   transition: border-color 0.1s, background 0.1s;
+  /* A button label must never break across lines. Without this, flex children
+   * in a tight row (e.g. the transport before it wraps) shrink and reflow their
+   * text ("CLR NOTES ALL" -> 3 lines). Keep labels on one line at every width. */
+  white-space: nowrap;
 }
 
 .btn:hover {
@@ -4619,5 +4633,71 @@ body {
   #track-nav {
     flex-direction: row;
     width: 100%;
+  }
+}
+
+/* ── Surface B — Transport bar ───────────────────────────────────────
+ * The bar and its right cluster wrap content-driven (base rules), so the row
+ * breaks exactly when buttons would overflow — at any width, not a guessed
+ * breakpoint. Keep buttons rigid so the row wraps as whole units. */
+#transport .btn {
+  flex-shrink: 0;
+}
+
+/* Overflow group: on desktop it's just an inline flex run and the ⋯ toggle is
+ * hidden — no behaviour change. The collapse only happens at phone width. */
+.transport-overflow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.transport-overflow-toggle {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .transport-right {
+    margin-left: 0;
+  }
+  /* BPM slider must not claim a whole row. Cap it so it stays inline and
+   * compact instead of stretching (the full-row jump you saw). */
+  #bpm-slider {
+    width: 90px;
+    flex: 0 0 auto;
+  }
+  /* Show the ⋯ toggle; collapse the rarely-used controls into a dropdown that
+   * only appears when opened. This keeps the phone transport to <=2 rows. */
+  .transport-overflow-toggle {
+    display: inline-flex;
+  }
+  .transport-overflow {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 4px;
+    z-index: 900;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    margin-top: 4px;
+    padding: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
+  .transport-overflow.open {
+    display: flex;
+  }
+  /* The vertical separators are for an inline row; in the stacked dropdown they
+   * just leave odd gaps. Hide them here. */
+  .transport-overflow .sep {
+    display: none;
+  }
+  /* Anchor the dropdown to the transport bar. */
+  #transport {
+    position: relative;
   }
 }

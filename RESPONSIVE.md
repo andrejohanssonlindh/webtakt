@@ -76,7 +76,16 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
 - [x] **A — Step grid reflow.** 16-wide → 8-wide (tablet) → 4×4 (phone).
       Pure CSS: `.step-grid-inner` col-count override; `#middle-row` height:auto
       then column at phone. Cells are `aspect-ratio:1` so they stay square.
-- [ ] **B — Transport bar** wrap/stack at narrow.
+- [x] **B — Transport bar.** Content-driven wrap (base `flex-wrap` on
+      `#transport` + `.transport-right`, `min-height:32px`) so the row breaks the
+      instant buttons would overflow — at any width, no breakpoint guessing.
+      Global `.btn { white-space:nowrap }` stops labels reflowing across lines.
+      **Overflow menu:** rarely-used controls (4× CLR, TRACKS ±, EXPORT, IMPORT)
+      wrapped in `.transport-overflow` behind a `⋯` toggle (`#btn-overflow`,
+      wired in boot.js: toggles `.open`, click-outside closes). Desktop shows the
+      group inline + hides the toggle (no change); only at `<=640px` does it
+      collapse into a dropdown. BPM slider capped at 90px so it never claims a
+      full row. Result: phone transport stays <=2 rows.
 - [ ] **C — Synth panel** → one-panel-at-a-time + tab bar on narrow.
 - [ ] **D — Keyboard** → live-play strip on narrow.
 - [ ] **E — Knob/component sizes** (JS — `size:` passed in panel render code).
@@ -89,3 +98,18 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
 ## Status log
 
 - 2026-06-16: Doc created. Starting Phase 0 (boot extraction).
+- 2026-06-16: Phase 0 landed + pushed (commit "extract inline index.html boot").
+- 2026-06-16: Pivot to adaptive/reflow (fluid-alone too invisible here).
+- 2026-06-16: Surface A (step grid 16→8→4×4) + fluid type landed + pushed.
+- 2026-06-16: Surface B (transport wrap + overflow menu + compact BPM) — **done,
+  awaiting in-browser verify, NOT yet committed.**
+
+## Next up
+
+- **Surface C — Synth panel → one-panel-at-a-time + tab bar on narrow.** The hard
+  one (tab nav model; some panels encode desktop layout imperatively in JS render
+  code, so may need per-panel compact paths). Pause to agree the approach before
+  diving in. Files: `js/ui/SynthPanel.js`, `js/ui/panels/*`, panel CSS.
+- Then D — Keyboard (live-play strip), E — knob/component sizes (JS `size:`).
+- Verify pattern: resize desktop browser across desktop/tablet/phone widths;
+  user verifies in-browser (no headless). Hard-refresh to dodge CSS module cache.
