@@ -1,76 +1,71 @@
 /**
  * moogish_tail.js — persistent-oscillator gate-leak guard
  *
- * Bug under investigation: some Moogish sounds, after playing in the sequencer,
- * leave a fixed-pitch drone that never stops (only the global STOP/panic
- * silences it). Moogish runs its oscillators continuously (noteOff is a no-op),
- * so the ONLY thing that produces silence between/after notes is the per-voice
- * amp gate (envelope.ampGain) reaching 0. If the gate fails to settle to 0, the
- * always-on oscillators bleed through forever — audible only on persistent-osc
- * machines (synth/bass/strings/chord/moogish), masked on machines whose
- * noteOff stops the source.
+ * Bug: some Moogish sounds, after playing FROM THE SEQUENCER OR ARP (never the
+ * live keyboard), leave a fixed-pitch drone that never stops — only the global
+ * STOP/panic silences it. Moogish runs its oscillators continuously (noteOff is
+ * a no-op), so the per-voice amp gate (envelope.ampGain) is the ONLY thing that
+ * produces silence. A stuck gate ⇒ the always-on oscillators bleed forever.
  *
- * Strategy: fire a short sequence, then render WELL past the last note's
- * release and measure the RMS of the trailing "should be silent" window. A
- * correctly-closing gate makes that tail ~0. A leak leaves it audible.
+ * Why keyboard is fine but sequencer/arp is not: the keyboard fires at
+ * currentTime; the sequencer/arp schedule ~100ms AHEAD (lookahead). The gate
+ * scheduler (Envelope._scheduleADS) anchors with `setValueAtTime(param.value,
+ * time)` — but `param.value` is read NOW (schedule time), while `time` is in the
+ * future. When a note is scheduled while the PREVIOUS note is still mid-flight
+ * on that voice slot, `param.value` ≠ the gate's value at `time`, which corrupts
+ * the A-D-S-R chain so a release never reaches 0.
  *
- * We test moogish plus the other persistent-osc machines (same gate path) so a
- * regression in the shared Envelope/VoicePool gating is caught broadly. The
- * sequencer fires the notes, so this exercises the real _fireStep → nextVoice →
- * scheduleNote path, not a synthetic envelope call.
+ * A plain "schedule everything then render once" offline test CANNOT catch this:
+ * nothing has rendered at schedule time, so `param.value` is always the idle 0.
+ * To reproduce we render in SEGMENTS with ctx.suspend(): we fire note 2 from
+ * inside a suspend callback that runs AFTER note 1 has partly rendered, so
+ * `param.value` is a live mid-note value — exactly the live lookahead condition.
  */
 
 import { suite, test, assert, makeOfflineTrack, fireStep, rms } from '../runner.js';
 
 const SR = 44100;
 
-// Persistent-oscillator machines: their oscillators never stop, so the amp gate
-// must fully close or they drone. (Excludes sampler/wt-sampler — worklet/buffer
-// deps don't render offline.)
+// Persistent-oscillator machines: oscillators never stop, so the gate must close.
 const PERSISTENT = ['moogish', 'synth', 'bass', 'strings', 'chord'];
 
-// Fire a handful of short notes, leave a long silent tail, measure the tail.
-const STEP_SEC   = 0.4;
-const NOTE_TICKS = 2;      // note length in ticks (≈ a 16th at 120 BPM)
-const HITS       = 4;
-const RELEASE    = 0.3;    // default amp release
-// Render: all hits, plus a generous tail far beyond the last release so the gate
-// has every chance to settle. The tail window we measure starts after the last
-// note's release is comfortably over.
-const LAST_NOTE_START = (HITS - 1) * STEP_SEC + 0.05;
-const TAIL_START      = LAST_NOTE_START + 1.5;   // 1.5 s after last note → release long gone
-const RENDER_SEC      = TAIL_START + 1.0;
+// Timeline: two overlapping notes on the same slot, then a long silent tail.
+// Note 1 fires at 0.05. We suspend mid-note-1 and schedule note 2 from there, so
+// its _scheduleADS reads a live (non-zero) param.value — the lookahead trap.
+const N1_TIME   = 0.05;
+const SUSPEND_AT = 0.15;     // mid note-1 (gate open) — schedule note 2 here
+const N2_TIME   = 0.20;      // note 2 starts shortly after the suspend point
+const NOTE_LEN  = 2;         // ticks
+const TAIL_START = 1.8;      // well past both releases
+const RENDER_SEC = TAIL_START + 1.0;
 
 async function tailRms(machineType) {
   const { track, ctx } = await makeOfflineTrack(machineType, RENDER_SEC, { sampleRate: SR });
 
-  // Fire HITS short notes through the sequencer.
-  for (let i = 0; i < HITS; i++) {
-    const t = 0.05 + i * STEP_SEC;
-    fireStep(track, t, { note: 60, velocity: 110, length: NOTE_TICKS });
-  }
+  // Note 1 scheduled up front (idle gate → param.value 0, like the first note).
+  fireStep(track, N1_TIME, { note: 60, velocity: 110, length: NOTE_LEN });
+
+  // Schedule note 2 from inside a suspend callback so it runs AFTER note 1 has
+  // rendered up to SUSPEND_AT — `param.value` is now a live mid-note value,
+  // reproducing the sequencer/arp lookahead condition that the keyboard avoids.
+  ctx.suspend(SUSPEND_AT).then(() => {
+    fireStep(track, N2_TIME, { note: 67, velocity: 110, length: NOTE_LEN });
+    ctx.resume();
+  });
 
   const rendered = await ctx.startRendering();
   const data     = rendered.getChannelData(0);
 
-  // Trailing window: should be silence once every note has released.
-  const start = Math.floor(TAIL_START * SR);
-  const tail  = data.slice(start);
-  // Sanity: confirm the patch actually made sound earlier (guards against a
-  // silent render that would trivially "pass" the tail check).
-  const body  = data.slice(Math.floor(0.05 * SR), Math.floor((0.05 + 0.2) * SR));
+  const tail = data.slice(Math.floor(TAIL_START * SR));
+  const body = data.slice(Math.floor(N1_TIME * SR), Math.floor((N1_TIME + 0.2) * SR));
   return { tail: rms(tail), body: rms(body) };
 }
 
 suite('Persistent-osc gate tail (drone guard)', () => {
   for (const m of PERSISTENT) {
-    test(`${m}: amp gate fully closes after release (no drone)`, async () => {
+    test(`${m}: amp gate fully closes after overlapping notes (no drone)`, async () => {
       const { tail, body } = await tailRms(m);
-      // The patch must have been audible during playback.
       assert.gt(body, 1e-4, `${m}: produced no sound during playback (test invalid)`);
-      // After the release tail, the gate must be effectively silent. A lingering
-      // drone shows up as a tail RMS comparable to the body. Threshold is a hard
-      // noise floor — a real drone is orders of magnitude above this.
       assert.lt(tail, 1e-4, `${m}: gate left a lingering tail (RMS ${tail.toExponential(2)}) — drone bug`);
     });
   }
