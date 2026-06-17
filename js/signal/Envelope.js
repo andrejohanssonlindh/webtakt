@@ -150,6 +150,11 @@ export class Envelope {
    * cancelAndHold settled to; for an idle gate that's the held 0.)
    */
   _scheduleADS(param, time, a, d, peakVal, sustainVal, analogue = false) {
+    // ── TEMP DRONE DIAGNOSTIC (remove once solved) ──
+    if (typeof window !== 'undefined' && window.__DRONE_DEBUG) {
+      // eslint-disable-next-line no-console
+      console.log(`%c[drone] slot${this.__slot} _scheduleADS cancelAndHold @${time.toFixed(3)} (now=${this.context.currentTime.toFixed(3)}) — deletes any release ≥ this time`, 'color:#a60');
+    }
     if (typeof param.cancelAndHoldAtTime === 'function') {
       param.cancelAndHoldAtTime(time);
     } else {
@@ -242,13 +247,14 @@ export class Envelope {
     // you still hear sound, the leak is downstream (ladder self-osc / osc replay).
     if (typeof window !== 'undefined' && window.__DRONE_DEBUG) {
       const ctx     = this.context;
+      const slot    = this.__slot;
       const sampleT = (offTime + r + 0.15);
       const waitMs  = Math.max(0, (sampleT - ctx.currentTime) * 1000);
       // eslint-disable-next-line no-console
-      console.log(`[drone] schedule note t=${time.toFixed(3)} off=${offTime.toFixed(3)} r=${r} relTarget=0 (analogue=${analogue}) gateNow=${g.value.toFixed(4)}`);
+      console.log(`%c[drone] slot${slot} scheduleNote t=${time.toFixed(3)} off=${offTime.toFixed(3)} r=${r} sustain=${(s*velFactor).toFixed(4)} (analogue=${analogue}) gateNow=${g.value.toFixed(4)}`, 'color:#06c');
       setTimeout(() => {
         // eslint-disable-next-line no-console
-        console.log(`[drone] AFTER-release sample @${ctx.currentTime.toFixed(3)} gate=${g.value.toFixed(5)} ${g.value > 1e-3 ? '*** GATE STILL OPEN ***' : '(gate closed)'}`);
+        console.log(`%c[drone] slot${slot} AFTER-release @${ctx.currentTime.toFixed(3)} gate=${g.value.toFixed(5)} ${g.value > 1e-3 ? '*** STILL OPEN ***' : '(closed)'}`, g.value > 1e-3 ? 'color:#c00;font-weight:bold' : 'color:#888');
       }, waitMs + 20);
     }
 

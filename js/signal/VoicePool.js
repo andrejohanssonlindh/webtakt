@@ -126,7 +126,9 @@ export class VoicePool {
     this._bpm         = 120; // current tempo, propagated to new slot envelopes
 
     for (let i = 0; i < count; i++) {
-      this._slots.push(this._makeSlot(i === 0));
+      const slot = this._makeSlot(i === 0);
+      slot.envelope.__slot = i;   // TEMP DRONE DIAGNOSTIC: tag slot index for logging
+      this._slots.push(slot);
     }
   }
 

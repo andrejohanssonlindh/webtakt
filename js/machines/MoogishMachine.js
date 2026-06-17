@@ -256,11 +256,6 @@ export class MoogishMachine extends Machine {
   _retune(time) {
     const t = time ?? this.context.currentTime;
     const master = this._params['osc.detune'];
-    // ── TEMP DRONE DIAGNOSTIC (remove once solved) ──
-    if (typeof window !== 'undefined' && window.__DRONE_DEBUG) {
-      // eslint-disable-next-line no-console
-      console.log(`[drone] Moogish._retune root=${this._rootMidi} at t=${t.toFixed(3)} (now=${this.context.currentTime.toFixed(3)})`);
-    }
     for (let i = 0; i < 3; i++) {
       const oct  = this._params[`osc${i + 1}.octave`];
       const det  = this._params[`osc${i + 1}.detune`];
