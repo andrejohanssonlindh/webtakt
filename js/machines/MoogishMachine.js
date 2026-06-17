@@ -294,6 +294,11 @@ export class MoogishMachine extends Machine {
 
   /** Retune to the played note. Amplitude gating handled by the track Envelope. */
   noteOn(midiNote, velocity, time) {
+    // ── TEMP DRONE DIAGNOSTIC (remove once solved) ──
+    if (typeof window !== 'undefined' && window.__DRONE_DEBUG) {
+      // eslint-disable-next-line no-console
+      console.log(`%c[drone] Moogish.noteOn note=${midiNote} time=${(time ?? this.context.currentTime).toFixed(3)} (now=${this.context.currentTime.toFixed(3)})`, 'color:#0a0');
+    }
     this._rootMidi = midiNote;
     this._retune(time);
   }
