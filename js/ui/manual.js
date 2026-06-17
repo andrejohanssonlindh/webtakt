@@ -126,10 +126,15 @@ export const MANUAL_CONTENT = {
                  'tag; tags are attached per-sound when saving. ALL (or ✕ CLEAR FILTER) ' +
                  'shows everything. The chosen tag now sticks after you load a sound. ' +
                  'On phone the chips collapse behind a TAGS button — tap to expand.'],
-      ['Sound cards', 'Each card shows the sound name and machine type. Click the card ' +
+      ['Sound cards', 'Each card shows the sound name and machine type. Click LOAD ' +
                  'to load it onto the track. Use ▶ to audition without loading.'],
       ['▶ (preview)', 'Plays a one-shot of the sound on the track without committing ' +
                  'the load. The track reverts after the release tail.'],
+      ['✦ (load special)', 'Opens a popout to LOAD while KEEPING some of the track\'s ' +
+                 'current settings. The voice/machine always loads; tick Amp/Envelope, ' +
+                 'Filter, or FX chain to leave those untouched, then CONFIRM LOAD. ' +
+                 'Handy for auditioning a new oscillator through your existing filter ' +
+                 'and FX, or swapping the synth while keeping your amp shape.'],
       ['× (delete)', 'Permanently removes the sound from the library.'],
     ],
   },

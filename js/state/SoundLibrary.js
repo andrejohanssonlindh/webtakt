@@ -123,18 +123,29 @@ export class SoundLibrary {
 
   /**
    * Load a sound onto a track. Restores machine + signal chain, leaves sequencer intact.
+   *
+   * The voice/machine section ALWAYS loads (it's what makes the sound the sound).
+   * The signal-chain sections can be individually KEPT (left as the track already
+   * has them) via the `keep` flags — the "Load Special" feature. Keeping a section
+   * just skips its fromJSON restore; everything else loads normally.
+   *
    * @param {string} id
    * @param {import('./Track.js').Track} track
+   * @param {{ amp?: boolean, filter?: boolean, fx?: boolean }} [keep]
+   *   amp    — keep the track's amp envelope + pan (don't load the sound's)
+   *   filter — keep the track's filter (don't load the sound's)
+   *   fx     — keep the track's FX chain: delay/crush/chorus/reverb + pipeline
+   *            order/instances + the analogue flow flag (don't load the sound's)
    */
-  load(id, track) {
+  load(id, track, keep = {}) {
     const sound = this._sounds.find(s => s.id === id);
     if (!sound) return;
 
     if (sound.machine?.type) track.setMachine(sound.machine.type);
     track.loadedSoundName = sound.name;
     track.machine.fromJSON(sound.machine ?? {});
-    track.filter.fromJSON(sound.filter ?? {});
-    track.envelope.fromJSON(sound.envelope ?? {});
+    if (!keep.filter) track.filter.fromJSON(sound.filter ?? {});
+    if (!keep.amp)    track.envelope.fromJSON(sound.envelope ?? {});
     // machine.fromJSON / envelope.fromJSON write ONLY the canonical slot-0; fan
     // them out to the sibling voice slots so all 8 voices play the loaded sound.
     // Without this the canonical slot (every 8th note) carried the true settings
@@ -142,18 +153,24 @@ export class SoundLibrary {
     // "every 8th note sounds different" bug. (Track.fromJSON already does this;
     // the filter auto-mirrors via setParam, so only machine+envelope need it.)
     track._pool.syncParams();
-    track.delayFX.fromJSON(sound.delayFX ?? {});
-    track.bitcrushFX.fromJSON(sound.bitcrushFX ?? {});
-    track.chorusFX.fromJSON(sound.chorusFX ?? {});
-    track.reverbFX.fromJSON(sound.reverbFX ?? {});
-    // FX pipeline: rebuild added instances, then apply order (both absent in
-    // sounds saved before the pipeline → base-four default order).
-    track._restoreFXInstances(sound.fxInstances ?? []);
-    track.setFXOrder(sound.fxOrder ?? track.getFXOrder());
+    if (!keep.fx) {
+      track.delayFX.fromJSON(sound.delayFX ?? {});
+      track.bitcrushFX.fromJSON(sound.bitcrushFX ?? {});
+      track.chorusFX.fromJSON(sound.chorusFX ?? {});
+      track.reverbFX.fromJSON(sound.reverbFX ?? {});
+      // FX pipeline: rebuild added instances, then apply order (both absent in
+      // sounds saved before the pipeline → base-four default order).
+      track._restoreFXInstances(sound.fxInstances ?? []);
+      track.setFXOrder(sound.fxOrder ?? track.getFXOrder());
+    }
     // Analogue flow: derive from the saved flag, or fall back to the restored
     // filter engine for sounds saved before the flag existed. setAnalogue keeps
-    // the chorus enable + filter engine consistent.
-    track.setAnalogue(sound.analogue ?? (track.filter.getParam('filter.engine') === 'analogue'));
+    // the chorus enable + filter engine consistent. It spans filter + FX + env
+    // curves, so only re-apply when neither filter nor fx is being kept (keeping
+    // either means the track's current analogue mode should stay as-is).
+    if (!keep.filter && !keep.fx) {
+      track.setAnalogue(sound.analogue ?? (track.filter.getParam('filter.engine') === 'analogue'));
+    }
     // Restore sampler buffer via SampleStore if present on the track
     if (track.machine.type === 'sampler' && track.machine.sampleId && track.sampleStore) {
       track.sampleStore.load(track.machine.sampleId, track.audio.context).then(buf => {
@@ -173,8 +190,10 @@ export class SoundLibrary {
       }
     }
 
-    // Restore pan
-    track.pannerNode.pan.setTargetAtTime(sound.pan ?? 0, track.audio.context.currentTime, 0.005);
+    // Restore pan (part of the amp section — kept alongside the envelope).
+    if (!keep.amp) {
+      track.pannerNode.pan.setTargetAtTime(sound.pan ?? 0, track.audio.context.currentTime, 0.005);
+    }
     track.trigTone = sound.trigTone ?? 0;
 
     // Restore LFOs

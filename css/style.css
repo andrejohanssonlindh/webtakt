@@ -3744,6 +3744,64 @@ body {
   color: var(--danger);
 }
 
+/* LOAD SPECIAL (✦) — accent-tinted; lit while its popout is open. */
+.sl-card-btn-special {
+  border-color: var(--accent-dim);
+  color: var(--accent-dim);
+}
+
+.sl-card-btn-special:hover,
+.sl-card-btn-special.sl-card-btn-active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--surface-3);
+}
+
+/* LOAD SPECIAL popout — the "keep on track" checkbox panel under a card. */
+.sl-special {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 8px;
+  background: var(--surface-1);
+  border: 1px solid var(--accent-dim);
+  border-radius: var(--radius);
+}
+
+.sl-special-head {
+  color: var(--text-dim);
+  font-size: 0.727rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.sl-special-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-bright);
+  font-size: 0.909rem;
+  cursor: pointer;
+}
+
+.sl-special-row input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.sl-special-confirm {
+  margin-top: 2px;
+  border-color: var(--accent-dim);
+  color: var(--accent);
+  letter-spacing: 0.06em;
+}
+
+.sl-special-confirm:hover {
+  border-color: var(--accent);
+  background: var(--surface-3);
+}
+
 /* ── Sampler Panel ─────────────────────────────────────────── */
 
 .sampler-wrap {

@@ -24,15 +24,17 @@ A persistent library of named sounds (voice snapshots) stored in `localStorage` 
 **What it does NOT capture:** sequencer steps, step count, page offset, mute state.
 
 **Files:**
-- `js/state/SoundLibrary.js` — CRUD: `save(name, tags, track)`, `load(id, track)`, `delete(id)`, `rename()`, `setTags()`, `allTags()`
+- `js/state/SoundLibrary.js` — CRUD: `save(name, tags, track)`, `load(id, track, keep)`, `delete(id)`, `rename()`, `setTags()`, `allTags()`
 - `js/ui/panels/SoundLibraryPanel.js` — panel content: tag filter chips + scrollable card list
 
 **UI:** SOUNDS tab in the SynthPanel tab bar. Clicking the tab opens the panel with:
 - `+ SAVE SOUND` button → two-step modal (name, then comma-separated tags)
 - Tag filter chips (ALL + one per tag + `+ TAG` to define a new category)
-- Scrollable list of sound cards (name, tags, machine badge), each with LOAD / ✎ edit / ✕ delete
+- Scrollable list of sound cards (name, tags, machine badge), each with LOAD / ✦ load-special / ✎ edit / ⤓ export / ✕ delete
 
 Loading a sound swaps the current track's machine and all signal chain params, leaving sequencer data intact.
+
+**Load Special (`✦`):** `load(id, track, keep)` takes an optional `keep = { amp?, filter?, fx? }` flag set. The voice/machine section **always** loads; each true flag *skips* that section's restore so the track keeps its current setting: `amp` = amp envelope + pan; `filter` = the filter; `fx` = delay/crush/chorus/reverb + FX pipeline order/instances. The analogue-flow flag (spans filter + FX + env curves) is only re-applied when neither filter nor fx is kept. The ✦ button on each card opens an inline popout of "keep" checkboxes + CONFIRM LOAD (`SoundLibraryPanel._toggleLoadSpecial`); the plain LOAD button passes no flags (loads everything).
 
 ---
 

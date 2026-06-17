@@ -184,6 +184,17 @@ export class SoundLibraryPanel {
       this.onLoad();
     });
 
+    // LOAD SPECIAL — opens a popout to pick which signal-chain sections to KEEP
+    // on the track (the voice/machine always loads). See _toggleLoadSpecial.
+    const specialBtn = document.createElement('button');
+    specialBtn.className = 'btn sl-card-btn sl-card-btn-special';
+    specialBtn.textContent = '✦';
+    specialBtn.title = 'Load special — keep some track settings';
+    specialBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._toggleLoadSpecial(card, sound, specialBtn);
+    });
+
     const editBtn = document.createElement('button');
     editBtn.className = 'btn sl-card-btn';
     editBtn.textContent = '✎';
@@ -207,12 +218,78 @@ export class SoundLibraryPanel {
 
     actions.appendChild(previewBtn);
     actions.appendChild(loadBtn);
+    actions.appendChild(specialBtn);
     if (!sound.factory) actions.appendChild(editBtn);
     actions.appendChild(exportBtn);
     if (!sound.factory) actions.appendChild(delBtn);
     card.appendChild(actions);
 
     return card;
+  }
+
+  /**
+   * Toggle the LOAD SPECIAL popout under a sound card. The popout offers one
+   * "keep" checkbox per skippable signal-chain section (Amp/Filter/FX) — checked
+   * = leave the track's current setting untouched — and a CONFIRM LOAD button
+   * that loads the sound honouring those choices. The voice/machine always loads.
+   *
+   * Only one popout is open at a time; re-clicking the ✦ closes it.
+   */
+  _toggleLoadSpecial(card, sound, btn) {
+    // Already open on this card → close (toggle).
+    const existing = card.querySelector('.sl-special');
+    if (existing) { existing.remove(); btn.classList.remove('sl-card-btn-active'); return; }
+
+    // Close any popout open on another card first.
+    this.container.querySelectorAll('.sl-special').forEach(el => el.remove());
+    this.container.querySelectorAll('.sl-card-btn-special.sl-card-btn-active')
+      .forEach(el => el.classList.remove('sl-card-btn-active'));
+
+    btn.classList.add('sl-card-btn-active');
+
+    const pop = document.createElement('div');
+    pop.className = 'sl-special';
+
+    const heading = document.createElement('div');
+    heading.className = 'sl-special-head';
+    heading.textContent = 'Keep current settings from:';
+    pop.appendChild(heading);
+
+    // Section → label. The machine/voice section is intentionally absent: it
+    // always loads (it's what makes the sound the sound).
+    const SECTIONS = [
+      ['amp',    'Amp / Envelope'],
+      ['filter', 'Filter'],
+      ['fx',     'FX chain'],
+    ];
+    const keep = {};
+    for (const [key, label] of SECTIONS) {
+      const row = document.createElement('label');
+      row.className = 'sl-special-row';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.addEventListener('change', () => { keep[key] = cb.checked; });
+      row.appendChild(cb);
+      const span = document.createElement('span');
+      span.textContent = label;
+      row.appendChild(span);
+      pop.appendChild(row);
+    }
+
+    const confirm = document.createElement('button');
+    confirm.className = 'btn sl-special-confirm';
+    confirm.textContent = 'CONFIRM LOAD';
+    confirm.addEventListener('click', () => {
+      const track = this.state.selectedTrack;
+      if (!track) return;
+      this.library.load(sound.id, track, keep);
+      pop.remove();
+      btn.classList.remove('sl-card-btn-active');
+      this.onLoad();
+    });
+    pop.appendChild(confirm);
+
+    card.appendChild(pop);
   }
 
   /**
