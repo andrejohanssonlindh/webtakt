@@ -208,7 +208,7 @@ export class SettingsPanel {
 
       p.appendChild(this._selectRow(
         'Sample rate',
-        'Output rate. Lower = lower fidelity but less CPU (can fix crackle on weak phones). Auto = 22 kHz on phones, full rate elsewhere.',
+        'Output rate. Lower = lower fidelity but less CPU (can fix crackle on weak phones). Auto = 11 kHz on phones, full rate elsewhere.',
         SAMPLE_RATE_OPTIONS, 'audioSampleRate', refreshNote,
       ));
       p.appendChild(this._selectRow(

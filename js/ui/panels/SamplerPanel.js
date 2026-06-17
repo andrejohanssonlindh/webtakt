@@ -154,6 +154,10 @@ export class SamplerPanel {
         fmt,
         onChange: v => {
           this.ctx.writeValue(m, path, v, false);
+          // When START moves forward past LOOP ST, drag LOOP ST along so the
+          // knob/line/param all agree (otherwise the loop line clamps to start
+          // visually while the knob shows a stale lower value).
+          if (path === 'sample.start') this._clampLoopStartToStart();
           this._drawWaveform();
         },
         onRelease: () => {
@@ -445,6 +449,7 @@ export class SamplerPanel {
         path = this._dragging === 'start' ? 'sample.start' : 'sample.end';
       }
       this.ctx.writeValue(this.machine, path, pos, false);
+      if (path === 'sample.start') this._clampLoopStartToStart();
       this._drawWaveform();
     };
 
@@ -666,6 +671,21 @@ export class SamplerPanel {
     this.machine.setParam('sample.end',   endNorm);
     this._startKnob?.setValue(startNorm);
     this._endKnob?.setValue(endNorm);
+    this._clampLoopStartToStart();
+  }
+
+  /**
+   * Pull LOOP ST up to START whenever START moves past it. Keeps the loop-start
+   * knob, the drawn loop line, and the stored param in agreement — without this
+   * the line clamps to START visually while the knob still reads the lower
+   * (often 0) value, so the loop appears not to start until you drag past START.
+   */
+  _clampLoopStartToStart() {
+    const start = this.machine.getParam('sample.start');
+    if (this.machine.getParam('sample.loopStart') < start) {
+      this.ctx.writeValue(this.machine, 'sample.loopStart', start, false);
+      this._loopStartKnob?.setValue(start);
+    }
   }
 
   /** Convert MIDI note number to name like C4, F#3. */

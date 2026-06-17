@@ -388,11 +388,18 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
         LAGGY; dropping to **22.05 kHz fixed it AND kept low latency** — the
         better lever for a weak phone (cut per-second work, keep a small buffer).
         **Auto defaults now bake this in:** both settings default to `auto` —
-        `resolveSampleRate` → 22 kHz on **phone-class** hardware (coarse pointer
-        AND ≤640px via `isPhoneClass()`), native elsewhere; `resolveLatencyHint`
-        → interactive everywhere. Tablets are deliberately excluded (the M-series
-        iPad Air has the headroom for full rate + low latency — that's why it
-        never crackled), so phone users get good sound with zero Settings visits.
+        `resolveSampleRate` → **11.025 kHz** on **phone-class** hardware (coarse
+        pointer AND ≤640px via `isPhoneClass()`), native elsewhere;
+        `resolveLatencyHint` → interactive everywhere. Tablets are deliberately
+        excluded (the M-series iPad Air has the headroom for full rate + low
+        latency — that's why it never crackled), so phone users get good sound
+        with zero Settings visits.
+        **2026-06-17 update:** 22 kHz still underran on a OnePlus 9 Pro (one
+        track, lowest other settings), so phone-class `auto` was lowered to the
+        cheapest rate we expose, **11.025 kHz**. Also added 16 kHz and 11.025 kHz
+        to the manual picker (`SAMPLE_RATE_OPTIONS`) for experimentation. Auto
+        only sets the DEFAULT — an explicit manual choice is still honoured (we
+        intentionally don't clamp it down on phone).
       - **Scheduler slack.** `Clock` lookahead 0.1s→**0.25s**, interval 25ms→50ms,
         so a phone main-thread stall (GC/layout/slow rAF) no longer overruns
         `_nextTickTime` and drop/late-schedule notes.
@@ -413,8 +420,8 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
         Note: iPad-landscape (~1180px) still gets the desktop layout — the scope
         is genuinely visible there (CSS only hides it ≤1024px); layout retiering
         for tablets is a separate pass (Phase 2/3).
-      **Status: FIXED + verified on all three devices** (OP9 Pro / S22 via 22 kHz
-      rate; iPad Air via touch-unlock).
+      **Status: FIXED + verified on all three devices** (OP9 Pro / S22 via low
+      rate — now 11.025 kHz auto; iPad Air via touch-unlock).
 - [~] **H — Tablet tier hardening (iPad portrait / narrowed window).** The
       in-between tier (`641–1024px`) already reflowed `.param-group`/machine grid
       2-up, but otherwise kept the DESKTOP header — so iPad portrait read as a

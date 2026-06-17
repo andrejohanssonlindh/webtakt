@@ -432,7 +432,20 @@ export class WavetableSamplerPanel {
       path = handle === 'start' ? `sample.start${slot}` : `sample.end${slot}`;
     }
     this.ctx.writeValue(this.machine, path, posN, false);
+    if (handle === 'start') this._clampLoopStartToStart(slot);
     this._drawSlot(slot);
+  }
+
+  /**
+   * Pull LOOP ST up to START when START moves past it, so the loop-start knob,
+   * the drawn loop line, and the stored param all agree (see SamplerPanel).
+   */
+  _clampLoopStartToStart(slot) {
+    const start = this.machine.getParam(`sample.start${slot}`);
+    if (this.machine.getParam(`sample.loopStart${slot}`) < start) {
+      this.ctx.writeValue(this.machine, `sample.loopStart${slot}`, start, false);
+      this._loopStartKnob[slot]?.setValue(start);
+    }
   }
 
   _onDragUp() {
@@ -610,6 +623,7 @@ export class WavetableSamplerPanel {
 
     this.machine.setParam(`sample.start${slot}`, startNorm);
     this.machine.setParam(`sample.end${slot}`,   endNorm);
+    this._clampLoopStartToStart(slot);
     this._drawSlot(slot);
   }
 

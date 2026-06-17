@@ -44,9 +44,9 @@ export class AudioEngine {
     // context. Background: weak phone CPUs (OnePlus 9 Pro, Galaxy S22) can't fill
     // a tiny buffer at full rate → buffer UNDERRUNS, heard as crackle / a "2-bit"
     // gritty sound in every browser (they share the OS audio stack). Confirmed
-    // on-device: dropping the SAMPLE RATE (to 22 kHz) cures it while keeping low
+    // on-device: dropping the SAMPLE RATE cures it while keeping low
     // latency, whereas inflating the buffer ('playback') cured the tone but added
-    // audible lag. So the 'auto' defaults resolve to 22 kHz + interactive latency
+    // audible lag. So the 'auto' defaults resolve to 11.025 kHz + interactive latency
     // on phone-class hardware, and native rate + interactive everywhere else
     // (tablets like the M-series iPad have the headroom). Users can override both
     // from the Settings pane.

@@ -15,7 +15,7 @@
  *                        historical 300px-per-full-range feel). Lower = calmer.
  *   audioSampleRate    — SAMPLE_RATE_OPTIONS id (default 'auto'). Output rate;
  *                        fixed at AudioContext creation so it applies on reload.
- *                        'auto' = 22 kHz on phone-class hardware (cures the
+ *                        'auto' = 11.025 kHz on phone-class hardware (cures the
  *                        Android underrun crackle), native elsewhere. Lower rates
  *                        cost less CPU. See resolveSampleRate.
  *   audioLatency       — LATENCY_OPTIONS id (default 'auto'). latencyHint → buffer
@@ -76,12 +76,14 @@ export const GRID_OPTIONS = [
  * let the platform choose. A numeric `rate` is passed straight to the context.
  */
 export const SAMPLE_RATE_OPTIONS = [
-  { id: 'auto',   label: 'Auto (device)',   rate: null  },
-  { id: 'native', label: 'Native (full)',   rate: null  },
-  { id: '48000',  label: '48 kHz',          rate: 48000 },
-  { id: '44100',  label: '44.1 kHz',        rate: 44100 },
-  { id: '24000',  label: '24 kHz (low)',    rate: 24000 },
-  { id: '22050',  label: '22.05 kHz (low)', rate: 22050 },
+  { id: 'auto',   label: 'Auto (device)',     rate: null  },
+  { id: 'native', label: 'Native (full)',     rate: null  },
+  { id: '48000',  label: '48 kHz',            rate: 48000 },
+  { id: '44100',  label: '44.1 kHz',          rate: 44100 },
+  { id: '24000',  label: '24 kHz (low)',      rate: 24000 },
+  { id: '22050',  label: '22.05 kHz (low)',   rate: 22050 },
+  { id: '16000',  label: '16 kHz (lower)',    rate: 16000 },
+  { id: '11025',  label: '11.025 kHz (min)',  rate: 11025 },
 ];
 
 /**
@@ -115,11 +117,17 @@ export function isPhoneClass() {
 
 /**
  * Resolve the stored sample-rate setting to a number (or null = native). 'auto'
- * → 22050 on phone-class hardware (the rate that fixed the crackle on-device
- * while keeping low latency), native everywhere else.
+ * → 11025 on phone-class hardware, native everywhere else.
+ *
+ * Phone auto dropped 22050 → 11025: even 22 kHz underran on a OnePlus 9 Pro
+ * (one track, lowest other settings), so phone-class auto now picks the lowest
+ * rate we expose — it's the cheapest CPU lever short of cutting voices. Tone is
+ * duller but playback is stable; users can still pick a higher rate manually.
+ * 'auto' only sets the DEFAULT — an explicit manual choice is always honoured
+ * (we deliberately don't clamp it down on phone).
  */
 export function resolveSampleRate(id) {
-  if (id === 'auto') return isPhoneClass() ? 22050 : null;
+  if (id === 'auto') return isPhoneClass() ? 11025 : null;
   return SAMPLE_RATE_OPTIONS.find(o => o.id === id)?.rate ?? null;
 }
 
@@ -139,7 +147,7 @@ export const DEFAULTS = Object.freeze({
   bpmGrid:             '1/32',
   modWheelSensitivity: 1.0,
   // Audio engine — applied at AudioContext creation (effective on reload).
-  // Both default to 'auto': phone-class devices get 22 kHz (fixes the Android
+  // Both default to 'auto': phone-class devices get 11.025 kHz (fixes the Android
   // underrun crackle while keeping low latency); tablets/desktop get native rate
   // + interactive latency. See resolveSampleRate / resolveLatencyHint.
   audioSampleRate:     'auto',   // SAMPLE_RATE_OPTIONS id
