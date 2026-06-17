@@ -13,12 +13,15 @@
  *                        fractional count 0.5). See js/util/BpmSync.js.
  *   modWheelSensitivity — scroll → mod-wheel travel multiplier (0.1–3.0, 1 = the
  *                        historical 300px-per-full-range feel). Lower = calmer.
- *   audioSampleRate    — SAMPLE_RATE_OPTIONS id (default 'native'). Output rate;
+ *   audioSampleRate    — SAMPLE_RATE_OPTIONS id (default 'auto'). Output rate;
  *                        fixed at AudioContext creation so it applies on reload.
- *                        Lower rates cost less CPU (can cure underrun crackle).
+ *                        'auto' = 22 kHz on phone-class hardware (cures the
+ *                        Android underrun crackle), native elsewhere. Lower rates
+ *                        cost less CPU. See resolveSampleRate.
  *   audioLatency       — LATENCY_OPTIONS id (default 'auto'). latencyHint → buffer
- *                        size; 'auto' = 'playback' on mobile, 'interactive' on
- *                        desktop. Also applied on reload. See AudioEngine.js.
+ *                        size; 'auto' = 'interactive' (low latency) everywhere —
+ *                        we fix phone crackle via the rate, not the buffer, to
+ *                        avoid lag. Applied on reload. See AudioEngine.js.
  *   keybinds           — { play, record, stopAll, manual, hold, arp, octaveUp,
  *                        octaveDown, moveLeft, moveRight, fx1, fx2, fx3, fx4 }: each
  *                        an `event.code` string (layout-independent). Handled in
@@ -67,12 +70,17 @@ export const GRID_OPTIONS = [
 // These can't change on a live context, so a change only takes effect on the next
 // page load (SettingsPanel shows a "reload to apply" note).
 
-/** Output sample rate. 'native' = pass no rate, let the platform choose. */
+/**
+ * Output sample rate. 'auto' = pick per device (low on phone-class hardware,
+ * native elsewhere — see resolveSampleRate). 'native' = always pass no rate and
+ * let the platform choose. A numeric `rate` is passed straight to the context.
+ */
 export const SAMPLE_RATE_OPTIONS = [
-  { id: 'native', label: 'Native (auto)', rate: null  },
-  { id: '48000',  label: '48 kHz',        rate: 48000 },
-  { id: '44100',  label: '44.1 kHz',      rate: 44100 },
-  { id: '24000',  label: '24 kHz (low)',  rate: 24000 },
+  { id: 'auto',   label: 'Auto (device)',   rate: null  },
+  { id: 'native', label: 'Native (full)',   rate: null  },
+  { id: '48000',  label: '48 kHz',          rate: 48000 },
+  { id: '44100',  label: '44.1 kHz',        rate: 44100 },
+  { id: '24000',  label: '24 kHz (low)',    rate: 24000 },
   { id: '22050',  label: '22.05 kHz (low)', rate: 22050 },
 ];
 
@@ -89,22 +97,41 @@ export const LATENCY_OPTIONS = [
   { id: 'playback',    label: 'Safe (playback)' },
 ];
 
-/** True on touch/coarse-pointer devices — used to pick a safer audio default. */
-export function isMobileLike() {
+/**
+ * True only on PHONE-CLASS hardware: a coarse pointer AND a phone-sized viewport
+ * (≤640px, the app's phone breakpoint). This deliberately EXCLUDES tablets — the
+ * confirmed underrun crackle was on weak Android phones (OnePlus 9 Pro, Galaxy
+ * S22); a large-screen iPad (M-series) has the CPU headroom to run native rate +
+ * low latency fine and never underran. So phone-class devices get the lighter
+ * audio defaults, tablets/desktop keep full quality. Width is a proxy for "small
+ * mobile" (we can't read CPU class from the browser).
+ */
+export function isPhoneClass() {
   try {
     return window.matchMedia('(pointer: coarse)').matches
-        || (navigator.maxTouchPoints ?? 0) > 0;
+        && window.matchMedia('(max-width: 640px)').matches;
   } catch (_) { return false; }
 }
 
 /**
+ * Resolve the stored sample-rate setting to a number (or null = native). 'auto'
+ * → 22050 on phone-class hardware (the rate that fixed the crackle on-device
+ * while keeping low latency), native everywhere else.
+ */
+export function resolveSampleRate(id) {
+  if (id === 'auto') return isPhoneClass() ? 22050 : null;
+  return SAMPLE_RATE_OPTIONS.find(o => o.id === id)?.rate ?? null;
+}
+
+/**
  * Resolve the stored latency setting to a value the AudioContext accepts. 'auto'
- * → 'playback' on mobile-like devices (bigger buffer guards against the
- * underrun crackle reported on Android phones) and 'interactive' on desktop
- * (low latency, which desktop CPUs sustain fine).
+ * → 'interactive' (low latency). We do NOT inflate the buffer on phones: dropping
+ * the sample rate (resolveSampleRate above) is the lever that fixes the crackle
+ * without the audible lag that 'playback' added on-device. 'interactive' is the
+ * right default everywhere; users can still pick 'playback' manually if needed.
  */
 export function resolveLatencyHint(id) {
-  if (id === 'auto') return isMobileLike() ? 'playback' : 'interactive';
+  if (id === 'auto') return 'interactive';
   return id;
 }
 
@@ -112,8 +139,11 @@ export const DEFAULTS = Object.freeze({
   bpmGrid:             '1/32',
   modWheelSensitivity: 1.0,
   // Audio engine — applied at AudioContext creation (effective on reload).
-  audioSampleRate:     'native', // SAMPLE_RATE_OPTIONS id
-  audioLatency:        'auto',   // LATENCY_OPTIONS id ('auto' = playback on mobile)
+  // Both default to 'auto': phone-class devices get 22 kHz (fixes the Android
+  // underrun crackle while keeping low latency); tablets/desktop get native rate
+  // + interactive latency. See resolveSampleRate / resolveLatencyHint.
+  audioSampleRate:     'auto',   // SAMPLE_RATE_OPTIONS id
+  audioLatency:        'auto',   // LATENCY_OPTIONS id
   keybinds: {
     play:    'Space',
     record:  'Enter',

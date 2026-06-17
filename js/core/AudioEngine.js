@@ -19,7 +19,7 @@
  *   .ladderLoaded     — bool, true once the ladder worklet is registered
  */
 
-import { settings, SAMPLE_RATE_OPTIONS, resolveLatencyHint } from '../state/Settings.js';
+import { settings, resolveSampleRate, resolveLatencyHint } from '../state/Settings.js';
 
 const LADDER_WORKLET_PATH   = 'js/worklets/patina-ladder-processor.js';
 // FX worklets registered at boot so `new AudioWorkletNode(ctx, 'bitcrush'|'stutter')`
@@ -41,16 +41,18 @@ export class AudioEngine {
 
     // Sample rate + latency hint come from user settings (Settings.js), applied
     // here because both are fixed at context creation and can't change on a live
-    // context. Background: pinning a HIGH rate + a buffer-minimising latency hint
-    // on weak phone CPUs (OnePlus 9 Pro, Galaxy S22) causes buffer UNDERRUNS —
-    // crackle / a "2-bit" gritty sound across every browser (they share the OS
-    // audio stack). So the defaults are conservative: native rate, and a latency
-    // hint that resolves to 'playback' (bigger buffer) on mobile-like devices and
-    // 'interactive' (low latency) on desktop. Users can step the rate down or the
-    // latency up from the Settings pane to chase crackle on a specific device.
+    // context. Background: weak phone CPUs (OnePlus 9 Pro, Galaxy S22) can't fill
+    // a tiny buffer at full rate → buffer UNDERRUNS, heard as crackle / a "2-bit"
+    // gritty sound in every browser (they share the OS audio stack). Confirmed
+    // on-device: dropping the SAMPLE RATE (to 22 kHz) cures it while keeping low
+    // latency, whereas inflating the buffer ('playback') cured the tone but added
+    // audible lag. So the 'auto' defaults resolve to 22 kHz + interactive latency
+    // on phone-class hardware, and native rate + interactive everywhere else
+    // (tablets like the M-series iPad have the headroom). Users can override both
+    // from the Settings pane.
     const opts = {};
-    const rate = SAMPLE_RATE_OPTIONS.find(o => o.id === settings.get('audioSampleRate'))?.rate;
-    if (rate) opts.sampleRate = rate;          // omit → platform-native rate
+    const rate = resolveSampleRate(settings.get('audioSampleRate'));
+    if (rate) opts.sampleRate = rate;          // null → omit → platform-native rate
     opts.latencyHint = resolveLatencyHint(settings.get('audioLatency'));
 
     // A device may reject a requested sampleRate; fall back to native (no rate)

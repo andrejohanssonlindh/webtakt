@@ -208,12 +208,12 @@ export class SettingsPanel {
 
       p.appendChild(this._selectRow(
         'Sample rate',
-        'Output rate. Lower = lower fidelity but less CPU (can fix crackle on weak devices). Native lets the platform choose.',
+        'Output rate. Lower = lower fidelity but less CPU (can fix crackle on weak phones). Auto = 22 kHz on phones, full rate elsewhere.',
         SAMPLE_RATE_OPTIONS, 'audioSampleRate', refreshNote,
       ));
       p.appendChild(this._selectRow(
         'Audio latency',
-        'Bigger buffer (Safe) = fewer dropouts/crackle but more latency. Auto picks Safe on phones, Low on desktop.',
+        'Bigger buffer (Safe) = fewer dropouts but more latency. Auto = Low everywhere (phones are handled by the rate instead).',
         LATENCY_OPTIONS, 'audioLatency', refreshNote,
       ));
       p.appendChild(noteRow);

@@ -387,6 +387,12 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
         result:** Safe latency (bigger buffer) fixed the tone but made playback
         LAGGY; dropping to **22.05 kHz fixed it AND kept low latency** — the
         better lever for a weak phone (cut per-second work, keep a small buffer).
+        **Auto defaults now bake this in:** both settings default to `auto` —
+        `resolveSampleRate` → 22 kHz on **phone-class** hardware (coarse pointer
+        AND ≤640px via `isPhoneClass()`), native elsewhere; `resolveLatencyHint`
+        → interactive everywhere. Tablets are deliberately excluded (the M-series
+        iPad Air has the headroom for full rate + low latency — that's why it
+        never crackled), so phone users get good sound with zero Settings visits.
       - **Scheduler slack.** `Clock` lookahead 0.1s→**0.25s**, interval 25ms→50ms,
         so a phone main-thread stall (GC/layout/slow rAF) no longer overruns
         `_nextTickTime` and drop/late-schedule notes.
