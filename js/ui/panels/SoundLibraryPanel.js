@@ -30,7 +30,8 @@ export class SoundLibraryPanel {
     this.onLoad    = onLoad;
     this.onPreview = onPreview;
 
-    this._activeTag = null; // null = ALL
+    // The active tag filter lives on the library (survives panel rebuilds — see
+    // SoundLibrary.activeTag), so a loaded sound no longer clears your filter.
     this._render();
   }
 
@@ -53,18 +54,31 @@ export class SoundLibraryPanel {
     wrap.appendChild(topBar);
 
     // ── Tag filter chips ──────────────────────────────────
+    // On phone the chip row eats vertical space and pushes the sound cards down,
+    // so it collapses behind a TAGS toggle (`body.phone-show-tags` is set while
+    // expanded). Desktop/tablet always show it (CSS un-collapses the row + hides
+    // the toggle). The toggle button itself is phone-only (CSS-hidden elsewhere).
+    const tagsToggle = document.createElement('button');
+    tagsToggle.className = 'btn sl-tags-toggle';
+    const activeLabel = this.library.activeTag === null ? 'ALL' : this.library.activeTag;
+    tagsToggle.textContent = `TAGS: ${activeLabel} ▾`;
+    tagsToggle.addEventListener('click', () => {
+      document.body.classList.toggle('sl-tags-open');
+    });
+    wrap.appendChild(tagsToggle);
+
     const chipBar = document.createElement('div');
     chipBar.className = 'sl-chips';
 
-    const allChip = this._makeChip('ALL', this._activeTag === null, () => {
-      this._activeTag = null;
+    const allChip = this._makeChip('ALL', this.library.activeTag === null, () => {
+      this.library.activeTag = null;
       this._render();
     });
     chipBar.appendChild(allChip);
 
     this.library.allTags().forEach(tag => {
-      const chip = this._makeChip(tag, this._activeTag === tag, () => {
-        this._activeTag = tag;
+      const chip = this._makeChip(tag, this.library.activeTag === tag, () => {
+        this.library.activeTag = tag;
         this._render();
       });
       chipBar.appendChild(chip);
@@ -76,22 +90,35 @@ export class SoundLibraryPanel {
     addTagBtn.addEventListener('click', () => this._addTag());
     chipBar.appendChild(addTagBtn);
 
+    // CLEAR FILTER — explicit reset back to ALL (only meaningful when a tag is
+    // active; hidden otherwise to avoid clutter).
+    if (this.library.activeTag !== null) {
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'sl-chip sl-chip-clear';
+      clearBtn.textContent = '✕ CLEAR FILTER';
+      clearBtn.addEventListener('click', () => {
+        this.library.activeTag = null;
+        this._render();
+      });
+      chipBar.appendChild(clearBtn);
+    }
+
     wrap.appendChild(chipBar);
 
     // ── Sound list ────────────────────────────────────────
     const list = document.createElement('div');
     list.className = 'sl-list';
 
-    const sounds = this._activeTag === null
+    const sounds = this.library.activeTag === null
       ? this.library.sounds
-      : this.library.sounds.filter(s => s.tags.includes(this._activeTag));
+      : this.library.sounds.filter(s => s.tags.includes(this.library.activeTag));
 
     if (sounds.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'sl-empty';
-      empty.textContent = this._activeTag === null
+      empty.textContent = this.library.activeTag === null
         ? 'No sounds saved yet. Hit + SAVE SOUND to save the current track.'
-        : `No sounds tagged "${this._activeTag}".`;
+        : `No sounds tagged "${this.library.activeTag}".`;
       list.appendChild(empty);
     } else {
       sounds.forEach(sound => list.appendChild(this._makeCard(sound)));
@@ -229,7 +256,7 @@ export class SoundLibraryPanel {
         const track = this.state.selectedTrack;
         if (!track) return;
         this.library.save(name, tags, track);
-        this._activeTag = null;
+        this.library.activeTag = null;
         this._render();
       });
     });
@@ -255,7 +282,7 @@ export class SoundLibraryPanel {
       if (!tag.trim()) return;
       // Tag is created by saving it on the first sound via edit — for now,
       // just switch the active filter to the new tag so it's visible on next save.
-      this._activeTag = tag.trim();
+      this.library.activeTag = tag.trim();
       this._render();
     });
   }

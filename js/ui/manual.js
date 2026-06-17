@@ -123,7 +123,9 @@ export const MANUAL_CONTENT = {
       ['+ SAVE SOUND', 'Save the current track\'s full state (machine + filter + ' +
                  'envelope + FX) as a named sound. You will be prompted for a name.'],
       ['Tag chips', 'Filter the list to sounds with a given tag. + TAG creates a new ' +
-                 'tag; tags are attached per-sound when saving. ALL shows everything.'],
+                 'tag; tags are attached per-sound when saving. ALL (or ✕ CLEAR FILTER) ' +
+                 'shows everything. The chosen tag now sticks after you load a sound. ' +
+                 'On phone the chips collapse behind a TAGS button — tap to expand.'],
       ['Sound cards', 'Each card shows the sound name and machine type. Click the card ' +
                  'to load it onto the track. Use ▶ to audition without loading.'],
       ['▶ (preview)', 'Plays a one-shot of the sound on the track without committing ' +
@@ -413,8 +415,9 @@ export const MANUAL_CONTENT = {
            'reverb before crush sounds very different from crush before reverb. ' +
            'Opened with the FX button in the header FX bar; the icon row beside ' +
            'that button mirrors the chain (click an icon to jump here with that ' +
-           'effect selected). On phone the header FX bar is hidden — FX is a tab ' +
-           'in the strip instead, and the pane reflows to a single column: a ' +
+           'effect selected). On iPad and phone the header FX bar is hidden — FX ' +
+           'is a tab in the strip instead. On phone the pane also reflows to a ' +
+           'single column: a ' +
            'function row (ADD / LOAD / SAVE) on top, then a vertical INPUT→OUTPUT ' +
            'card stack.',
     items: [

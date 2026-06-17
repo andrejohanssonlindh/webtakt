@@ -415,6 +415,44 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
         for tablets is a separate pass (Phase 2/3).
       **Status: FIXED + verified on all three devices** (OP9 Pro / S22 via 22 kHz
       rate; iPad Air via touch-unlock).
+- [~] **H — Tablet tier hardening (iPad portrait / narrowed window).** The
+      in-between tier (`641–1024px`) already reflowed `.param-group`/machine grid
+      2-up, but otherwise kept the DESKTOP header — so iPad portrait read as a
+      cramped PC. Two pure-CSS fixes (no JS — the buttons/tabs already exist,
+      CSS-gated):
+      - **FX as a tab on tablet too.** The `.tab-fx` button (already built in
+        SynthPanel, CSS-hidden off-phone) is now shown at `≤1024px`, and the
+        header `.fx-bar` hidden there — the header FX bar crowds the tab strip on
+        iPad. Unlike phone, the STEPS pseudo-tab is NOT lifted: the step grid
+        stays visible below the synth panel (that's the intended in-between
+        "2-column" look). FX is already a real tab in `_renderContent`, so this
+        is button-show + bar-hide only.
+      - **MACHINE grid: orientation split.** Was a flat 2-up at `≤1024px`. Now
+        `≤1024px AND landscape` = 2 group-columns, `≤1024px AND portrait` =
+        1 column (iPad upright is too tight for two). `≤640px` unchanged. Override
+        placed after the base `.machine-grid-wrap` (cascade-order rule, see C.1b).
+      manual.js updated (FX-bar-hidden note now says "iPad and phone").
+      Desktop (>1024px) untouched. **Awaiting in-browser verify, NOT committed.**
+- [~] **H.1 — SOUNDS tab polish.** Four fixes (user-requested):
+      1. **Card grid 3/2/1.** `.sl-list` was a flex column (full-width rows); now
+         a grid that reflows like the machine grid — 3-up desktop → 2-up tablet
+         landscape / 1-up tablet portrait → 1-up phone (same orientation split).
+         Cards restyled to stack vertically (info over a wrapping action row,
+         actions bottom-pinned) so a narrow column doesn't squash the buttons.
+      2. **Tag chips collapse on phone.** The chip row ate the vertical space the
+         cards need, so on ≤640px it hides behind a `TAGS: <active> ▾` toggle
+         (`body.sl-tags-open`). Desktop/tablet always show the chips (toggle CSS-
+         hidden there).
+      3. **Tag filter persists across loads (the bug).** `_activeTag` lived on the
+         panel, but SoundLibraryPanel is rebuilt on every tab re-render — so
+         loading/previewing a sound (which re-renders) snapped the filter back to
+         ALL. Moved it to `SoundLibrary.activeTag` (long-lived) so the chosen tag
+         survives.
+      4. **✕ CLEAR FILTER chip.** Explicit reset to ALL; only shown when a tag is
+         active. (NB: this is the SOUND-LIST tag filter, NOT the audio FILTER tab.)
+      manual.js updated (SOUNDS tab chips entry). Desktop card layout changes too
+      (vertical card + grid) — verify it still reads well there.
+      **Awaiting in-browser verify, NOT committed.**
 - [ ] **Phase 2 — Mobile shell.** New `mobile.html` + tab-bar nav (one panel at a
       time), 4×4 step grid, live-only keyboard, tap-step → note-picker. Reuses
       engine, state, most panels.

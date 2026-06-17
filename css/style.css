@@ -2546,9 +2546,16 @@ body {
  * above (same specificity → source order decides; these previously lived earlier
  * in the file and lost to the base, so the grid stayed 3-wide on every size).
  * Groups: 3-up desktop → 2-up iPad → 1-up phone, matching the param sections. */
-@media (max-width: 1024px) {
+/* Tablet machine grid: landscape has the width for two group columns; portrait
+ * (iPad upright / a narrow window) is too tight, so groups stack one per row. */
+@media (max-width: 1024px) and (orientation: landscape) {
   .machine-grid-wrap {
     grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 1024px) and (orientation: portrait) {
+  .machine-grid-wrap {
+    grid-template-columns: 1fr;
   }
 }
 @media (max-width: 640px) {
@@ -3492,6 +3499,11 @@ body {
 .sl-wrap {
   display: flex;
   flex-direction: column;
+  /* .panel-content is a wrapping flex row, so a child with no width shrink-wraps
+   * to its content (~70% on phone, leaving wasted space). Pin full width so the
+   * sound grid spans the whole pane. */
+  width: 100%;
+  flex: 1;
   height: 100%;
   overflow: hidden;
   padding: 6px 8px;
@@ -3556,15 +3568,49 @@ body {
   border-style: dashed;
 }
 
-/* ── Scrollable list ── */
+/* CLEAR FILTER — sits at the end of the chip row, styled as a muted reset. */
+.sl-chip-clear {
+  border-style: dashed;
+  border-color: var(--accent-dim);
+  color: var(--text-dim);
+}
+.sl-chip-clear:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
+/* TAGS toggle — phone-only collapse control for the chip row. Hidden on
+ * desktop/tablet (the chips always show there). See the ≤640px block below. */
+.sl-tags-toggle {
+  display: none;
+  flex-shrink: 0;
+  align-self: flex-start;
+  letter-spacing: 0.06em;
+}
+
+/* ── Scrollable list ── */
+/* Cards lay out in a grid that reflows like the machine grid: 3-up desktop →
+ * 2-up tablet landscape / 1-up tablet portrait → 1-up phone (overrides below).
+ * `align-content:start` keeps rows packed at the top when there are few cards. */
 .sl-list {
   flex: 1;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  align-content: start;
   gap: 4px;
   padding-right: 2px;
+}
+
+/* Mirror the machine grid's orientation split (see .machine-grid-wrap). */
+@media (max-width: 1024px) and (orientation: landscape) {
+  .sl-list { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 1024px) and (orientation: portrait) {
+  .sl-list { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .sl-list { grid-template-columns: 1fr; }
 }
 
 .sl-list::-webkit-scrollbar       { width: 4px; }
@@ -3572,21 +3618,44 @@ body {
 .sl-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
 .sl-empty {
+  grid-column: 1 / -1;          /* span the full grid (it's the only cell) */
   color: var(--text-dim);
   font-size: 0.909rem;
   padding: 16px 4px;
   text-align: center;
 }
 
+/* ── Phone: collapse the tag chips behind the TAGS toggle ──
+ * The chip row eats vertical space the sound cards need on a phone, so hide it
+ * by default and reveal it only while expanded (body.sl-tags-open, toggled by
+ * the TAGS button). Desktop/tablet are unaffected (chips always shown there). */
+@media (max-width: 640px) {
+  .sl-tags-toggle {
+    display: inline-flex;
+  }
+  .sl-chips {
+    display: none;
+  }
+  body.sl-tags-open .sl-chips {
+    display: flex;
+  }
+}
+
 /* ── Sound card ── */
 
+/* Cards sit in a grid cell (was a full-width row). Stack info over the action
+ * row so a narrow column (3-up desktop, 1-up phone) doesn't squash the buttons.
+ * `justify-content:space-between` + `height:100%` keep the action row pinned to
+ * the bottom so cards of differing tag-count still align their buttons. */
 .sl-card {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  gap: 8px;
+  gap: 6px;
   padding: 6px 8px;
   transition: border-color 0.1s;
 }
@@ -3630,6 +3699,7 @@ body {
 
 .sl-card-actions {
   display: flex;
+  flex-wrap: wrap;          /* 5 buttons reflow within a narrow grid cell */
   gap: 4px;
   flex-shrink: 0;
 }
@@ -4901,13 +4971,29 @@ body {
   }
 }
 
-/* The STEPS + FX pseudo-tabs are phone-only. STEPS: desktop shows the step grid
- * and synth panel together, so the toggle has no meaning. FX: desktop opens the
- * FX pane from the header FX bar, so the strip doesn't need an FX tab there.
- * Both hidden by default; un-hidden inside the phone breakpoint below. */
+/* The STEPS + FX pseudo-tabs are not for desktop. STEPS: desktop shows the step
+ * grid and synth panel together, so the toggle has no meaning. FX: desktop opens
+ * the FX pane from the header FX bar, so the strip doesn't need an FX tab there.
+ * Both hidden by default; un-hidden in the breakpoints below — STEPS only on
+ * phone, FX on tablet AND phone (the header FX bar is too cramped on iPad). */
 .tab-btn.tab-steps,
 .tab-btn.tab-fx {
   display: none;
+}
+
+/* ── Tablet tier (iPad portrait / narrowed window) — FX as a tab ──────
+ * Between phone and desktop the header FX bar crowds the tab strip, and on iPad
+ * portrait it's awkward to reach. Move FX into the strip (like phone) but WITHOUT
+ * the phone STEPS surface — the step grid stays visible below the synth panel
+ * (the intended in-between "2-column" layout). FX is already a real tab in the
+ * _renderContent switch, so showing the button + hiding the bar is all it needs. */
+@media (max-width: 1024px) {
+  .tab-btn.tab-fx {
+    display: block;
+  }
+  .panel-header .fx-bar {
+    display: none;
+  }
 }
 
 /* ── Surface C — Synth panel (header + knob grid + step-grid-as-tab) ──

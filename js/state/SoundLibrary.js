@@ -22,6 +22,11 @@ const SOUNDS_DIR  = 'sounds';
 export class SoundLibrary {
   constructor() {
     this._sounds = this._load();
+    // Active tag-filter selection (null = ALL). Lives here, not on the panel,
+    // because SoundLibraryPanel is rebuilt on every tab re-render (e.g. after
+    // loading a sound) — keeping it on the long-lived library means the chosen
+    // tag filter survives those re-renders instead of snapping back to ALL.
+    this.activeTag = null;
   }
 
   /**
