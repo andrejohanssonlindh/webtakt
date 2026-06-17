@@ -33,6 +33,17 @@ export class Oscilloscope {
 
   _draw() {
     const canvas   = this._canvas;
+
+    // Skip all work when the canvas isn't actually on screen. On phones the
+    // scope is hidden by CSS (display:none / zero-size container), but the rAF
+    // loop would otherwise still pull analyser data and repaint every frame —
+    // pure wasted main-thread time that helps starve the audio render thread
+    // (contributes to crackle on weaker phones). offsetParent === null catches
+    // display:none; the size check catches collapsed/zero-area layouts.
+    if (canvas.offsetParent === null || canvas.clientWidth === 0 || canvas.clientHeight === 0) {
+      return;
+    }
+
     const analyser = this._analyser;
     const buf      = this._buf;
     const W        = canvas.width;

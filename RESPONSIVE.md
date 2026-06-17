@@ -371,6 +371,35 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
         panel render code + the phone CSS shrink (52px) are good as-is on real
         panels; user confirmed sizes are fine. Reopen only if a future panel
         proves cramped.
+- [x] **G — Mobile audio quality (crackle + iPad silence).** Three separate bugs
+      surfaced together on OnePlus 9 Pro, Galaxy S22 (crackly "2-bit" sound, all
+      browsers) and iPad Air (no sound + frozen scope in the desktop layout):
+      - **Crackle = buffer underrun, not bitrate.** The earlier "pin 48 kHz" fix
+        (commit 15ada9c) cured an Android *telephony-rate* context but forcing a
+        high rate + tiny buffer on a weak phone CPU just trades distortion for
+        UNDERRUNS — render thread can't fill buffers → crackle in every browser
+        (they share the platform audio stack). Fix: `AudioEngine` now constructs
+        `new Ctor()` with **no options** → platform-native rate + default buffer.
+      - **Scheduler slack.** `Clock` lookahead 0.1s→**0.25s**, interval 25ms→50ms,
+        so a phone main-thread stall (GC/layout/slow rAF) no longer overruns
+        `_nextTickTime` and drop/late-schedule notes.
+      - **Oscilloscope wasted the main thread.** `oscilloscope.start()` runs at
+        boot on EVERY device; on phones the canvas is CSS-hidden but the rAF loop
+        still pulled analyser data + repainted each frame, helping starve audio.
+        `Oscilloscope._draw()` now bails when the canvas is offscreen
+        (`offsetParent===null` / zero client size). Self-correcting on iPad: once
+        visible + audio flowing it animates.
+      - **iPad silence = audio never unlocked.** Boot only resumed on a one-shot
+        `click`; iOS Safari unlocks audio only from a real gesture and often
+        won't synthesise that first click. New `unlockAudio()` listens on
+        touchend/pointerdown/click, plays a 1-sample silent buffer (canonical iOS
+        unlock), and unbinds once `state==='running'`. Also added the
+        `webkitAudioContext` fallback in `AudioEngine` (bare `AudioContext` ref
+        would ReferenceError at boot on prefixed-only Safari → kills all audio +
+        freezes scope). **Awaiting in-browser verify on all three devices.**
+        Note: iPad-landscape (~1180px) still gets the desktop layout — the scope
+        is genuinely visible there (CSS only hides it ≤1024px); layout retiering
+        for tablets is a separate pass (Phase 2/3).
 - [ ] **Phase 2 — Mobile shell.** New `mobile.html` + tab-bar nav (one panel at a
       time), 4×4 step grid, live-only keyboard, tap-step → note-picker. Reuses
       engine, state, most panels.

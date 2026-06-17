@@ -806,6 +806,31 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ── Resume AudioContext on first user gesture ─────────────
-document.addEventListener('click', () => audio.resume(), { once: true });
+// iOS/iPadOS Safari only unlocks audio from inside a genuine user-gesture
+// handler, and a one-shot `click` is unreliable there (Safari often doesn't
+// synthesise a click for the first tap, and a swallowed target gives no retry —
+// the symptom: no sound at all + a frozen oscilloscope because the analyser
+// only ever sees silence). So we:
+//   • listen on touchend AND pointerdown AND click (covers every platform),
+//   • play a one-sample silent buffer inside the gesture (the canonical iOS
+//     unlock — resume() alone is not always enough on Safari),
+//   • keep listening until the context is actually 'running', then unbind.
+function unlockAudio() {
+  audio.resume();
+  try {
+    const ctx = audio.context;
+    const src = ctx.createBufferSource();
+    src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+    src.connect(ctx.destination);
+    src.start(0);
+  } catch (_) { /* unlock is best-effort */ }
+
+  if (audio.context.state === 'running') {
+    ['touchend', 'pointerdown', 'click'].forEach(ev =>
+      document.removeEventListener(ev, unlockAudio));
+  }
+}
+['touchend', 'pointerdown', 'click'].forEach(ev =>
+  document.addEventListener(ev, unlockAudio));
 
 // No auto-load — always start fresh. Use IMPORT to load a saved project.

@@ -31,27 +31,26 @@ const FX_WORKLET_PATHS = [
 
 export class AudioEngine {
   constructor() {
-    // latencyHint 'interactive' asks the platform for the smallest stable
-    // output buffer — matters for live monitoring through the Input machine
-    // (InputMachine.js). Browsers still impose ~20-60ms+ round-trip; see
-    // baseLatency/outputLatency getters and design/input-machine.md.
-    //
-    // BUT on Android (e.g. OnePlus 9 Pro) 'interactive' makes Chrome open the
-    // audio device at a low "telephony" sample rate (~8–24 kHz) to chase the
-    // smallest buffer — everything then sounds like a really low-bitrate file
-    // (grainy/distorted). Desktop honours interactive at full 44.1/48 kHz, so
-    // it never showed there. Fix: PIN a full-quality sample rate. The latency
-    // hint stays at its spec default (still 'interactive', so live monitoring
-    // latency is unchanged) — pinning the rate just stops the platform from
-    // dropping to telephony quality in pursuit of that low latency. We try
-    // 48000 first (the common Android-native rate, avoids a resample), then fall
-    // back progressively if a device rejects the requested rate.
-    const tryContext = (opts) => { try { return new AudioContext(opts); } catch (_) { return null; } };
-    this.context =
-         tryContext({ sampleRate: 48000 })
-      ?? tryContext({ sampleRate: 44100 })
-      ?? tryContext({})            // let the platform choose its native rate
-      ?? new AudioContext();       // last resort (older browsers w/o options arg)
+    // iOS/older Safari only exposes the prefixed constructor. Resolve once so a
+    // missing unprefixed AudioContext doesn't throw a ReferenceError at boot
+    // (which would kill ALL audio AND freeze the oscilloscope — the analyser
+    // never gets a context). patina.js already uses this same fallback.
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+
+    // We deliberately do NOT request a buffer-minimising latency hint or pin a
+    // high sample rate here. Earlier we pinned 48 kHz to dodge an Android Chrome
+    // bug where the smallest-buffer chase opened the device at "telephony" rate
+    // (grainy/distorted). But on weaker phone CPUs (OnePlus 9 Pro, Galaxy S22)
+    // forcing 48 kHz + a tiny buffer just trades distortion for buffer UNDERRUNS
+    // — the render thread can't keep up and you get crackle / a "2-bit" gritty
+    // sound across every browser (Chrome/FF/Brave all share the platform audio
+    // stack, so it reproduced everywhere). Letting the platform choose its own
+    // native rate and buffer size is the stable default: no resample, no
+    // telephony fallback, and a buffer the device can actually fill in time.
+    // No options object → platform-native rate + default buffer (most stable on
+    // mobile). Throws only if the browser has no AudioContext at all, which is
+    // unrecoverable, so we let it propagate rather than swallow it silently.
+    this.context = new Ctor();
 
     // Preload the analogue ladder filter worklet (Filter.js engine='analogue').
     // Fire-and-forget at boot: nothing awaits it, but by the time a user switches

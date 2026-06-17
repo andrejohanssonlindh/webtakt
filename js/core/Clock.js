@@ -37,8 +37,14 @@ export class Clock {
 
     this._tickIndex    = 0;
     this._nextTickTime = 0;       // scheduled AudioContext time of next tick
-    this._lookahead    = 0.1;     // seconds to schedule ahead
-    this._scheduleInterval = 25;  // ms between scheduler runs
+    // Lookahead must comfortably exceed the worst main-thread stall, or a phone
+    // hiccup (GC, layout, a slow rAF) lets currentTime overrun _nextTickTime and
+    // notes schedule late/never → audible gaps. 0.1s was too tight on mobile;
+    // 0.25s gives the scheduler slack without perceptibly hurting timing
+    // responsiveness (steps are still queued ahead of the audio thread, not
+    // played early). Interval stays well below the lookahead.
+    this._lookahead    = 0.25;    // seconds to schedule ahead
+    this._scheduleInterval = 50;  // ms between scheduler runs
     this._timerID      = null;
     this._callbacks    = new Set();
     // Transport listeners — fired by start()/stop(). Used by MidiEngine to send
