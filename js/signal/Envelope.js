@@ -234,6 +234,24 @@ export class Envelope {
     this._scheduleADS(g, time, a, d, peak, s * velFactor, analogue);
     this._scheduleR(g, offTime, s * velFactor, r, 0, analogue);
 
+    // ── TEMP DRONE DIAGNOSTIC (remove once solved) ──────────────────────────
+    // Enable in console: window.__DRONE_DEBUG = true
+    // Logs, per scheduled note: the release endpoint + a SAMPLE of the actual
+    // ampGain value a moment AFTER the release should have reached 0. If that
+    // sample is non-zero, the gate stayed open (drone via gate). If it's ~0 but
+    // you still hear sound, the leak is downstream (ladder self-osc / osc replay).
+    if (typeof window !== 'undefined' && window.__DRONE_DEBUG) {
+      const ctx     = this.context;
+      const sampleT = (offTime + r + 0.15);
+      const waitMs  = Math.max(0, (sampleT - ctx.currentTime) * 1000);
+      // eslint-disable-next-line no-console
+      console.log(`[drone] schedule note t=${time.toFixed(3)} off=${offTime.toFixed(3)} r=${r} relTarget=0 (analogue=${analogue}) gateNow=${g.value.toFixed(4)}`);
+      setTimeout(() => {
+        // eslint-disable-next-line no-console
+        console.log(`[drone] AFTER-release sample @${ctx.currentTime.toFixed(3)} gate=${g.value.toFixed(5)} ${g.value > 1e-3 ? '*** GATE STILL OPEN ***' : '(gate closed)'}`);
+      }, waitMs + 20);
+    }
+
     // ── Filter envelope ──
     if (this._filter) {
       const fa = this._stageSeconds('fenv', 'attack',  overrides);
