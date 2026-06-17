@@ -352,7 +352,7 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
       manual.js updated (OCT± phone note + an on-screen-keyboard phone entry:
       tap to play, multitouch chords, live-play only). **Awaiting in-browser
       verify, NOT committed.**
-- [~] **E — Knob touch (ALL knobs) + component sizes.**
+- [x] **E — Knob touch (ALL knobs) + component sizes.**
       - **Knob touch (done).** `KnobWidget` is the single knob component (every
         panel uses it), so one change covers ALL knobs. It was mouse+wheel only
         → click-drag in devtools mobile did nothing (devtools fires real
@@ -367,9 +367,10 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
         drag. Click-vs-drag threshold now checks both axes; center double-tap
         maps to the existing double-click toggle. Desktop unchanged (same
         handlers). **Committed.**
-      - **Component sizes (still open).** The JS `size:` passed in panel render
-        code (knobs bake 64px; phone shrinks via CSS today). Revisit if the CSS
-        shrink proves insufficient on real panels.
+      - **Component sizes — CLOSED (no work needed).** The JS `size:` baked in
+        panel render code + the phone CSS shrink (52px) are good as-is on real
+        panels; user confirmed sizes are fine. Reopen only if a future panel
+        proves cramped.
 - [ ] **Phase 2 — Mobile shell.** New `mobile.html` + tab-bar nav (one panel at a
       time), 4×4 step grid, live-only keyboard, tap-step → note-picker. Reuses
       engine, state, most panels.
@@ -453,14 +454,23 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
   User verified working.
 - 2026-06-17: Surface E (knob touch) — `KnobWidget` (the one knob component → ALL
   knobs) made pointer-agnostic + given touch handlers. Two-axis drag: right/up
-  increases, left/down decreases (axes summed). Desktop unchanged. Committed.
+  increases, left/down decreases (axes summed). Desktop unchanged. Committed
+  (`067bd9f`), user verified working. Knob/component SIZES closed — fine as-is.
+- 2026-06-17: **Adaptive per-surface pass (A–F + knob touch) COMPLETE and
+  verified.** Webtakt now does full track-building on a phone. Remaining items
+  (Phase 2 mobile shell, Phase 3 per-panel compact modes) are optional bigger
+  efforts, not blockers.
 
 ## Next up
 
-- **Verify knob touch** at phone width: drag any knob — right/up raises the
-  value, left/down lowers it; a horizontal swipe works as well as vertical;
-  center double-tap still toggles MS/BPM etc.; the page doesn't scroll under the
-  drag. Try it across panels (Moogish, filter, amp, FX).
+- Per-surface adaptive work is done. Open/optional only:
+  - **Phase 2 — Mobile shell** (a dedicated `mobile.html` tab-bar nav). Big, and
+    arguably unnecessary now that the single responsive UI builds tracks on a
+    phone — revisit only if the one-page reflow hits a wall.
+  - **Phase 3 — Per-panel compact modes** — incremental, opt-in; do per panel if
+    a specific one feels cramped in real use.
+  - **Custom dropdowns everywhere** — roll the mod-wheel/FX popout out to the
+    remaining native `<select>`s (logged: memory `project-custom-dropdowns`).
 - Then E — knob/component sizes (JS `size:` passed in panel render code).
 - **Custom synth panels (FM, Sampler) on phone.** They pin their own canvas sizes
   and lay out imperatively — likely need per-panel compact paths. Fold into
