@@ -297,7 +297,7 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
       filling; cards with wider params happened to fill — hence "re-add base
       shrinks, new FX doesn't". Fix: `.fxpipe-block-unit { width:100% }` pins every
       card full-width regardless of param content. Pure CSS. **Awaiting verify.**
-- [~] **D — Keyboard** → live-play strip on narrow. The real gap wasn't layout:
+- [x] **D — Keyboard** → live-play strip on narrow. The real gap wasn't layout:
       the keys only bound `mousedown/up/leave` with no `touch-action`, so on a
       phone they played with a ~300ms delay, got hijacked by scroll/zoom, and
       stuck (a finger sliding off a key never fires `mouseleave`). Two parts:
@@ -352,7 +352,24 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
       manual.js updated (OCT± phone note + an on-screen-keyboard phone entry:
       tap to play, multitouch chords, live-play only). **Awaiting in-browser
       verify, NOT committed.**
-- [ ] **E — Knob/component sizes** (JS — `size:` passed in panel render code).
+- [~] **E — Knob touch (ALL knobs) + component sizes.**
+      - **Knob touch (done).** `KnobWidget` is the single knob component (every
+        panel uses it), so one change covers ALL knobs. It was mouse+wheel only
+        → click-drag in devtools mobile did nothing (devtools fires real
+        touch events, not synthesized mouse). Made the down/move/up handlers
+        **pointer-agnostic** (a `point(e)` helper reads `touches[0]` /
+        `changedTouches[0]` / mouse) and added `touchstart` (canvas) +
+        `touchmove/end/cancel` (window, `passive:false` so move can
+        preventDefault and not scroll the page). `.knob-canvas` already had
+        `touch-action:none`. Drag is now **two-axis** (user's spec): moving
+        RIGHT (+X) or UP (−Y) increases, LEFT/DOWN decreases — axes summed so a
+        horizontal swipe (natural on phone) works like the classic vertical
+        drag. Click-vs-drag threshold now checks both axes; center double-tap
+        maps to the existing double-click toggle. Desktop unchanged (same
+        handlers). **Committed.**
+      - **Component sizes (still open).** The JS `size:` passed in panel render
+        code (knobs bake 64px; phone shrinks via CSS today). Revisit if the CSS
+        shrink proves insufficient on real panels.
 - [ ] **Phase 2 — Mobile shell.** New `mobile.html` + tab-bar nav (one panel at a
       time), 4×4 step grid, live-only keyboard, tap-step → note-picker. Reuses
       engine, state, most panels.
@@ -429,13 +446,21 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
   keys, reach the rest via OCT±; `_blackKeyOffset` takes a `whiteCount`), mod-
   wheels hidden, OCT controls stack full-width, `touch-action:none`. Desktop
   unchanged. manual.js updated. **Awaiting in-browser verify, NOT committed.**
+- 2026-06-17: Surface D refined + committed (`20fca66`): mod-wheel layout reworked
+  to a bounded horizontal row (off-screen bug fixed via `#app{overflow:hidden}`),
+  one mod-wheel kept with touch-drag, black-key geometry fixed (`_blackKeyGeom`
+  width+center from white count), mod-wheel native `<select>` → custom popout.
+  User verified working.
+- 2026-06-17: Surface E (knob touch) — `KnobWidget` (the one knob component → ALL
+  knobs) made pointer-agnostic + given touch handlers. Two-axis drag: right/up
+  increases, left/down decreases (axes summed). Desktop unchanged. Committed.
 
 ## Next up
 
-- **Verify Surface D** at phone width (≤640px): keyboard shows one octave;
-  tapping keys plays (no delay, no page scroll/zoom-on-tap); multitouch chords
-  sound and release per finger; OCT+ reaches the next octave; mod-wheels gone;
-  OCT-/display/OCT+ sit in a full-width row under the keys. Then commit.
+- **Verify knob touch** at phone width: drag any knob — right/up raises the
+  value, left/down lowers it; a horizontal swipe works as well as vertical;
+  center double-tap still toggles MS/BPM etc.; the page doesn't scroll under the
+  drag. Try it across panels (Moogish, filter, amp, FX).
 - Then E — knob/component sizes (JS `size:` passed in panel render code).
 - **Custom synth panels (FM, Sampler) on phone.** They pin their own canvas sizes
   and lay out imperatively — likely need per-panel compact paths. Fold into

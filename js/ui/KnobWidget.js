@@ -280,10 +280,18 @@ export class KnobWidget {
 
   _bindInteraction() {
     let dragging = false;
+    let lastX    = 0;
     let lastY    = 0;
-    let downY    = 0;       // clientY at mousedown (for click-vs-drag threshold)
-    let downInCenter = false;  // mousedown landed on the center hotspot
-    let lastClickTime = 0;  // timestamp of last center-click (for double-click detection)
+    let downX    = 0;       // pointer X at press (for click-vs-drag threshold)
+    let downY    = 0;       // pointer Y at press
+    let downInCenter = false;  // press landed on the center hotspot
+    let lastClickTime = 0;  // timestamp of last center-click/tap (double-click detection)
+
+    // Extract clientX/clientY from a mouse OR touch event so the drag handlers are
+    // pointer-agnostic (touch added for phone — Surface E: ALL knobs draggable).
+    const point = (e) => (e.touches && e.touches[0]) ? e.touches[0]
+                       : (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0]
+                       : e;
 
     const onWheel = (e) => {
       e.preventDefault();
@@ -302,25 +310,34 @@ export class KnobWidget {
       if (this.onRelease) this.onRelease(this._value);
     };
 
-    const onMouseDown = (e) => {
+    const onDown = (e) => {
       dragging = true;
-      lastY    = e.clientY;
-      downY    = e.clientY;
+      const p  = point(e);
+      lastX    = p.clientX;
+      lastY    = p.clientY;
+      downX    = p.clientX;
+      downY    = p.clientY;
       // Did the press land on the center hotspot? (body radius ≈ size*0.35)
       const rect = this._canvas.getBoundingClientRect();
-      const dx = (e.clientX - rect.left) - this.size / 2;
-      const dy = (e.clientY - rect.top)  - this.size / 2;
+      const dx = (p.clientX - rect.left) - this.size / 2;
+      const dy = (p.clientY - rect.top)  - this.size / 2;
       downInCenter = Math.hypot(dx, dy) <= this.size * 0.35;
       e.preventDefault();
     };
 
-    const onMouseMove = (e) => {
+    const onMove = (e) => {
       if (!dragging) return;
+      const p = point(e);
       const snapMode = this.snapPoints && (e.shiftKey || e.ctrlKey);
       const speed = (e.shiftKey || e.ctrlKey) && !snapMode ? 0.0008 : 0.008;
-      const dy    = (lastY - e.clientY) * speed;
-      const norm  = _clamp(this._toNorm(this._value) + dy, 0, 1);
-      lastY       = e.clientY;
+      // Two-axis: moving RIGHT (+X) or UP (−Y) increases; LEFT/DOWN decreases.
+      // Summing both axes means a horizontal swipe (the natural phone gesture)
+      // works just as well as the classic vertical drag.
+      const move  = (p.clientX - lastX) + (lastY - p.clientY);
+      const norm  = _clamp(this._toNorm(this._value) + move * speed, 0, 1);
+      lastX       = p.clientX;
+      lastY       = p.clientY;
+      if (e.cancelable) e.preventDefault();   // touch: stop the page scrolling under the drag
       if (snapMode) {
         // Drag with shift on a snap knob → continuously snap to nearest division.
         this._value = this._snap(this._fromNorm(norm));
@@ -331,11 +348,14 @@ export class KnobWidget {
       }
     };
 
-    const onMouseUp = (e) => {
+    const onUp = (e) => {
       if (!dragging) return;
-      const isClick = Math.abs((e?.clientY ?? downY) - downY) <= 4;
+      const p = point(e);
+      const movedX = Math.abs((p?.clientX ?? downX) - downX);
+      const movedY = Math.abs((p?.clientY ?? downY) - downY);
+      const isClick = movedX <= 4 && movedY <= 4;
       if (isClick && downInCenter && this.onCenterClick) {
-        // Center double-click (no meaningful drag) → toggle, don't fire release.
+        // Center double-click/tap (no meaningful drag) → toggle, don't fire release.
         const now = Date.now();
         if (now - lastClickTime < 400) {
           dragging = false;
@@ -350,16 +370,27 @@ export class KnobWidget {
     };
 
     this._canvas.addEventListener('wheel', onWheel, { passive: false });
-    this._canvas.addEventListener('mousedown', onMouseDown);
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
+    this._canvas.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+
+    // Touch (Surface E): same handlers, pointer-agnostic. passive:false so the
+    // move handler can preventDefault and stop the page scrolling under a drag.
+    this._canvas.addEventListener('touchstart', onDown, { passive: false });
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onUp);
+    window.addEventListener('touchcancel', onUp);
 
     // Store for cleanup
     this._cleanup = () => {
       this._canvas.removeEventListener('wheel', onWheel);
-      this._canvas.removeEventListener('mousedown', onMouseDown);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
+      this._canvas.removeEventListener('mousedown', onDown);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      this._canvas.removeEventListener('touchstart', onDown);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onUp);
+      window.removeEventListener('touchcancel', onUp);
     };
   }
 
