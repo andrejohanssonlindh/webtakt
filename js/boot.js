@@ -41,6 +41,13 @@ import { setSnapResolution } from './util/BpmSync.js';
 
 // ── Boot ────────────────────────────────────────────────
 const audio    = new AudioEngine();
+// Snapshot the audio settings that were in effect when the context was built.
+// Sample rate + latency are fixed at construction, so the Settings pane uses
+// this to show a "reload to apply" note when the user changes them mid-session.
+settings._audioLive = {
+  sampleRate: settings.get('audioSampleRate'),
+  latency:    settings.get('audioLatency'),
+};
 const recorder = new GlobalRecorder(audio);
 const clock    = new Clock(audio);
 const project = new Project(audio, clock);

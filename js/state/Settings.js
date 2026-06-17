@@ -13,6 +13,12 @@
  *                        fractional count 0.5). See js/util/BpmSync.js.
  *   modWheelSensitivity — scroll → mod-wheel travel multiplier (0.1–3.0, 1 = the
  *                        historical 300px-per-full-range feel). Lower = calmer.
+ *   audioSampleRate    — SAMPLE_RATE_OPTIONS id (default 'native'). Output rate;
+ *                        fixed at AudioContext creation so it applies on reload.
+ *                        Lower rates cost less CPU (can cure underrun crackle).
+ *   audioLatency       — LATENCY_OPTIONS id (default 'auto'). latencyHint → buffer
+ *                        size; 'auto' = 'playback' on mobile, 'interactive' on
+ *                        desktop. Also applied on reload. See AudioEngine.js.
  *   keybinds           — { play, record, stopAll, manual, hold, arp, octaveUp,
  *                        octaveDown, moveLeft, moveRight, fx1, fx2, fx3, fx4 }: each
  *                        an `event.code` string (layout-independent). Handled in
@@ -57,9 +63,57 @@ export const GRID_OPTIONS = [
   { id: '1/128', label: '1/128', base: 128 },
 ];
 
+// ── Audio engine options (applied at AudioContext creation — see AudioEngine.js) ──
+// These can't change on a live context, so a change only takes effect on the next
+// page load (SettingsPanel shows a "reload to apply" note).
+
+/** Output sample rate. 'native' = pass no rate, let the platform choose. */
+export const SAMPLE_RATE_OPTIONS = [
+  { id: 'native', label: 'Native (auto)', rate: null  },
+  { id: '48000',  label: '48 kHz',        rate: 48000 },
+  { id: '44100',  label: '44.1 kHz',      rate: 44100 },
+  { id: '24000',  label: '24 kHz (low)',  rate: 24000 },
+  { id: '22050',  label: '22.05 kHz (low)', rate: 22050 },
+];
+
+/**
+ * latencyHint → output buffer size tradeoff. 'interactive' = smallest buffer
+ * (lowest latency, most prone to underrun/crackle on weak CPUs); 'playback' =
+ * larger buffer (fewer dropouts, more latency). 'auto' lets the runtime pick a
+ * sensible default per device (see resolveLatencyHint).
+ */
+export const LATENCY_OPTIONS = [
+  { id: 'auto',        label: 'Auto (device)' },
+  { id: 'interactive', label: 'Low (interactive)' },
+  { id: 'balanced',    label: 'Balanced' },
+  { id: 'playback',    label: 'Safe (playback)' },
+];
+
+/** True on touch/coarse-pointer devices — used to pick a safer audio default. */
+export function isMobileLike() {
+  try {
+    return window.matchMedia('(pointer: coarse)').matches
+        || (navigator.maxTouchPoints ?? 0) > 0;
+  } catch (_) { return false; }
+}
+
+/**
+ * Resolve the stored latency setting to a value the AudioContext accepts. 'auto'
+ * → 'playback' on mobile-like devices (bigger buffer guards against the
+ * underrun crackle reported on Android phones) and 'interactive' on desktop
+ * (low latency, which desktop CPUs sustain fine).
+ */
+export function resolveLatencyHint(id) {
+  if (id === 'auto') return isMobileLike() ? 'playback' : 'interactive';
+  return id;
+}
+
 export const DEFAULTS = Object.freeze({
   bpmGrid:             '1/32',
   modWheelSensitivity: 1.0,
+  // Audio engine — applied at AudioContext creation (effective on reload).
+  audioSampleRate:     'native', // SAMPLE_RATE_OPTIONS id
+  audioLatency:        'auto',   // LATENCY_OPTIONS id ('auto' = playback on mobile)
   keybinds: {
     play:    'Space',
     record:  'Enter',

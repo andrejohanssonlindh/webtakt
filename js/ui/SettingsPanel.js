@@ -9,6 +9,8 @@
  * preference (see js/state/Settings.js):
  *   - BPM grid: finest synced-knob division (1/32 / 1/64 / 1/128)
  *   - Mod-wheel scroll sensitivity (slider)
+ *   - Audio: sample rate + latency hint (effective on reload — fixed at
+ *     AudioContext creation; shows a "reload to apply" note when changed)
  *   - Keyboard layout: computer-key → piano-key preset (QWERTY / AZERTY / …)
  *   - Capture Play key + CapsLock=lowercase toggles (checkboxes)
  *   - Keybinds: click a row then press a key to rebind (play / record / stop-all /
@@ -25,7 +27,7 @@
  * Used by: index.html (constructed with the cog + book buttons)
  */
 
-import { settings, GRID_OPTIONS } from '../state/Settings.js';
+import { settings, GRID_OPTIONS, SAMPLE_RATE_OPTIONS, LATENCY_OPTIONS } from '../state/Settings.js';
 import { KB_LAYOUTS, CUSTOM_LAYOUT_LABEL } from './Keyboard.js';
 
 // Black-key slots (parallel to Keyboard.BLACK_NOTES): -1 = gap (no key there).
@@ -183,6 +185,39 @@ export class SettingsPanel {
         edit.addEventListener('click', (e) => { e.stopPropagation(); this._openKeyEditor(); });
         p.appendChild(edit);
       }
+    }
+
+    // ── Audio engine (sample rate + latency) ─────────────────
+    // Both are fixed at AudioContext creation, so a change only takes effect on
+    // the next page load. We snapshot the live values at boot (boot.js stores
+    // them on settings._audioLive) to show a "reload to apply" note when the
+    // current selection differs from what's actually running.
+    {
+      p.appendChild(this._subtitle('AUDIO'));
+
+      const live = settings._audioLive ?? {};
+      const noteRow = document.createElement('div');
+      noteRow.className = 'settings-keybind-note';
+
+      const refreshNote = () => {
+        const changed = settings.get('audioSampleRate') !== live.sampleRate
+                     || settings.get('audioLatency')    !== live.latency;
+        noteRow.style.display = changed ? 'block' : 'none';
+        noteRow.innerHTML = '⟳ <b>Reload the page</b> to apply audio changes.';
+      };
+
+      p.appendChild(this._selectRow(
+        'Sample rate',
+        'Output rate. Lower = lower fidelity but less CPU (can fix crackle on weak devices). Native lets the platform choose.',
+        SAMPLE_RATE_OPTIONS, 'audioSampleRate', refreshNote,
+      ));
+      p.appendChild(this._selectRow(
+        'Audio latency',
+        'Bigger buffer (Safe) = fewer dropouts/crackle but more latency. Auto picks Safe on phones, Low on desktop.',
+        LATENCY_OPTIONS, 'audioLatency', refreshNote,
+      ));
+      p.appendChild(noteRow);
+      refreshNote();
     }
 
     // ── Behaviour toggles ────────────────────────────────────
@@ -441,6 +476,29 @@ export class SettingsPanel {
     l.textContent = label;
     if (hint) l.title = hint;
     row.appendChild(l);
+    return row;
+  }
+
+  /**
+   * A labelled <select> row bound to a string setting `key`. `options` is an
+   * array of { id, label }. `onChange` (optional) runs after the setting is
+   * written (e.g. to refresh a "reload to apply" note).
+   */
+  _selectRow(label, hint, options, key, onChange) {
+    const row = this._row(label, hint);
+    const sel = document.createElement('select');
+    sel.className = 'settings-select';
+    options.forEach(o => {
+      const opt = document.createElement('option');
+      opt.value = o.id; opt.textContent = o.label;
+      if (o.id === settings.get(key)) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener('change', () => {
+      settings.set(key, sel.value);
+      if (onChange) onChange();
+    });
+    row.appendChild(sel);
     return row;
   }
 
