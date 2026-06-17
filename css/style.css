@@ -4043,8 +4043,12 @@ body {
 
 /* ─── MIXER TAB ──────────────────────────────────────────── */
 
+/* Desktop: strips in a wrapping row. Tablet (≤1024) and phone (≤640) override
+   the layout below. The panel (MixerPanel.js) tags the wrapper with
+   .mixer-desktop / .mixer-tablet / .mixer-phone so each tier can style freely. */
 .mixer-wrapper {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   width: 100%;
   align-items: flex-start;
@@ -4055,8 +4059,8 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 0;
+  min-width: 96px;        /* never collapse below readable; wraps instead */
   padding: 6px 4px 8px;
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -4094,14 +4098,6 @@ body {
   min-height: 10px;
 }
 
-/* 2×2 grid for the 4 secondary knobs */
-.mixer-knob-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  width: 100%;
-}
-
 /* compact knobs inside mixer strips */
 .mixer-strip .knob-cell {
   gap: 2px;
@@ -4116,14 +4112,56 @@ body {
   font-size: 0.636rem;
 }
 
-.mixer-fx-toggles {
+/* One key-bound FX: glyph + name + bind badge on top, then its wet/mix knob and
+   an ON/OFF toggle. Only rendered on desktop/tablet (phone is LEVEL + DJ only). */
+.mixer-bound-fx {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 3px;
   width: 100%;
+  padding: 4px 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.mixer-bound-fx-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  justify-content: center;
+}
+
+.mixer-bound-fx-glyph {
+  color: var(--accent);
+  font-size: 0.818rem;
+  line-height: 1;
+}
+
+.mixer-bound-fx-name {
+  font-size: 0.636rem;
+  letter-spacing: 0.04em;
+  color: var(--text-bright);
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mixer-bound-fx-bind {
+  font-size: 0.545rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 3px;
 }
 
 .mixer-fx-toggle {
-  flex: 1;
+  width: 100%;
   padding: 2px 0;
   font-family: var(--font-ui);
   font-size: 0.636rem;
@@ -4142,6 +4180,64 @@ body {
   background: #0e2e2e;
   border-color: #7ec8c8;
   color: #7ec8c8;
+}
+
+/* ── Tablet (≤1024px): reflow strips into a grid so 8–12 tracks don't squish ── */
+@media (max-width: 1024px) {
+  .mixer-wrapper.mixer-tablet {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+  .mixer-wrapper.mixer-tablet .mixer-strip {
+    min-width: 0;
+  }
+}
+
+/* ── Phone (≤640px): light mode — pick-list + LEVEL/DJ-only strips in a grid ── */
+@media (max-width: 640px) {
+  .mixer-phone-picks {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    margin-bottom: 8px;
+  }
+  .mixer-phone-picks-hint {
+    font-size: 0.636rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    margin-right: 2px;
+  }
+  .mixer-pick-chip {
+    padding: 3px 8px;
+    font-family: var(--font-ui);
+    font-size: 0.727rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s, border-color 0.1s;
+  }
+  .mixer-pick-chip.on {
+    background: #0e2e2e;
+    border-color: #7ec8c8;
+    color: #7ec8c8;
+  }
+
+  .mixer-wrapper.mixer-phone {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .mixer-wrapper.mixer-phone .mixer-strip {
+    min-width: 0;
+  }
 }
 
 /* ── MIDI UI ──────────────────────────────────────────────────────── */

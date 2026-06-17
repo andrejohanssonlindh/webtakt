@@ -460,6 +460,19 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
       manual.js updated (SOUNDS tab chips entry). Desktop card layout changes too
       (vertical card + grid) — verify it still reads well there.
       **Awaiting in-browser verify, NOT committed.**
+- [x] **H — MIXER redo (bind-aware + responsive).** The mixer hardcoded the old 3
+      base FX (DLY/CRUSH/REV) as fixed wet knobs — outdated since FX became a
+      reorderable multi-instance pipeline with 4 keybinds. Rebuilt so each strip
+      shows LEVEL + DJ FILT + a control row (glyph/name/primary-knob/ON-OFF) only
+      for the FX that have a keybind (FX 1–4) on that track; no binds → just LEVEL
+      + DJ. Primary-param picker = wet/mix/amount/depth else first numeric param
+      (handles base + FXInstance blocks). Three tiers (the mixer had NO responsive
+      CSS, so 8 strips squished and 12 — `TRACK_COUNT_MAX` — was unusable):
+      desktop wrapping row (strip `min-width:96px`) → tablet (≤1024) 4-col grid →
+      phone (≤640) **light mode** = a SHOW pick-list chip row (curate which tracks
+      appear, default first 6, persisted in localStorage `webtakt_mixer_phone_tracks`)
+      + LEVEL/DJ-only strips in a 3-col grid. `MixerPanel.js` + the `.mixer-*` CSS
+      block; DESIGN.md + manual.js (MIXER tab) updated. **Awaiting in-browser verify.**
 - [ ] **Phase 2 — Mobile shell.** New `mobile.html` + tab-bar nav (one panel at a
       time), 4×4 step grid, live-only keyboard, tap-step → note-picker. Reuses
       engine, state, most panels.

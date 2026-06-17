@@ -365,24 +365,29 @@ export const MANUAL_CONTENT = {
 
   mixer: {
     title: 'MIXER',
-    blurb: 'A compact one-strip-per-track overview of levels and FX sends for ' +
-           'every track at once. Clicking a strip also selects that track. Knob ' +
-           'changes here stay in sync with the matching FX tab knobs.',
+    blurb: 'A compact one-strip-per-track overview of levels, key-bound FX, and ' +
+           'the DJ filter for every track at once. Clicking a strip also selects ' +
+           'that track. Knob changes here stay in sync with the matching FX/SYNTH ' +
+           'tab knobs. Each strip shows a control row only for the FX you have ' +
+           'assigned a keybind (FX 1–4) on that track in the FX pane — tracks with ' +
+           'no binds show just LEVEL + DJ FILT.',
     items: [
       ['LEVEL', 'Output level for this track\'s machine (0–100%). Linked to the ' +
                  'machine\'s output.level param — moving it here updates the SYNTH ' +
                  'tab knob for the selected track.'],
-      ['DLY', 'Delay send level for this track (0–100%). Equivalent to the Wet ' +
-                 'knob for Delay in the FX pane.'],
-      ['CRUSH', 'Bitcrush send level for this track (0–100%). Equivalent to the ' +
-                 'Wet knob for Crush in the FX pane.'],
-      ['REV', 'Reverb send level for this track (0–100%). Equivalent to the ' +
-                 'Wet knob for Reverb in the FX pane.'],
+      ['Bound-FX row', 'For each FX you keybind (FX 1–4) on a track, the strip ' +
+                 'shows that effect\'s glyph + name, its main knob (wet / mix / ' +
+                 'amount / depth, depending on the effect), and an ON/OFF toggle. ' +
+                 'Assign or change binds in the FX pipeline pane; the mixer just ' +
+                 'reflects them. The ON/OFF here is the same bypass as in the FX pane.'],
       ['DJ FILT', 'A per-track DJ-style filter. Bipolar: centre is flat. Turn ' +
                  'left to close a low-pass (cuts highs); turn right to open a ' +
                  'high-pass (cuts lows). Useful for build-ups and breakdowns.'],
-      ['DLY / CRUSH / REV toggles', 'Enable or bypass each FX processor for this ' +
-                 'track. Same as the per-block ON/OFF toggles in the FX pane.'],
+      ['Phone light mode', 'On phones the mixer slims to LEVEL + DJ FILT only. ' +
+                 'A SHOW chip row at the top lets you pick which tracks appear ' +
+                 '(tap to add/remove; defaults to the first 6) so the strips stay ' +
+                 'big enough to use — your choice is remembered. Tablets keep the ' +
+                 'full strips, reflowed into a grid.'],
     ],
   },
 
