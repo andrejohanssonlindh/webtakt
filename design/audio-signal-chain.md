@@ -274,6 +274,18 @@ Two scheduling paths:
   attack overwrites it. Accepts an `overrides` dict for p-locked ADSR values.
   The oscillator is kept alive until `offTime + release` (so the release tail has audio to shape).
 
+  **Release must cancel-and-hold at `offTime` first (`_scheduleR`).** Because A→D→S and R
+  are queued in one shot, when the decay is long enough that its endpoint (`time+attack+decay`)
+  falls AFTER the release end (`offTime+release`) — i.e. `attack+decay > gateLen+release` — the
+  decay stage's trailing pin/ramp to SUSTAIN is *later in the timeline* than the release, so it
+  fires after the release has driven the gate to 0 and slams it back to sustain, holding it there.
+  On a persistent-oscillator machine (Moogish/synth/bass/strings/chord, oscillators never stop) a
+  frozen-at-sustain amp gate is an **endless drone** — only STOP/panic clears it; the "~2 s of
+  silence then it starts" is the gap between the release pin and the late decay pin. Fix:
+  `_scheduleR` (amp gate) and `Filter.scheduleFrequency` (filter cutoff) `cancelAndHoldAtTime(offTime)`
+  before scheduling the release, dropping any late A/D/S events and ramping from the held value.
+  Sequencer/arp-only because the keyboard's `noteOff` already cancels before its release.
+
 **Live keyboard path — `noteOn(time)` / `noteOff(time)`:**
   Cancels prior events and restarts from zero. Used only for keyboard playing.
   These two paths must stay separate — using noteOn from the sequencer caused release bugs.

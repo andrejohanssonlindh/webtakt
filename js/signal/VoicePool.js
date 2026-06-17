@@ -126,9 +126,7 @@ export class VoicePool {
     this._bpm         = 120; // current tempo, propagated to new slot envelopes
 
     for (let i = 0; i < count; i++) {
-      const slot = this._makeSlot(i === 0);
-      slot.envelope.__slot = i;   // TEMP DRONE DIAGNOSTIC: tag slot index for logging
-      this._slots.push(slot);
+      this._slots.push(this._makeSlot(i === 0));
     }
   }
 
@@ -218,20 +216,6 @@ export class VoicePool {
     }
 
     const slot = this._slots[chosen];
-
-    // ── TEMP DRONE DIAGNOSTIC (remove once solved) ──
-    // Expose this pool + a gate dumper so the console can inspect EVERY slot's
-    // amp-gate value while a drone is happening (the per-note Envelope log only
-    // sees the firing slot; a DIFFERENT stuck slot is the suspect).
-    if (typeof window !== 'undefined' && window.__DRONE_DEBUG) {
-      window.__lastPool = this;
-      if (!window.__dumpGates) {
-        window.__dumpGates = () => (window.__lastPool?._slots ?? []).map((s, i) =>
-          `slot${i} gate=${s.envelope.ampGain.gain.value.toFixed(5)} freeAt=${s._freeAt.toFixed(2)}`).join('\n');
-      }
-      // eslint-disable-next-line no-console
-      console.log(`[drone] nextVoice → slot ${chosen} (robin now ${this._robin}) noteTime=${now.toFixed(3)}`);
-    }
 
     // Sync params from canonical slot 0 to the chosen slot (skip slot 0 itself).
     // fromJSONSafe applies JS-state params (waveforms, enums) immediately.

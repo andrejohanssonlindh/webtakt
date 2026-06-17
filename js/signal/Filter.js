@@ -449,18 +449,30 @@ export class Filter {
       // the amp "pre-note". baseCut, when given, IS that anchor; otherwise pin the
       // held value. See Envelope._scheduleADS for the full rationale.
       freq.setValueAtTime(baseCut !== null ? baseCut : freq.value, time);
+      // Release must win over any A/D/S event that lands after `offTime`. When the
+      // decay is long (attack+decay > gateLen+release) its trailing pin/ramp to
+      // sustainCut falls AFTER the release in the timeline and would override the
+      // release sweep, leaving the cutoff stuck at sustain. Cancel-and-hold at
+      // offTime drops those late decay events and freezes the held value so the
+      // release sweeps cleanly from there. (Amp-gate twin of this is the drone bug
+      // fixed in Envelope._scheduleR — see that for the full rationale.)
+      const holdRelease = () => {
+        if (typeof freq.cancelAndHoldAtTime === 'function') freq.cancelAndHoldAtTime(offTime);
+        else                                                freq.cancelScheduledValues(offTime);
+        freq.setValueAtTime(sustainCut, offTime);
+      };
       if (analogue) {
         // RC (exponential) filter sweep, matching the analogue amp envelope's
         // curve. Each segment approaches asymptotically (tc = dur/3) and is
         // pinned to its exact endpoint so the A→D→S→R chain stays accurate.
         _rcFreq(freq, time,       a,  peakCut);
         _rcFreq(freq, time + a,   d,  sustainCut);
-        freq.setValueAtTime(sustainCut, offTime);
+        holdRelease();
         _rcFreq(freq, offTime,    fr, trueCut);
       } else {
         freq.linearRampToValueAtTime(peakCut,    time + a);
         freq.linearRampToValueAtTime(sustainCut, time + a + d);
-        freq.setValueAtTime(sustainCut, offTime);
+        holdRelease();
         freq.linearRampToValueAtTime(trueCut, offTime + fr);
       }
     }

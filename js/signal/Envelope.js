@@ -150,11 +150,6 @@ export class Envelope {
    * cancelAndHold settled to; for an idle gate that's the held 0.)
    */
   _scheduleADS(param, time, a, d, peakVal, sustainVal, analogue = false) {
-    // ── TEMP DRONE DIAGNOSTIC (remove once solved) ──
-    if (typeof window !== 'undefined' && window.__DRONE_DEBUG) {
-      // eslint-disable-next-line no-console
-      console.log(`%c[drone] slot${this.__slot} _scheduleADS cancelAndHold @${time.toFixed(3)} (now=${this.context.currentTime.toFixed(3)}) — deletes any release ≥ this time`, 'color:#a60');
-    }
     if (typeof param.cancelAndHoldAtTime === 'function') {
       param.cancelAndHoldAtTime(time);
     } else {
@@ -179,8 +174,32 @@ export class Envelope {
   /**
    * Schedule release ramp on `param` starting at `offTime`.
    * `endVal` — value to ramp toward (0 for amp, baseCutoff for filter).
+   *
+   * The release MUST win over any A/D/S automation that lands after `offTime`.
+   * scheduleNote queues the full A→D→S then R in one shot (no cancel between, by
+   * design). When the decay is long enough that its END (`time + a + d`) falls
+   * AFTER the release — i.e. attack+decay > gateLen+release — the decay stage's
+   * trailing event (`setValueAtTime(sustain, time+a+d)` on the analogue path, or
+   * `linearRampToValueAtTime(sustain, time+a+d)` on the digital path) is later in
+   * the timeline than the release's own events, so it fires AFTER the release has
+   * driven the param to `endVal` and slams it back to sustain — and holds it there.
+   * On a persistent-oscillator machine (Moogish et al.) that frozen-at-sustain amp
+   * gate is an endless drone (the "lingering note that never stops"; the famous
+   * ~2 s of silence on eiirp-lead is exactly the gap between the release's pin and
+   * the late decay pin). The live keyboard path is immune because noteOff cancels
+   * before scheduling release.
+   *
+   * Fix: cancel-and-hold at `offTime` first — this drops every still-pending A/D/S
+   * event from `offTime` onward (including the late decay pin) and freezes the param
+   * at whatever value it holds at `offTime` (the sustain it's resting at). The
+   * release then ramps cleanly from there to `endVal`. Mirrors what noteOff does.
    */
   _scheduleR(param, offTime, sustainVal, r, endVal, analogue = false) {
+    if (typeof param.cancelAndHoldAtTime === 'function') {
+      param.cancelAndHoldAtTime(offTime);
+    } else {
+      param.cancelScheduledValues(offTime);
+    }
     param.setValueAtTime(sustainVal, offTime);
     if (analogue) {
       this._rcSegment(param, offTime, r, endVal);
@@ -238,25 +257,6 @@ export class Envelope {
     const peak = 1.0 * velFactor;
     this._scheduleADS(g, time, a, d, peak, s * velFactor, analogue);
     this._scheduleR(g, offTime, s * velFactor, r, 0, analogue);
-
-    // ── TEMP DRONE DIAGNOSTIC (remove once solved) ──────────────────────────
-    // Enable in console: window.__DRONE_DEBUG = true
-    // Logs, per scheduled note: the release endpoint + a SAMPLE of the actual
-    // ampGain value a moment AFTER the release should have reached 0. If that
-    // sample is non-zero, the gate stayed open (drone via gate). If it's ~0 but
-    // you still hear sound, the leak is downstream (ladder self-osc / osc replay).
-    if (typeof window !== 'undefined' && window.__DRONE_DEBUG) {
-      const ctx     = this.context;
-      const slot    = this.__slot;
-      const sampleT = (offTime + r + 0.15);
-      const waitMs  = Math.max(0, (sampleT - ctx.currentTime) * 1000);
-      // eslint-disable-next-line no-console
-      console.log(`%c[drone] slot${slot} scheduleNote t=${time.toFixed(3)} off=${offTime.toFixed(3)} r=${r} sustain=${(s*velFactor).toFixed(4)} (analogue=${analogue}) gateNow=${g.value.toFixed(4)}`, 'color:#06c');
-      setTimeout(() => {
-        // eslint-disable-next-line no-console
-        console.log(`%c[drone] slot${slot} AFTER-release @${ctx.currentTime.toFixed(3)} gate=${g.value.toFixed(5)} ${g.value > 1e-3 ? '*** STILL OPEN ***' : '(closed)'}`, g.value > 1e-3 ? 'color:#c00;font-weight:bold' : 'color:#888');
-      }, waitMs + 20);
-    }
 
     // ── Filter envelope ──
     if (this._filter) {
