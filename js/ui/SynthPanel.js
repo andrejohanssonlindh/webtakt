@@ -158,8 +158,9 @@ export class SynthPanel {
     const fx = track?.toggleFXBind(n);
     if (!fx) return;
     this._renderFXChainOutline();             // bypassed blocks dim in the outline
-    // The FX pane shows per-block ON/OFF — re-render it if it's the active tab.
-    if (this.state.activeTab === 'fx') this._renderContent();
+    // The FX pane and the MIXER both show per-block ON/OFF state — re-render the
+    // active tab if it's one of them so its toggle reflects the keybind change.
+    if (this.state.activeTab === 'fx' || this.state.activeTab === 'mixer') this._renderContent();
   }
 
   /**
