@@ -135,6 +135,13 @@ export class SoundLibrary {
     track.machine.fromJSON(sound.machine ?? {});
     track.filter.fromJSON(sound.filter ?? {});
     track.envelope.fromJSON(sound.envelope ?? {});
+    // machine.fromJSON / envelope.fromJSON write ONLY the canonical slot-0; fan
+    // them out to the sibling voice slots so all 8 voices play the loaded sound.
+    // Without this the canonical slot (every 8th note) carried the true settings
+    // while slots 1–7 kept the previous machine's stale levels/waveforms — the
+    // "every 8th note sounds different" bug. (Track.fromJSON already does this;
+    // the filter auto-mirrors via setParam, so only machine+envelope need it.)
+    track._pool.syncParams();
     track.delayFX.fromJSON(sound.delayFX ?? {});
     track.bitcrushFX.fromJSON(sound.bitcrushFX ?? {});
     track.chorusFX.fromJSON(sound.chorusFX ?? {});

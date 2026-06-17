@@ -134,6 +134,8 @@ Wheel position 0–1 maps linearly to [min, max].
 
 Round-robin through 8 slots; picks the first idle one (past its release tail). If all 8 are busy, steals the one whose release ends soonest. Before returning the chosen slot, syncs its machine and envelope params from slot 0 (canonical) so UI knob changes always take effect on the next note. (Filter params stay synced continuously via `Filter.mirrorTo`.)
 
+**Bulk param writes must fan out to the slots.** `machine.fromJSON` / `envelope.fromJSON` write ONLY the canonical slot-0; any path that calls them (project load, paste, **sound-library load**) must follow with `VoicePool.syncParams()` to copy slot 0 into slots 1–7. The machine does *not* auto-mirror (unlike `Filter`, which fans every `setParam` to its mirrors). A missing `syncParams()` left slots 1–7 on the previous machine's stale levels/waveforms — audible as "every 8th note (the canonical slot, hit once per round-robin cycle) sounds different from the other 7" after loading a sound. Fixed in `SoundLibrary.load()` (2026-06-17).
+
 ---
 
 ## Filter Architecture
