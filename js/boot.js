@@ -214,6 +214,9 @@ const keyboard   = new Keyboard(
   document.getElementById('octave-controls'),
   state
 );
+// Let the track row finger-drum via the keyboard's drum-note path when drum
+// mode is on (tap a track = play it, instead of selecting — see TrackRow).
+trackRow.keyboard = keyboard;
 
 // ── Phone default surface: STEPS ──────────────────────────
 // On a phone the step grid and synth panel are mutually-exclusive surfaces

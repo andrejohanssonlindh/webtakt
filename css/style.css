@@ -551,6 +551,19 @@ body {
   opacity: 0.45;
 }
 
+/* Drum mode: track buttons become finger-drum pads (tap = play, see TrackRow).
+   Blue cue matches the DRUM toggle; touch-action:none stops the tap from being
+   eaten by scroll/zoom so the pad fires reliably on phones. */
+#track-row.drum-mode .track-btn {
+  border-color: #3a5a80;
+  touch-action: none;
+}
+#track-row.drum-mode .track-btn:active {
+  background: #1a2a40;
+  border-color: #5599ee;
+  color: #5599ee;
+}
+
 .track-num {
   font-size: 1.182rem;
   font-weight: 700;
