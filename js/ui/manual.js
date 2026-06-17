@@ -383,11 +383,11 @@ export const MANUAL_CONTENT = {
       ['DJ FILT', 'A per-track DJ-style filter. Bipolar: centre is flat. Turn ' +
                  'left to close a low-pass (cuts highs); turn right to open a ' +
                  'high-pass (cuts lows). Useful for build-ups and breakdowns.'],
-      ['Phone light mode', 'On phones the mixer slims to LEVEL + DJ FILT only. ' +
-                 'A SHOW chip row at the top lets you pick which tracks appear ' +
-                 '(tap to add/remove; defaults to the first 6) so the strips stay ' +
-                 'big enough to use — your choice is remembered. Tablets keep the ' +
-                 'full strips, reflowed into a grid.'],
+      ['Tablet / phone light mode', 'On tablets (iPad) and phones the mixer slims ' +
+                 'to LEVEL + DJ FILT only. A SHOW chip row at the top lets you pick ' +
+                 'which tracks appear (tap to add/remove; defaults to the first 6) ' +
+                 'so the strips stay big enough to use — your choice is remembered. ' +
+                 'The full bound-FX strips are a desktop affordance.'],
     ],
   },
 

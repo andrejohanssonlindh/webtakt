@@ -4043,9 +4043,10 @@ body {
 
 /* ─── MIXER TAB ──────────────────────────────────────────── */
 
-/* Desktop: strips in a wrapping row. Tablet (≤1024) and phone (≤640) override
-   the layout below. The panel (MixerPanel.js) tags the wrapper with
-   .mixer-desktop / .mixer-tablet / .mixer-phone so each tier can style freely. */
+/* Two layouts. Desktop (>1024px, .mixer-desktop): full strips in a wrapping row,
+   each with LEVEL + a 2-per-row bound-FX grid + DJ. Tablet/iPad AND phone
+   (≤1024px, .mixer-light): pick-list + LEVEL/DJ-only strips in a grid (see the
+   LIGHT-mode block below). MixerPanel.js tags the wrapper with the active class. */
 .mixer-wrapper {
   display: flex;
   flex-wrap: wrap;
@@ -4058,7 +4059,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex: 1 1 0;
   min-width: 96px;        /* never collapse below readable; wraps instead */
   padding: 6px 4px 8px;
@@ -4112,15 +4113,24 @@ body {
   font-size: 0.636rem;
 }
 
-/* One key-bound FX: glyph + name + bind badge on top, then its wet/mix knob and
-   an ON/OFF toggle. Only rendered on desktop/tablet (phone is LEVEL + DJ only). */
+/* Bound-FX cells laid 2-per-row so all 4 binds fit in two compact rows (no
+   vertical scroll). Desktop only — tablet/phone use the LIGHT mode below. */
+.mixer-fx-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  width: 100%;
+}
+
+/* A single bound FX: a tight header (glyph + name + bind badge), its wet/mix
+   knob, and an ON/OFF toggle. Compact so two sit side by side. */
 .mixer-bound-fx {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  width: 100%;
-  padding: 4px 2px;
+  gap: 2px;
+  min-width: 0;
+  padding: 3px 2px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -4129,36 +4139,44 @@ body {
 .mixer-bound-fx-head {
   display: flex;
   align-items: center;
-  gap: 4px;
-  width: 100%;
+  gap: 3px;
+  max-width: 100%;
   justify-content: center;
 }
 
 .mixer-bound-fx-glyph {
   color: var(--accent);
-  font-size: 0.818rem;
+  font-size: 0.727rem;
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .mixer-bound-fx-name {
-  font-size: 0.636rem;
-  letter-spacing: 0.04em;
+  font-size: 0.567rem;
+  letter-spacing: 0.02em;
   color: var(--text-bright);
   text-transform: uppercase;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .mixer-bound-fx-bind {
-  font-size: 0.545rem;
+  font-size: 0.5rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   color: var(--text-dim);
   border: 1px solid var(--border);
   border-radius: 3px;
-  padding: 0 3px;
+  padding: 0 2px;
+  flex-shrink: 0;
 }
+
+/* Knobs inside an FX cell are smaller; trim the value/label so the cell is short. */
+.mixer-bound-fx .knob-cell { gap: 1px; }
+.mixer-bound-fx .knob-val  { font-size: 0.636rem; min-width: 0; }
+.mixer-bound-fx .knob-label { display: none; }   /* name already labels the cell */
 
 .mixer-fx-toggle {
   width: 100%;
@@ -4182,20 +4200,11 @@ body {
   color: #7ec8c8;
 }
 
-/* ── Tablet (≤1024px): reflow strips into a grid so 8–12 tracks don't squish ── */
+/* ── LIGHT mode (≤1024px: tablet/iPad AND phone) ─────────────────────────────
+   Pick-list chips to curate which tracks show, then LEVEL + DJ-only strips in a
+   grid. iPad uses the same UX as phone (per design); the only phone-specific
+   tweak is the column count (≤640px). */
 @media (max-width: 1024px) {
-  .mixer-wrapper.mixer-tablet {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 6px;
-  }
-  .mixer-wrapper.mixer-tablet .mixer-strip {
-    min-width: 0;
-  }
-}
-
-/* ── Phone (≤640px): light mode — pick-list + LEVEL/DJ-only strips in a grid ── */
-@media (max-width: 640px) {
   .mixer-phone-picks {
     display: flex;
     flex-wrap: wrap;
@@ -4230,13 +4239,21 @@ body {
     color: #7ec8c8;
   }
 
-  .mixer-wrapper.mixer-phone {
+  /* iPad/tablet: roomier grid (more columns than phone). */
+  .mixer-wrapper.mixer-light {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 6px;
   }
-  .mixer-wrapper.mixer-phone .mixer-strip {
+  .mixer-wrapper.mixer-light .mixer-strip {
     min-width: 0;
+  }
+}
+
+/* ── Phone (≤640px): fewer columns so the LEVEL/DJ strips stay big enough ── */
+@media (max-width: 640px) {
+  .mixer-wrapper.mixer-light {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 

@@ -40,15 +40,15 @@ export class MixerPanel {
     const { container, state } = ctx;
     this._tracks = state.project.tracks;
 
-    const phone  = window.matchMedia(PHONE_MQ).matches;
-    const tablet = !phone && window.matchMedia(TABLET_MQ).matches;
+    // Tablet/iPad uses the same LIGHT mode as phone (pick-list + LEVEL/DJ-only
+    // strips) — the full bound-FX strips are a desktop-only affordance.
+    const light = window.matchMedia(TABLET_MQ).matches;
 
     const wrapper = document.createElement('div');
-    wrapper.className = 'mixer-wrapper'
-      + (phone ? ' mixer-phone' : tablet ? ' mixer-tablet' : ' mixer-desktop');
+    wrapper.className = 'mixer-wrapper' + (light ? ' mixer-light' : ' mixer-desktop');
 
-    if (phone) {
-      // Light mode: pick-list chips, then LEVEL + DJ-only strips for picked tracks.
+    if (light) {
+      // Pick-list chips, then LEVEL + DJ-only strips for the picked tracks.
       container.appendChild(this._renderPhonePicks());
       const picks = this._getPhonePicks();
       this._tracks.forEach((track, i) => {
@@ -56,7 +56,7 @@ export class MixerPanel {
         wrapper.appendChild(this._strip(track, i, { light: true }));
       });
     } else {
-      // Desktop / tablet: full strips for every track (CSS reflows tablet to a grid).
+      // Desktop: full strips (LEVEL + bound-FX grid + DJ) for every track.
       this._tracks.forEach((track, i) => {
         wrapper.appendChild(this._strip(track, i, { light: false }));
       });
@@ -90,16 +90,21 @@ export class MixerPanel {
 
     strip.appendChild(this._levelKnob(track, i).el);
 
-    // Bound-FX rows (desktop/tablet only). One row per assigned bind 1–4.
+    // Bound-FX cells (desktop only), laid 2-per-row so all 4 binds fit in two
+    // rows without the strip growing tall enough to scroll. One cell per
+    // assigned bind 1–4.
     if (!light) {
+      const grid = document.createElement('div');
+      grid.className = 'mixer-fx-grid';
       const seen = new Set();
       for (let n = 1; n <= 4; n++) {
         const id = track.getFXBindBlock(n);
         if (!id || seen.has(id)) continue;   // skip empty / duplicate binds
         seen.add(id);
-        const row = this._boundFXRow(track, i, n, id);
-        if (row) strip.appendChild(row);
+        const cell = this._boundFXRow(track, i, n, id);
+        if (cell) grid.appendChild(cell);
       }
+      if (grid.children.length) strip.appendChild(grid);
     }
 
     strip.appendChild(this._djKnob(track, i).el);
