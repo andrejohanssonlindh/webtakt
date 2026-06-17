@@ -374,12 +374,19 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
 - [x] **G — Mobile audio quality (crackle + iPad silence).** Three separate bugs
       surfaced together on OnePlus 9 Pro, Galaxy S22 (crackly "2-bit" sound, all
       browsers) and iPad Air (no sound + frozen scope in the desktop layout):
-      - **Crackle = buffer underrun, not bitrate.** The earlier "pin 48 kHz" fix
-        (commit 15ada9c) cured an Android *telephony-rate* context but forcing a
-        high rate + tiny buffer on a weak phone CPU just trades distortion for
-        UNDERRUNS — render thread can't fill buffers → crackle in every browser
-        (they share the platform audio stack). Fix: `AudioEngine` now constructs
-        `new Ctor()` with **no options** → platform-native rate + default buffer.
+      - **Crackle = buffer underrun (CONFIRMED on the phones).** The earlier "pin
+        48 kHz" fix (commit 15ada9c) cured an Android *telephony-rate* context but
+        forcing a high rate + tiny buffer on a weak phone CPU just trades
+        distortion for UNDERRUNS — render thread can't fill buffers → crackle in
+        every browser (they share the platform audio stack). Reverted the pin to
+        a native default, then shipped **user-selectable sample rate + latency**
+        in Settings (`audioSampleRate` / `audioLatency`, read by `AudioEngine` at
+        context creation → applies on RELOAD; pane shows a "reload to apply"
+        note). Defaults: rate native, latency `auto` → `playback` on
+        touch/coarse-pointer devices, `interactive` on desktop. **On-device
+        result:** Safe latency (bigger buffer) fixed the tone but made playback
+        LAGGY; dropping to **22.05 kHz fixed it AND kept low latency** — the
+        better lever for a weak phone (cut per-second work, keep a small buffer).
       - **Scheduler slack.** `Clock` lookahead 0.1s→**0.25s**, interval 25ms→50ms,
         so a phone main-thread stall (GC/layout/slow rAF) no longer overruns
         `_nextTickTime` and drop/late-schedule notes.
@@ -396,10 +403,12 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
         unlock), and unbinds once `state==='running'`. Also added the
         `webkitAudioContext` fallback in `AudioEngine` (bare `AudioContext` ref
         would ReferenceError at boot on prefixed-only Safari → kills all audio +
-        freezes scope). **Awaiting in-browser verify on all three devices.**
+        freezes scope). **Verified: iPad now plays sound.**
         Note: iPad-landscape (~1180px) still gets the desktop layout — the scope
         is genuinely visible there (CSS only hides it ≤1024px); layout retiering
         for tablets is a separate pass (Phase 2/3).
+      **Status: FIXED + verified on all three devices** (OP9 Pro / S22 via 22 kHz
+      rate; iPad Air via touch-unlock).
 - [ ] **Phase 2 — Mobile shell.** New `mobile.html` + tab-bar nav (one panel at a
       time), 4×4 step grid, live-only keyboard, tap-step → note-picker. Reuses
       engine, state, most panels.
