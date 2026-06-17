@@ -532,10 +532,16 @@ export class ADSRWidget {
 
       this._knobs[key] = { ctx, c, valEl, lblEl, KS };
 
-      let dragging = false, lastY = 0, downY = 0, downInCenter = false;
+      let dragging = false, lastX = 0, lastY = 0, downX = 0, downY = 0, downInCenter = false;
       let lastClickTime = 0;   // for center double-click detection (mode toggle)
       const accent    = this._accent;
       const syncable  = this._isSyncable(key);
+
+      // Mouse OR touch → clientX/clientY, so the ADSR knobs drag by touch too
+      // (Surface E — these were mouse-only while the main KnobWidget got touch).
+      const point = (e) => (e.touches && e.touches[0]) ? e.touches[0]
+                         : (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0]
+                         : e;
 
       // A timed stage in BPM mode drives its 1/32 count instead of seconds.
       const isBpm   = () => this._stageMode(key) === 'bpm';
@@ -564,27 +570,36 @@ export class ADSRWidget {
       };
       const onDown = (e) => {
         dragging = true;
-        lastY    = e.clientY;
-        downY    = e.clientY;
+        const p  = point(e);
+        lastX    = p.clientX;
+        lastY    = p.clientY;
+        downX    = p.clientX;
+        downY    = p.clientY;
         // Did the press land on the center hotspot? (body radius ≈ KS*0.35)
         const rect = c.getBoundingClientRect();
-        const dx = (e.clientX - rect.left) - KS / 2;
-        const dy = (e.clientY - rect.top)  - KS / 2;
+        const dx = (p.clientX - rect.left) - KS / 2;
+        const dy = (p.clientY - rect.top)  - KS / 2;
         downInCenter = Math.hypot(dx, dy) <= KS * 0.35;
         e.preventDefault();
       };
       const onMove = (e) => {
         if (!dragging) return;
+        const p     = point(e);
         const fine  = e.shiftKey || e.ctrlKey;
         const speed = fine ? 0.0008 : 0.008;
-        const dy    = (lastY - e.clientY) * speed;
-        const norm  = _clamp(toNorm(getVal()) + dy, 0, 1);
+        // Two-axis (matches KnobWidget): right (+X) or up (−Y) increases.
+        const move  = (p.clientX - lastX) + (lastY - p.clientY);
+        const norm  = _clamp(toNorm(getVal()) + move * speed, 0, 1);
         setVal(fromNorm(norm));
-        lastY = e.clientY;
+        lastX = p.clientX;
+        lastY = p.clientY;
+        if (e.cancelable) e.preventDefault();   // touch: don't scroll the page under the drag
       };
       const onUp = (e) => {
         if (!dragging) return;
-        const isClick = Math.abs((e?.clientY ?? downY) - downY) <= 4;
+        const p = point(e);
+        const isClick = Math.abs((p?.clientX ?? downX) - downX) <= 4 &&
+                        Math.abs((p?.clientY ?? downY) - downY) <= 4;
         if (isClick && downInCenter && syncable) {
           // Center DOUBLE-click (two clicks within 400ms, no meaningful drag) →
           // toggle mode. Matches the KnobWidget sync knobs (FX/Arp/LFO/FM/etc.)
@@ -609,11 +624,20 @@ export class ADSRWidget {
       window.addEventListener('mousemove', onMove);
       window.addEventListener('mouseup', onUp);
 
+      c.addEventListener('touchstart', onDown, { passive: false });
+      window.addEventListener('touchmove', onMove, { passive: false });
+      window.addEventListener('touchend', onUp);
+      window.addEventListener('touchcancel', onUp);
+
       this._cleanups.push(() => {
         c.removeEventListener('wheel', onWheel);
         c.removeEventListener('mousedown', onDown);
         window.removeEventListener('mousemove', onMove);
         window.removeEventListener('mouseup', onUp);
+        c.removeEventListener('touchstart', onDown);
+        window.removeEventListener('touchmove', onMove);
+        window.removeEventListener('touchend', onUp);
+        window.removeEventListener('touchcancel', onUp);
       });
 
       redraw();

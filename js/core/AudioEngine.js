@@ -35,7 +35,23 @@ export class AudioEngine {
     // output buffer — matters for live monitoring through the Input machine
     // (InputMachine.js). Browsers still impose ~20-60ms+ round-trip; see
     // baseLatency/outputLatency getters and design/input-machine.md.
-    this.context = new AudioContext({ latencyHint: 'interactive' });
+    //
+    // BUT on Android (e.g. OnePlus 9 Pro) 'interactive' makes Chrome open the
+    // audio device at a low "telephony" sample rate (~8–24 kHz) to chase the
+    // smallest buffer — everything then sounds like a really low-bitrate file
+    // (grainy/distorted). Desktop honours interactive at full 44.1/48 kHz, so
+    // it never showed there. Fix: PIN a full-quality sample rate. The latency
+    // hint stays at its spec default (still 'interactive', so live monitoring
+    // latency is unchanged) — pinning the rate just stops the platform from
+    // dropping to telephony quality in pursuit of that low latency. We try
+    // 48000 first (the common Android-native rate, avoids a resample), then fall
+    // back progressively if a device rejects the requested rate.
+    const tryContext = (opts) => { try { return new AudioContext(opts); } catch (_) { return null; } };
+    this.context =
+         tryContext({ sampleRate: 48000 })
+      ?? tryContext({ sampleRate: 44100 })
+      ?? tryContext({})            // let the platform choose its native rate
+      ?? new AudioContext();       // last resort (older browsers w/o options arg)
 
     // Preload the analogue ladder filter worklet (Filter.js engine='analogue').
     // Fire-and-forget at boot: nothing awaits it, but by the time a user switches

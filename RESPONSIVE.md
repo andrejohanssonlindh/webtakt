@@ -460,6 +460,19 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
   verified.** Webtakt now does full track-building on a phone. Remaining items
   (Phase 2 mobile shell, Phase 3 per-panel compact modes) are optional bigger
   efforts, not blockers.
+- 2026-06-17: Mobile follow-ups (real-device, OnePlus 9 Pro):
+  - **ADSR knobs touch.** `ADSRWidget` has TWO drag surfaces — the envelope
+    canvas (already touch) and the A/D/S/R knob canvases (were mouse+wheel
+    only). Gave the knob block the same pointer-agnostic + two-axis touch fix as
+    `KnobWidget` (point() helper, touchstart/move/end/cancel, right/up =
+    increase). Now every knob in the app — including ADSR — drags by touch.
+  - **Distorted/low-quality audio on Android = sample-rate fix.** Sound was
+    "really low-bitrate"/grainy on the phone. Cause: `latencyHint:'interactive'`
+    makes Android Chrome open the device at a telephony sample rate (~8–24 kHz).
+    Fixed in `AudioEngine` by PINNING the rate (try 48000 → 44100 → default,
+    each guarded) while leaving the default (interactive) latency — so live-
+    monitoring latency is unchanged but quality is full. Engine is otherwise
+    sample-rate-agnostic (everything reads `context.sampleRate`).
 
 ## Next up
 
