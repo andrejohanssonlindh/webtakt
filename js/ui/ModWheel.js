@@ -39,14 +39,27 @@ export class ModWheel {
     state.on('trackSelected', () => this.render());
 
     // Scroll-zone control: left half → MW1, right half → MW2
-    // Only fires when the scroll target is NOT inside a knob or select.
+    // Only fires when the scroll target is NOT inside a knob or the wheel menu.
     this._scrollHandler = (e) => {
       const tag = e.target.tagName;
-      if (e.target.closest('.knob-cell') || e.target.closest('.mod-wheel-track') || tag === 'SELECT' || tag === 'INPUT') return;
+      if (e.target.closest('.knob-cell') || e.target.closest('.mod-wheel-track') ||
+          e.target.closest('.mw-select') || tag === 'INPUT') return;
       const idx = e.clientX < window.innerWidth / 2 ? 0 : 1;
       this.scrollControl(idx, e.deltaY);
     };
     document.addEventListener('wheel', this._scrollHandler, { passive: true });
+
+    // Click-outside closes any open wheel dropdown (mirrors the FX add-menu).
+    this._docClick = (e) => {
+      if (e.target.closest('.mw-select')) return;
+      this._closeAllMenus();
+    };
+    document.addEventListener('click', this._docClick);
+  }
+
+  /** Close every open mod-wheel param dropdown. */
+  _closeAllMenus() {
+    this._wheels.forEach(w => w.menu?.classList.add('hidden'));
   }
 
   _build() {
@@ -67,10 +80,31 @@ export class ModWheel {
     el.className = 'mod-wheel';
 
     // ── Param selector ────────────────────────────────────────
-    const sel = document.createElement('select');
-    sel.className = 'mod-wheel-select';
-    sel.title = `MW${index + 1} — assign a parameter`;
-    el.appendChild(sel);
+    // Custom dropdown (mirrors the FX +ADD menu) instead of a native <select>:
+    // the native option list is rendered by the OS and is tiny/unreadable on
+    // phone (and unstyleable everywhere). This is our own styleable DOM —
+    // legible at every viewport. (Future fix: convert the app's other native
+    // dropdowns to this same pattern.)
+    const selWrap = document.createElement('div');
+    selWrap.className = 'mw-select';
+
+    const selBtn = document.createElement('button');
+    selBtn.className = 'mw-select-btn';
+    selBtn.title = `MW${index + 1} — assign a parameter`;
+
+    const menu = document.createElement('div');
+    menu.className = 'mw-select-menu hidden';
+
+    selBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const wasHidden = menu.classList.contains('hidden');
+      this._closeAllMenus();
+      if (wasHidden) menu.classList.remove('hidden');
+    });
+
+    selWrap.appendChild(selBtn);
+    selWrap.appendChild(menu);
+    el.appendChild(selWrap);
 
     // ── Wheel track + thumb ───────────────────────────────────
     const track_el = document.createElement('div');
@@ -95,35 +129,51 @@ export class ModWheel {
     let startY   = 0;
     let startVal = 0;
 
-    track_el.addEventListener('mousedown', (e) => {
+    // Pointer-agnostic drag: works for mouse and (on phone, where this wheel is
+    // kept — Surface D) touch. e.touches[0] / changedTouches mirror the touch
+    // idiom used in ADSRWidget. touchstart preventDefault stops the page
+    // scrolling under the drag.
+    const dragStart = (e) => {
       dragging = true;
-      startY   = e.clientY;
+      startY   = (e.touches ? e.touches[0] : e).clientY;
       startVal = value;
       e.preventDefault();
-    });
-
-    document.addEventListener('mousemove', (e) => {
+    };
+    const dragMove = (e) => {
       if (!dragging) return;
-      const dy = (startY - e.clientY) / 120;
+      const clientY = (e.touches ? e.touches[0] : e).clientY;
+      const dy = (startY - clientY) / 120;
       value = Math.max(0, Math.min(1, startVal + dy));
       setThumb(value);
       this._applyWheel(index, value);
-    });
+    };
+    const dragEnd = () => { dragging = false; };
 
-    document.addEventListener('mouseup', () => { dragging = false; });
+    track_el.addEventListener('mousedown',  dragStart);
+    document.addEventListener('mousemove',  dragMove);
+    document.addEventListener('mouseup',    dragEnd);
 
-    // ── Selector change ───────────────────────────────────────
-    sel.addEventListener('change', () => {
+    track_el.addEventListener('touchstart', dragStart, { passive: false });
+    document.addEventListener('touchmove',  dragMove,  { passive: false });
+    document.addEventListener('touchend',   dragEnd);
+    document.addEventListener('touchcancel',dragEnd);
+
+    // Pick a param from the dropdown: write the assignment, sync the thumb to the
+    // newly-targeted param's current value, close the menu, refresh the label.
+    const choose = (path) => {
       const track = this.state.selectedTrack;
-      track.modWheelTargets[index] = sel.value || null;
-      // Sync wheel position to the current value of the assigned param
+      track.modWheelTargets[index] = path || null;
       value = this._currentNorm(index);
       setThumb(value);
-    });
+      menu.classList.add('hidden');
+      this.render();
+    };
 
     return {
       el,
-      sel,
+      selBtn,
+      menu,
+      choose,
       thumb,
       getValue: () => value,
       setValue: (v) => {
@@ -204,36 +254,49 @@ export class ModWheel {
     this._applyWheel(wheelIndex, w.getValue());
   }
 
-  /** Rebuild the selector options for the selected track. */
+  /** Rebuild the custom dropdown (button label + menu items) for the selected track. */
   render() {
     const track = this.state.selectedTrack;
     const groups = track.getAssignableParams();
 
     this._wheels.forEach((wheel, i) => {
-      const sel     = wheel.sel;
       const current = track.modWheelTargets[i] ?? '';
 
-      sel.innerHTML = '';
+      // Button label: the assigned param's label, or the bare "MWn" when unassigned.
+      let curLabel = `MW${i + 1}`;
+      for (const { items } of groups) {
+        const hit = items.find(it => it.path === current);
+        if (hit) { curLabel = hit.label; break; }
+      }
+      wheel.selBtn.textContent = curLabel;
+      wheel.selBtn.classList.toggle('mw-select-assigned', !!current);
 
-      const noneOpt = document.createElement('option');
-      noneOpt.value = '';
-      noneOpt.textContent = `MW${i + 1}`;
-      sel.appendChild(noneOpt);
+      // Menu: a "none" row, then each group as a sticky header + its items
+      // (same shape as the FX +ADD menu).
+      const menu = wheel.menu;
+      menu.innerHTML = '';
+
+      const noneItem = document.createElement('button');
+      noneItem.className = 'mw-select-item';
+      noneItem.textContent = `MW${i + 1} (none)`;
+      if (!current) noneItem.classList.add('mw-select-item-active');
+      noneItem.addEventListener('click', () => wheel.choose(''));
+      menu.appendChild(noneItem);
 
       groups.forEach(({ group, items }) => {
-        const og = document.createElement('optgroup');
-        og.label = group;
+        const h = document.createElement('div');
+        h.className = 'mw-select-header';
+        h.textContent = group;
+        menu.appendChild(h);
         items.forEach(({ path, label }) => {
-          const o = document.createElement('option');
-          o.value = path;
-          o.textContent = label;
-          if (path === current) o.selected = true;
-          og.appendChild(o);
+          const item = document.createElement('button');
+          item.className = 'mw-select-item';
+          item.textContent = label;
+          if (path === current) item.classList.add('mw-select-item-active');
+          item.addEventListener('click', () => wheel.choose(path));
+          menu.appendChild(item);
         });
-        sel.appendChild(og);
       });
-
-      sel.value = current;
 
       // Sync thumb to current param value
       wheel.setValue(this._currentNorm(i));
@@ -242,5 +305,6 @@ export class ModWheel {
 
   destroy() {
     document.removeEventListener('wheel', this._scrollHandler);
+    document.removeEventListener('click', this._docClick);
   }
 }

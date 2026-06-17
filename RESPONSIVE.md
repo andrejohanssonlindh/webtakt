@@ -86,7 +86,7 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
       group inline + hides the toggle (no change); only at `<=640px` does it
       collapse into a dropdown. BPM slider capped at 90px so it never claims a
       full row. Result: phone transport stays <=2 rows.
-- [~] **C — Synth panel** → narrow-screen reflow. The headline fix is
+- [x] **C — Synth panel** → narrow-screen reflow. The headline fix is
       **step-grid-as-a-tab**; three pure-CSS compactions ride along.
       0. **STEPS pseudo-tab (the real fix).** On phone the 4×4 step grid
          (`#middle-row`, `flex-shrink:0`) claimed its full natural height and
@@ -154,7 +154,7 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
       height:100% + grid-auto-rows:1fr, and `.step-cell` aspect-ratio:auto — cells
       become rectangles and the grid fills the whole freed area, zero gap.
       Keyboard stays bottom-pinned. Pure CSS.
-- [~] **C.4 — Roll param sections out to every machine.** Moogish proved the
+- [x] **C.4 — Roll param sections out to every machine.** Moogish proved the
       `group:` SPEC field (Surface C step 4). Now tagged ALL 22 remaining
       DefaultMachinePanel machines so the whole SYNTH tab shares one section
       language (3-up desktop → 2-up iPad → 1-up phone, same `.param-group` CSS,
@@ -173,7 +173,7 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
       (custom panels — FM is the deferred beast; fold into Surface E / Phase 3).
       manual.js intentionally NOT touched: grouping is a layout hint, not a new or
       renamed control. **Awaiting in-browser verify, NOT yet committed.**
-- [~] **C.5 — Sampler-family panels.** The three sample panels lay out
+- [x] **C.5 — Sampler-family panels.** The three sample panels lay out
       imperatively (custom panels, not DefaultMachinePanel) but were close. Pulled
       them onto the same `.param-group` section language via a new `.sampler-groups`
       flex-row (same wrap cadence as `.panel-content`, so groups inherit the
@@ -187,7 +187,7 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
         72px; params → MORPH / SLOT A / SLOT B / SWEEP groups. Dead CSS removed
         (`.sampler-param-row`, `.wt-sampler-params`, `.wt-sampler-root-row`).
       **Awaiting in-browser verify, NOT yet committed.**
-- [~] **C.6 — FM panel (the beast).** Was schematic-left + 2×2 op-grid-right
+- [x] **C.6 — FM panel (the beast).** Was schematic-left + 2×2 op-grid-right
       (couldn't reflow narrow). Now:
       - Each operator → its own `.param-group` (`.fm-op-group`) in a `.fm-ops-row`
         flex-row → reflows 3/2/1-up via the shared `.param-group` queries. Body =
@@ -203,7 +203,7 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
       `.fm-op-params-row`, `.fm-out-row`, `.fm-op-adsr-label`). The ADSR
       knob/sync-knob logic + schematic drawing are unchanged.
       **Awaiting in-browser verify, NOT yet committed.**
-- [~] **C.7 — FX as a phone tab + tab-strip squish fix (the real cause).**
+- [x] **C.7 — FX as a phone tab + tab-strip squish fix (the real cause).**
       Squish ROOT CAUSE (first pass was a band-aid): the header FX bar
       (`.fx-bar` — FX-pipe button + chain mini-outline, ~24px icons) gave
       `.panel-header` its height. On the STEPS surface the FX bar was hidden, so
@@ -229,7 +229,7 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
         `phone-show-steps`, since the header is uniform on phone now.
       Desktop unchanged (FX tab + the rules are inside the ≤640 block / desktop-
       hidden). **Awaiting in-browser verify.**
-- [~] **C.8 — FILTER + AMP panes → `.param-group` sections.** Both tabs laid out
+- [x] **C.8 — FILTER + AMP panes → `.param-group` sections.** Both tabs laid out
       with bespoke flex rows (`.filter-top-row`/`.filter-knob-sec`/`.filter-right-col`,
       `.amp-tab-row`/`.amp-pan-sec`/`.amp-adsr-sec`) that couldn't reflow narrow.
       Refactored onto the shared `.param-group` section language (same idiom as
@@ -245,19 +245,19 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
       Dead CSS removed (all the bespoke filter/amp layout classes +
       `.filter-env-label`). `.filter-viz-wrap` kept (FilterViz still emits it).
       Audio/p-lock/viz logic unchanged. **Awaiting in-browser verify, NOT committed.**
-- [~] **C.9 — Overflow-menu IMPORT alignment.** In the phone transport overflow
+- [x] **C.9 — Overflow-menu IMPORT alignment.** In the phone transport overflow
       dropdown (`flex-direction:column; align-items:stretch`), IMPORT sat left-
       aligned while every other entry centered. Cause: IMPORT is a
       `<label class="btn">` (wraps a hidden file input), not a `<button>`, so it
       lacks the button UA-default `text-align:center`. Fix:
       `.transport-overflow > .btn { text-align:center }` (scoped to the dropdown).
       Pure CSS. **Awaiting in-browser verify.**
-- [~] **C.10 — Oscilloscope hidden on iPad.** The header scope was only hidden at
+- [x] **C.10 — Oscilloscope hidden on iPad.** The header scope was only hidden at
       ≤640px; on iPad (≤1024px) it still overlapped the synth pane on the right
       where the tab bar needs the width. Added `.panel-header .oscilloscope {
       display:none }` to the existing ≤1024 block (the ≤640 block still hides it
       too, alongside more header fluff). Pure CSS.
-- [~] **F — FX pane phone reflow.** Desktop = left tray + right(path-over-params),
+- [x] **F — FX pane phone reflow.** Desktop = left tray + right(path-over-params),
       drag-to-reorder. That doesn't fit a phone and drag is unreliable on touch.
       On ≤640px the pane goes single-column (user's design):
       - **Function row on top:** `.fxpipe-tray` flips to a horizontal row (ADD /
@@ -275,7 +275,7 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
       desktop DOM + behavior unchanged. manual.js updated (signal-path drag→▲/▼,
       inline params, bin desktop-only, FX-as-phone-tab). **Awaiting in-browser
       verify, NOT committed.**
-- [~] **F.1 — FX refinements (design alignment + add-menu width).**
+- [x] **F.1 — FX refinements (design alignment + add-menu width).**
       - **+ADD FX menu was tiny on phone:** desktop caps it `max-width:240px` /
         `width:max-content`. On ≤640px give ADD its own full-width tray row (so
         its absolutely-positioned dropdown spans the whole pane), then the dropdown
@@ -289,7 +289,7 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
         synth-pane phone knob size (they're nested too deep for the .panel-content
         shrink rule); FX enum buttons bumped to touch size inside cards. Pure CSS.
       **Awaiting in-browser verify.**
-- [~] **F.2 — Card width bug (selected card shrink-wraps).** A selected card
+- [x] **F.2 — Card width bug (selected card shrink-wraps).** A selected card
       returns the `.fxpipe-block-unit` wrapper (block + inline params), the flex
       child of the `align-items:stretch` column path. The unit had no width, so
       when its inline params had a narrow intrinsic width (e.g. a re-added base FX
@@ -297,7 +297,61 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
       filling; cards with wider params happened to fill — hence "re-add base
       shrinks, new FX doesn't". Fix: `.fxpipe-block-unit { width:100% }` pins every
       card full-width regardless of param content. Pure CSS. **Awaiting verify.**
-- [ ] **D — Keyboard** → live-play strip on narrow.
+- [~] **D — Keyboard** → live-play strip on narrow. The real gap wasn't layout:
+      the keys only bound `mousedown/up/leave` with no `touch-action`, so on a
+      phone they played with a ~300ms delay, got hijacked by scroll/zoom, and
+      stuck (a finger sliding off a key never fires `mouseleave`). Two parts:
+      - **Touch support (JS, `Keyboard.js`).** New `_bindKeyEvents(key,midi)`
+        adds `touchstart`(`{passive:false}`+`preventDefault`)/`touchend`/
+        `touchcancel` alongside the mouse handlers. A `_touchNotes`
+        (touch.identifier→midi) map lets each finger in a multitouch chord
+        release its own note (the touch analogue of per-key `mouseleave`).
+        Reuses `_noteOn`/`_noteOff` unchanged — scale-block, hold, record,
+        followers, arp all still handled there. Desktop untouched (additive).
+      - **1-octave phone keyboard (user's choice).** Cramming 14 whites into
+        ~360px gave ~24px keys + near-untappable 4% blacks. On phone `_build()`
+        (reads `matchMedia(≤640px)`, per-render like FMPanel) renders ONE octave
+        (7 whites + their blacks); reach the rest via OCT±. `_blackKeyOffset`
+        now takes a `whiteCount` so the blacks sit correctly above the 7 visible
+        whites. A `matchMedia('change')` listener rebuilds on a breakpoint flip.
+      - **Layout (CSS, ≤640 block).** `.key { touch-action:none }` (belt to the
+        preventDefault). `#keyboard-row` stays a HORIZONTAL row (mod-wheel |
+        keyboard | OCT column) with a bounded **132px** height — an early
+        version stacked it into a tall column which, as a `flex-shrink:0` child
+        of the `100dvh` column, pushed itself (and the keys) off the bottom
+        ("keyboard pushed down, only a sliver"). OCT column slimmed 60→46px with
+        compact buttons (desktop size is oversized here).
+      - **Off-screen fix (the bug above, root cause).** `#app` got
+        `overflow:hidden` on phone so the flex column can't overrun `100dvh`
+        (a grower that won't shrink below its min-content was shoving the rigid
+        keyboard-row off the bottom); `#synth-panel .panel-content` now
+        `overflow-y:auto` so the panel body scrolls internally instead of
+        growing past its area.
+      - **One mod-wheel kept (user request).** Not hidden — `#mod-wheels`
+        narrowed to 30px and the 2nd `.mod-wheel` hidden, leaving one usable CC
+        fader. Gave the wheel **touch support** too (`ModWheel.js`: touch-drag
+        mirroring the mouse drag; `.mod-wheel-track { touch-action:none }`) since
+        it was mouse-only and would've been undraggable on phone.
+      - **Black-key geometry fix.** Black keys were a fixed `4%` width + a magic
+        `(whiteBelow+0.75)` left offset — calibrated for 14 whites. On the
+        7-white phone keyboard each white is ~2× wider, so a 4% black became a
+        thin sliver hugging the LEFT of the gap. `_blackKeyOffset` → `_blackKeyGeom`
+        now derives BOTH width (~58% of a white, set inline) and a centered left
+        (on the white/white boundary) from the visible white count — correct at
+        any count. Desktop look unchanged (58% of 7.14% ≈ the old 4%). The
+        Settings layout editor keeps its own 0.75 math (desktop-only, 14 whites).
+      - **Mod-wheel param dropdown → custom popout (user request, all viewports).**
+        The native `<select>` option list is OS-rendered, tiny + unreadable on
+        phone. Replaced with a custom button + popout menu mirroring the FX +ADD
+        menu (`.mw-select-*`: button shows the assigned param's label / sticky
+        category headers / click-outside close; opens UPWARD on phone since the
+        wheel is in the bottom row inside `#app{overflow:hidden}`). `ModWheel.js`
+        render() now builds menu buttons instead of `<option>`/`<optgroup>`.
+        Converting the app's OTHER native dropdowns to this pattern is logged as
+        a future fix (memory: project-custom-dropdowns).
+      manual.js updated (OCT± phone note + an on-screen-keyboard phone entry:
+      tap to play, multitouch chords, live-play only). **Awaiting in-browser
+      verify, NOT committed.**
 - [ ] **E — Knob/component sizes** (JS — `size:` passed in panel render code).
 - [ ] **Phase 2 — Mobile shell.** New `mobile.html` + tab-bar nav (one panel at a
       time), 4×4 step grid, live-only keyboard, tap-step → note-picker. Reuses
@@ -367,17 +421,24 @@ Breakpoints: tablet `<=1024px`, phone `<=640px`.
   schematic moved to phone-collapsible `<details>` (schematic now at bottom).
   Canvas redraws on `<details>` expand. Dead CSS removed. **Awaiting in-browser
   verify, NOT yet committed.**
+- 2026-06-17: Surfaces C–F confirmed working in-browser by user; all C/F `[~]`
+  markers flipped to `[x]`.
+- 2026-06-17: Surface D — keyboard live-play on phone. Added touch handlers
+  (`touchstart/end/cancel`, `_touchNotes` per-finger map) to the keys, which had
+  only mouse listeners. On phone the keyboard renders ONE octave (finger-sized
+  keys, reach the rest via OCT±; `_blackKeyOffset` takes a `whiteCount`), mod-
+  wheels hidden, OCT controls stack full-width, `touch-action:none`. Desktop
+  unchanged. manual.js updated. **Awaiting in-browser verify, NOT committed.**
 
 ## Next up
 
-- **Verify Surface C** at phone width (≤640px): app opens on STEPS; tapping
-  SYNTH/FILTER/etc swaps to the synth panel (grid hidden) and STEPS swaps back;
-  STEPS tab highlights when active; tab strip scrolls; scope/COPY-PASTE gone;
-  knobs sit 3-wide and legible on MoogishMachine/analogue + a drum machine.
-  Hard-refresh to dodge CSS module cache. Then commit.
+- **Verify Surface D** at phone width (≤640px): keyboard shows one octave;
+  tapping keys plays (no delay, no page scroll/zoom-on-tap); multitouch chords
+  sound and release per finger; OCT+ reaches the next octave; mod-wheels gone;
+  OCT-/display/OCT+ sit in a full-width row under the keys. Then commit.
+- Then E — knob/component sizes (JS `size:` passed in panel render code).
 - **Custom synth panels (FM, Sampler) on phone.** They pin their own canvas sizes
   and lay out imperatively — likely need per-panel compact paths. Fold into
   Surface E (JS `size:`) or Phase 3.
-- Then D — Keyboard (live-play strip), E — knob/component sizes (JS `size:`).
 - Verify pattern: resize desktop browser across desktop/tablet/phone widths;
   user verifies in-browser (no headless). Hard-refresh to dodge CSS module cache.

@@ -347,9 +347,11 @@ export class SettingsPanel {
       whiteRow.appendChild(this._editorKey('lower', wi, layout.lower[wi] ?? '', false));
     });
 
-    // Black-key row, positioned over the white keys exactly as the real
-    // keyboard does (Keyboard._blackKeyOffset): left edge at (whiteBelow+0.75)
-    // white-widths, width = one black-key (4% of 14 whites), no centering shift.
+    // Black-key row for the layout editor (desktop-only, always 14 whites).
+    // Uses the simple left-edge-at-(whiteBelow+0.75) offset + the CSS 4% width;
+    // this matches the desktop keyboard's look. (The live keyboard now derives
+    // black-key geometry from the white count in Keyboard._blackKeyGeom so it's
+    // also correct on the 7-white phone layout — this editor doesn't reflow.)
     const blackRow = document.createElement('div');
     blackRow.className = 'kb-editor-black-row';
     const whiteWidth = 100 / EDITOR_WHITE.length;

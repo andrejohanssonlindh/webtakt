@@ -1757,7 +1757,14 @@ body {
   padding: 4px 4px 4px;
 }
 
-.mod-wheel-select {
+/* Custom param dropdown (replaces a native <select> — the OS option list was
+   tiny/unreadable, esp. on phone). Mirrors the FX +ADD menu pattern. */
+.mw-select {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.mw-select-btn {
   width: 100%;
   font-size: 0.636rem;
   font-family: 'JetBrains Mono', monospace;
@@ -1765,29 +1772,69 @@ body {
   color: var(--text-dim);
   border: 1px solid var(--border);
   border-radius: 3px;
-  padding: 1px 2px;
+  padding: 2px 2px;
   cursor: pointer;
   text-align: center;
-  appearance: none;
-  -webkit-appearance: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex-shrink: 0;
 }
 
-.mod-wheel-select:focus {
-  outline: none;
-  border-color: var(--accent);
+.mw-select-btn.mw-select-assigned {
   color: var(--accent);
+  border-color: var(--accent);
 }
 
-.mod-wheel-select option,
-.mod-wheel-select optgroup {
-  font-size: 1rem;
+/* Popout: pops out WIDER than the narrow wheel button (the wheel column is only
+   ~30px) so labels are readable. Scrolls if the param list is long. */
+.mw-select-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  margin-top: 2px;
+  min-width: 210px;
+  width: max-content;
+  max-width: 330px;
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
   background: var(--surface-2);
-  color: var(--text);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
 }
+
+.mw-select-menu.hidden { display: none; }
+
+.mw-select-header {
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  color: var(--accent-dim);
+  font-family: var(--font-mono);
+  font-size: 0.727rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 5px 8px 3px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mw-select-item {
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.818rem;
+  text-align: left;
+  padding: 6px 8px;
+}
+
+.mw-select-item:last-child { border-bottom: none; }
+.mw-select-item:hover { background: rgba(126, 200, 200, 0.12); color: var(--accent); }
+.mw-select-item-active { color: var(--accent); }
 
 .mod-wheel-track {
   flex: 1;
@@ -1797,6 +1844,7 @@ body {
   border-radius: 7px;
   position: relative;
   cursor: ns-resize;
+  touch-action: none;   /* let the touch-drag work without the page scrolling */
 }
 
 .mod-wheel-thumb {
@@ -4918,12 +4966,27 @@ body {
    * synth, middle-row when steps) the keyboard is pushed to the bottom and the
    * growing surface scrolls internally instead of shoving the bars above it.
    * Keep the rigid rows rigid and let the synth panel scroll, not expand. */
+  /* Clip the column to the visible viewport. Without this the flex column can
+   * overrun 100dvh (a grower that won't shrink below its content's min-height
+   * pushes the rigid keyboard-row off the bottom — the "keyboard pushed down,
+   * only a sliver shows" bug). overflow:hidden forces 100dvh to hold so the
+   * bottom-pinned keyboard stays on screen and the grower scrolls internally. */
+  #app {
+    overflow: hidden;
+  }
   #track-row,
   #keyboard-row {
     flex-shrink: 0;
   }
   #synth-panel {
     min-height: 0;          /* allow it to scroll internally, not push siblings */
+  }
+  /* The synth panel's body is the part that should scroll when its content is
+   * taller than the freed space — so the panel itself never grows past its flex
+   * area and shoves the keyboard down. */
+  #synth-panel .panel-content {
+    overflow-y: auto;
+    min-height: 0;
   }
   /* SYNTH active (default phone state): synth panel is the grower, keyboard pins
    * below it. (When STEPS is active the rules below collapse it instead.) */
@@ -5020,5 +5083,59 @@ body {
   .manual-list dt {
     white-space: normal;      /* allow long headers to wrap instead of widening */
     overflow-wrap: anywhere;
+  }
+
+  /* ── Surface D — keyboard live-play strip ──────────────────────────────
+   * On phone the keyboard is live-play only (no click-step-then-note entry —
+   * that's the tap-step→note-picker of Phase 2). The 14-white 2-octave layout
+   * crammed into ~360px made keys ~24px (and 4%-wide blacks near-untappable),
+   * so Keyboard.js renders ONE octave on phone (7 whites, reach the rest via
+   * OCT±) and the keys gain touch handlers. These rules give them room. */
+
+  /* Keep ONE mod-wheel on phone (the second is hidden) — saves width but keeps
+   * a usable CC fader. Narrow it so the keyboard still gets most of the row. */
+  #mod-wheels {
+    width: 30px;
+  }
+  /* The wheel sits in the bottom keyboard-row; #app clips overflow on phone, so a
+   * downward popout would be cut off. Open the param menu UPWARD instead, and let
+   * it span wider than the screen edge would allow. */
+  .mw-select-menu {
+    top: auto;
+    bottom: 100%;
+    margin-top: 0;
+    margin-bottom: 2px;
+    max-height: 50vh;
+  }
+  .mod-wheel:nth-child(2) {
+    display: none;
+  }
+
+  /* touch-action:none stops the browser hijacking a key press as a scroll/zoom
+   * gesture (the touchstart handler also preventDefaults, this is the belt). */
+  .key {
+    touch-action: none;
+  }
+
+  /* The keyboard-row is a flex-shrink:0 child of the 100dvh phone column, so its
+   * height is claimed rigidly — a tall stacked row pushed itself (and the keys)
+   * off the bottom of the screen. Keep it a HORIZONTAL row with a bounded,
+   * modest height: [mod-wheel | keyboard | OCT column]. The keyboard fills the
+   * middle; OCT stays a compact column on the right (not a full-width row). */
+  #keyboard-row {
+    height: 132px;
+    gap: 4px;
+  }
+  #octave-controls {
+    width: 46px;              /* slimmer than the desktop 60px */
+  }
+  /* Compact OCT buttons: the desktop size is fine there but oversized here. */
+  #octave-controls .octave-btn {
+    font-size: 0.7rem;
+    padding: 2px 0;
+    letter-spacing: 0.04em;
+  }
+  #octave-controls .octave-display {
+    font-size: 0.8rem;
   }
 }

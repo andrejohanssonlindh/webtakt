@@ -33,6 +33,12 @@ import { settings }    from '../state/Settings.js';
 const WHITE_NOTES = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23];
 const BLACK_NOTES = [1, 3, -1, 6, 8, 10, -1, 13, 15, -1, 18, 20, 22, -1];
 
+// Phone breakpoint — must match the ≤640px CSS block. On phone the keyboard
+// shows ONE octave (Surface D, user's choice: bigger finger-sized keys, reach
+// the rest via OCT±) instead of cramming both into ~360px. Read per-_build()
+// like FMPanel/FXPipelinePanel so a viewport flip reflows it.
+const PHONE_MQ = '(max-width: 640px)';
+
 // Computer-keyboard → piano-key layouts. Not everyone runs QWERTY, so the
 // physical-layout map is selectable in Settings (keyboardLayout). Each preset:
 //   lower     — bottom row (white keys / folded in-scale notes), left→right
@@ -113,6 +119,9 @@ export class Keyboard {
     // key-up so that an octave/scale switch mid-hold (which rebuilds _keyMap)
     // still releases the original note instead of leaking a stuck voice.
     this._keyToNote = new Map();
+    // Touch identifier → MIDI note (Surface D). Lets each finger in a multitouch
+    // chord release the right note on touchend/cancel.
+    this._touchNotes = new Map();
 
     this._buildOctaveControls();
     this._build();
@@ -124,6 +133,13 @@ export class Keyboard {
 
     // Rebuild the computer-key map when the user switches keyboard layout.
     settings.on(() => { this._applyScale(); this._updateKeyLabels(); });
+
+    // Reflow across the phone breakpoint (Surface D): crossing ≤640px swaps
+    // between the 1-octave phone keyboard and the full 2-octave one. _build()
+    // reads the media query, so a full rebuild applies the right key count +
+    // black-key offsets. addEventListener('change') is the modern MediaQueryList
+    // API (the per-render reads in FMPanel handle the rest).
+    window.matchMedia(PHONE_MQ).addEventListener('change', () => this._build());
 
     state.on('scaleChanged',     () => { this._applyScale(); this._updateKeyLabels(); });
     state.on('trackSelected',    ({ prevTrack }) => {
@@ -371,7 +387,14 @@ export class Keyboard {
     const wrapper = document.createElement('div');
     wrapper.className = 'keyboard-inner';
 
+    // Phone: render only the lower octave so each key is finger-sized (Surface D).
+    // The upper octave is still reachable by tapping OCT+. whiteCount feeds the
+    // black-key offset math so the blacks sit correctly above the *visible* whites.
+    const phone      = window.matchMedia(PHONE_MQ).matches;
+    const whiteCount = phone ? 7 : WHITE_NOTES.length;
+
     WHITE_NOTES.forEach((semitone, wi) => {
+      if (wi >= whiteCount) return;
       const midi = this._rootNote + semitone;
       const key  = document.createElement('div');
       key.className = 'key white-key';
@@ -382,28 +405,29 @@ export class Keyboard {
       lbl.className = 'key-label';
       key.appendChild(lbl);
 
-      key.addEventListener('mousedown', () => this._noteOn(midi));
-      key.addEventListener('mouseup',   () => this._noteOff(midi));
-      key.addEventListener('mouseleave',() => this._noteOff(midi));
+      this._bindKeyEvents(key, midi);
       wrapper.appendChild(key);
     });
 
     BLACK_NOTES.forEach((semitone, bi) => {
       if (semitone === -1) return;
+      // On phone keep only the lower-octave blacks (semitone < 12, i.e. the first
+      // octave's sharps), matching the visible white-key range.
+      if (phone && semitone >= 12) return;
       const midi = this._rootNote + semitone;
       const key  = document.createElement('div');
       key.className = 'key black-key';
       key.dataset.note = midi;
       key.dataset.blackIndex = bi;
-      key.style.left = `${this._blackKeyOffset(semitone)}%`;
+      const { left, width } = this._blackKeyGeom(semitone, whiteCount);
+      key.style.left  = `${left}%`;
+      key.style.width = `${width}%`;
 
       const lbl = document.createElement('span');
       lbl.className = 'key-label';
       key.appendChild(lbl);
 
-      key.addEventListener('mousedown', () => this._noteOn(midi));
-      key.addEventListener('mouseup',   () => this._noteOff(midi));
-      key.addEventListener('mouseleave',() => this._noteOff(midi));
+      this._bindKeyEvents(key, midi);
       wrapper.appendChild(key);
     });
 
@@ -411,6 +435,38 @@ export class Keyboard {
     if (this._octaveDisplay) this._octaveDisplay.textContent = `C${this.octave}`;
     this._applyScale();
     this._updateKeyLabels();
+  }
+
+  /**
+   * Wire press/release for a single key. Mouse for desktop; touch for phone
+   * (Surface D). Touch needs its own handlers because the keys had only mouse
+   * listeners — on touch devices that means a ~300ms synthesized-click delay,
+   * scroll/zoom hijack, and stuck notes (a finger sliding off a key never fires
+   * `mouseleave`). touchstart preventDefault kills the delay + gesture hijack;
+   * we track the touch by identifier so multitouch chords each release their own
+   * note on touchend/cancel (the touch analogue of per-key mouseleave). Matches
+   * the { passive:false }/preventDefault idiom used in ADSRWidget.
+   */
+  _bindKeyEvents(key, midi) {
+    key.addEventListener('mousedown', () => this._noteOn(midi));
+    key.addEventListener('mouseup',   () => this._noteOff(midi));
+    key.addEventListener('mouseleave',() => this._noteOff(midi));
+
+    key.addEventListener('touchstart', (e) => {
+      e.preventDefault();   // no 300ms delay, no scroll/zoom hijack
+      for (const t of e.changedTouches) this._touchNotes.set(t.identifier, midi);
+      this._noteOn(midi);
+    }, { passive: false });
+    const release = (e) => {
+      for (const t of e.changedTouches) {
+        const note = this._touchNotes.get(t.identifier);
+        if (note === undefined) continue;
+        this._touchNotes.delete(t.identifier);
+        this._noteOff(note);
+      }
+    };
+    key.addEventListener('touchend',    release);
+    key.addEventListener('touchcancel', release);
   }
 
   _applyScale() {
@@ -525,10 +581,21 @@ export class Keyboard {
     });
   }
 
-  _blackKeyOffset(semitone) {
-    const whiteWidth = 100 / WHITE_NOTES.length;
+  /**
+   * Geometry (left + width, both in %) for a black key, derived from the visible
+   * white-key count so it's correct at ANY count (14-white desktop, 7-white
+   * phone). A black key is ~58% of a white key's width (matches the original
+   * desktop ratio of 4% over 7.14%) and is CENTERED on the boundary between the
+   * white below it and the next white — fixing the old fixed-width 4% + magic
+   * 0.75 offset, which on phone (wider whites) left a 4% sliver hugging the left
+   * of the gap instead of straddling it.
+   */
+  _blackKeyGeom(semitone, whiteCount = WHITE_NOTES.length) {
+    const whiteWidth = 100 / whiteCount;
+    const width      = whiteWidth * 0.58;
     const whiteBelow = WHITE_NOTES.indexOf(semitone - 1);
-    return (whiteBelow + 0.75) * whiteWidth;
+    const boundary   = (whiteBelow + 1) * whiteWidth;   // white/white gap
+    return { left: boundary - width / 2, width };
   }
 
   async _noteOn(midiNote) {

@@ -150,7 +150,12 @@ export const MANUAL_CONTENT = {
                  'in-scale notes in ascending order, skipping any out-of-scale ' +
                  'semitones. Makes playing in-key natural without thinking about it.'],
       ['OCT+ / OCT-', 'Shift the playable octave up/down. Bindable to keys in ' +
-                 'Settings (default ↑ / ↓).'],
+                 'Settings (default ↑ / ↓). On phone the keyboard shows one ' +
+                 'octave at a time (bigger, finger-sized keys) — use OCT± to ' +
+                 'reach the rest.'],
+      ['On-screen keyboard (phone)', 'Tap keys to play; multitouch chords work. ' +
+                 'On phone it\'s live-play only — to write pitches into steps, ' +
+                 'use a computer keyboard or the step editor.'],
     ],
   },
 
