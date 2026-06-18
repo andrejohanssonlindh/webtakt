@@ -171,11 +171,17 @@ export class SoundLibrary {
     if (!keep.filter && !keep.fx) {
       track.setAnalogue(sound.analogue ?? (track.filter.getParam('filter.engine') === 'analogue'));
     }
-    // Restore sampler buffer via SampleStore if present on the track
-    if (track.machine.type === 'sampler' && track.machine.sampleId && track.sampleStore) {
+    // Restore single-buffer sampler buffer via SampleStore if present on the
+    // track. Capability check (setBuffer + sampleId) covers sampler /
+    // sample-swarm / granular / slicer / stretch without per-type branches.
+    if (typeof track.machine.setBuffer === 'function' && track.machine.sampleId && track.sampleStore) {
       track.sampleStore.load(track.machine.sampleId, track.audio.context).then(buf => {
         if (buf) track.machine.setBuffer(buf, track.machine.sampleId, track.machine.sampleName);
       });
+    }
+    // Multi-buffer machines (MultiSampler) reload all zones via their own loader.
+    if (typeof track.machine.loadZoneBuffers === 'function' && track.sampleStore) {
+      track.machine.loadZoneBuffers(track.sampleStore, track.audio.context);
     }
     if (track.machine.type === 'wt-sampler' && track.sampleStore) {
       if (track.machine.sampleIdA) {

@@ -62,6 +62,11 @@ export const MACHINE_GROUPS = [
       { type: 'sampler',      label: 'Sampler',    desc: 'Load file or record mic' },
       { type: 'wt-sampler',   label: 'WT Sampler', desc: 'Morph between two samples' },
       { type: 'sample-swarm', label: 'Smp Swarm',  desc: '7-voice sample swarm cluster' },
+      { type: 'granular',     label: 'Granular',   desc: 'Grain cloud + scan position' },
+      { type: 'slicer',       label: 'Slicer',     desc: 'Chop loop into slices' },
+      { type: 'stretch',      label: 'TimeStretch',desc: 'Tempo-lock loop to BPM' },
+      { type: 'beat-repeat',  label: 'BeatRepeat', desc: 'Stutter / retrig roll' },
+      { type: 'multi-sampler',label: 'Multi Smp',  desc: 'Velocity / round-robin zones' },
     ],
   },
   {
@@ -135,8 +140,10 @@ export class MachinePickerPanel {
         // without committing the swap (snapshot/restore). Samplers have no
         // default buffer, so they are not previewable.
         if (def.type !== 'sampler' && def.type !== 'wt-sampler'
-            && def.type !== 'sample-swarm' && def.type !== 'midi'
-            && def.type !== 'input') {
+            && def.type !== 'sample-swarm' && def.type !== 'granular'
+            && def.type !== 'slicer' && def.type !== 'stretch'
+            && def.type !== 'beat-repeat' && def.type !== 'multi-sampler'
+            && def.type !== 'midi' && def.type !== 'input') {
           // A <span> (not a nested <button>) — nested buttons are invalid HTML.
           const prev = document.createElement('span');
           prev.className   = 'machine-card-preview';

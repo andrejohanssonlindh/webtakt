@@ -3901,6 +3901,23 @@ body {
   flex-shrink: 0;
 }
 
+/* MultiSampler: one bordered strip per zone (header + mini-waveform + knob row).
+ * Reuses .sampler-topbar / .param-group inside; just frames each zone. */
+.multi-zone-strip {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+  margin-top: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.multi-zone-canvas {
+  height: 56px;
+}
+
 .sampler-toggle {
   display: flex;
   flex-direction: column;

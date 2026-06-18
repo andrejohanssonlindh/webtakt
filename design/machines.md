@@ -346,6 +346,186 @@ Gain architecture: all 7 sources sum into `_mix` (normalised by 1/7), then `outp
 
 ---
 
+### Single-buffer protocol (shared)
+
+`SamplerMachine`, `SampleSwarmMachine`, `GranularMachine`, `SlicerMachine`,
+`TimeStretchMachine`, and `BeatRepeatMachine` all implement the **single-buffer protocol**:
+`setBuffer(buffer,
+id, name)` / `getBuffer()` / `clearBuffer()` / `hasBuffer`, a `syncFrom(other)` that
+copies the buffer reference to sibling voice slots, `sampleId`/`sampleName` fields, and
+a `toJSON` that carries `sampleId`. Because the rest of the app detects these machines by
+*capability* (`typeof machine.setBuffer === 'function'`) rather than by type name:
+- `VoicePool.setMachine` carries the loaded buffer across same-type rebuilds **and**
+  cross-type swaps between any two single-buffer machines (sampler ↔ slicer ↔ granular …),
+  along with every param the two have in common.
+- `Track.fromJSON` and `SoundLibrary.applySound` reload the buffer from `SampleStore` on
+  project / sound load.
+
+A new single-buffer machine gets all of this for free just by implementing the protocol —
+no per-type branches to add. (WT-Sampler is deliberately *excluded*: it has `setBufferA`/
+`setBufferB`, not `setBuffer`, and keeps its own dedicated load path. **MultiSampler** is the
+*multi-buffer* exception: it carries an array of zone buffers via `setBufferAt(i,…)` +
+`loadZoneBuffers(store, ctx)`, detected by `typeof machine.loadZoneBuffers === 'function'` —
+see its section below.)
+
+---
+
+### GranularMachine (`type: 'granular'`)
+
+Granular grain cloud. While a note is held, an `AudioWorkletNode`
+(`granular-processor.js`) continuously spawns short, Hann-windowed grains read from the
+buffer. The defining trait: scan-`position` and `pitch` are **decoupled** — freeze the
+playhead and still play melodies, or sweep it at any speed without repitching.
+Self-enveloping (worklet `gain` AudioParam, gated on noteOn / released on noteOff — hold
+the trig long for a pad, short for a textured stab).
+
+`position` is a worklet AudioParam, so it is an LFO / p-lock / mod-wheel target — assign an
+LFO for an evolving pad, p-lock per step to jump regions, or dial it on the panel for a
+frozen texture. `scan` auto-advances the playhead (fraction of buffer/sec; 0 = frozen, so
+the machine doubles as a granular loop player).
+
+```
+AudioWorkletNode (persistent, stereo) → outputGain → [Filter]
+```
+
+**Parameters:** `position` (0–1, **AudioParam** — LFO/p-lock; region-relative to the trim),
+`grain.size` (ms), `grain.density` (grains/s), `spray` (position jitter), `spread` (stereo
+width), `pitch.jitter` (per-grain pitch randomisation), `scan` (auto-advance, −2..+2×),
+`sample.start`/`sample.end` (trim region — grains/position/spray confined here),
+`sample.speed`, `sample.root`, `sample.pitch` (note tracking), `sample.reverse`,
+`output.level` (AudioParam). All except position/level are JS-only (read per trigger).
+
+**Custom panel:** `GranularPanel.js` — waveform with draggable START/END trim handles +
+POSITION marker + spray band, TRIM / CLOUD / GRAIN / PITCH / OUTPUT knob groups.
+
+**Files:** `js/machines/GranularMachine.js`, `js/worklets/granular-processor.js`,
+`js/ui/panels/GranularPanel.js`. **Not tested** by the audio suite (AudioWorklet
+unavailable in OfflineAudioContext); param/JSON contract in
+`tests/tests/machines/granular.js`.
+
+### SlicerMachine (`type: 'slicer'`)
+
+Chop-and-trigger. Divides the buffer into N equal slices; each noteOn plays one slice
+(one-shot, optionally looped) — the breakbeat-chop / drum-from-a-loop workflow. Plain
+`AudioBufferSourceNode` per noteOn (no worklet), self-enveloping like SamplerMachine.
+
+Slice selection (`slice.mode`): **`note`** — the MIDI note picks the slice (`slice.base`
+maps to slice 0, each semitone up advances one, wraps mod count) for chromatic keyboard
+chopping; **`fixed`** — the `slice` param picks it, p-lockable per step for per-step slice
+locks. `slice` is a number param so it shows + p-locks like any index. (User chose "both":
+note OR p-lock.)
+
+```
+AudioBufferSourceNode (per-note) → outputGain → [Filter]
+```
+
+**Parameters:** `slices` (1–64), `slice` (index, p-lockable), `slice.mode` (`note`/`fixed`),
+`slice.base` (MIDI note → slice 0), `sample.start`/`sample.end` (trim region — slices divide
+**this** region, not the whole buffer), `gate` (fraction of slice length played),
+`sample.speed`, `sample.gain`, `sample.reverse`, `sample.loop`, `output.level` (AudioParam).
+Everything except level is JS-only.
+
+**Custom panel:** `SlicerPanel.js` — waveform with START/END trim handles + slice-grid
+dividers (within the region) + index labels, active slice highlighted; click inside the
+region to select a slice (flips to `fixed` mode). SLICES / TRIM / PLAYBACK / OUTPUT groups.
+
+**Files:** `js/machines/SlicerMachine.js`, `js/ui/panels/SlicerPanel.js`,
+`tests/tests/machines/slicer.js` (fully audio-tested — no worklet).
+
+### TimeStretchMachine (`type: 'stretch'`)
+
+Tempo-locked loop player. Plays a loop at the project BPM regardless of its original
+tempo, pitch independent — Octatrack/Ableton "warp". An `AudioWorkletNode`
+(`time-stretch-processor.js`) does overlap-add (OLA) stretching: the read pointer advances
+at `ratio = origBpm / projectBpm` while overlapping Hann grains are emitted at a fixed
+synthesis hop; pitch is a separate intra-grain resample. Self-enveloping (worklet `gain`,
+gated on noteOn / released on noteOff). Reacts to project tempo via `setBpm`.
+
+Original tempo: **auto-detect + manual override** (user choice). `bars` (1–8) says how many
+bars the trimmed region spans; `detectBpm()` derives `orig.bpm` from `bars × 4 beats /
+trimmed-duration` (DETECT button writes it, and load auto-detects as a first guess);
+`orig.bpm` is a manual override knob. `sync` off → plays at original speed (ratio 1).
+`transpose` (semitones) and note tracking (`sample.pitch`) repitch without touching tempo.
+
+```
+AudioWorkletNode (persistent, stereo) → outputGain → [Filter]
+```
+
+**Parameters:** `orig.bpm`, `bars`, `transpose` (±24 st), `grain.size` (OLA grain ms),
+`sample.start`/`sample.end` (trim), `sample.root`, `sync` (bool), `sample.pitch` (bool),
+`sample.loop` (bool), `sample.reverse` (bool), `output.level` (AudioParam). All except
+level are JS-only and re-push config to the worklet.
+
+**Custom panel:** `TimeStretchPanel.js` — waveform with start/end trim handles, DETECT
+button, TEMPO / PITCH / PLAYBACK / OUTPUT groups, live ratio + effective-BPM readout.
+
+**Files:** `js/machines/TimeStretchMachine.js`, `js/worklets/time-stretch-processor.js`,
+`js/ui/panels/TimeStretchPanel.js`. **Not tested** by the audio suite (AudioWorklet);
+param/JSON + ratio/detect math in `tests/tests/machines/time_stretch.js`.
+
+### BeatRepeatMachine (`type: 'beat-repeat'`)
+
+Stutter / beat-repeat / retrigger. Each noteOn captures a slice (`sample.start` + `length`)
+and fires it back N times in a rapid roll, the repeats spaced by a tempo-synced division
+(`rate`: 1/4 … 1/32). The Elektron retrig / glitch-roll — drop on a step, p-lock `repeats`
+and `rate` for fills. Plain `AudioBufferSourceNode`s scheduled up front (no worklet);
+tempo-synced via `BpmSync.divToSeconds` + `setBpm`. Self-enveloping; noteOff is a no-op
+(the roll is a fixed burst per trig).
+
+```
+AudioBufferSourceNode (per repeat) → repeatGain → outputGain → [Filter]
+```
+
+**Parameters:** `rate` (enum 1/4…1/32, tempo-synced), `repeats` (1–32), `sample.start` +
+`length` (the captured roll slice — this is its trim), `gate` (fraction of each repeat
+played), `pitch.ramp` (semitones added per successive repeat — rising/falling rolls),
+`decay` (level taper across the roll), `sample.speed`, `sample.reverse`, `output.level`
+(AudioParam). All except level JS-only.
+
+**Custom panel:** `BeatRepeatPanel.js` — waveform with draggable capture region
+(START + LENGTH handles), ROLL / SLICE / PLAYBACK / OUTPUT groups, rate dropdown.
+
+**Files:** `js/machines/BeatRepeatMachine.js`, `js/ui/panels/BeatRepeatPanel.js`,
+`tests/tests/machines/beat_repeat.js` (fully audio-tested — no worklet).
+
+### MultiSamplerMachine (`type: 'multi-sampler'`)
+
+Multi-zone sampler — up to `MAX_ZONES` (4) buffers, each with its own velocity range, root,
+level and trim. The **multi-buffer** exception to the single-buffer protocol: it has
+`setBufferAt(i,…)` / `getBufferAt(i)` / `clearBufferAt(i)` and a `loadZoneBuffers(store, ctx)`
+reload helper instead of the single-buffer methods. `toJSON` carries `zoneSampleIds[]` /
+`zoneSampleNames[]`; `Track.fromJSON` and `SoundLibrary` detect it via
+`typeof machine.loadZoneBuffers === 'function'` and call that. `syncFrom` copies all zone
+buffers to sibling voice slots. Each zone is a one-shot `AudioBufferSourceNode`; self-enveloping.
+
+`mode` selects how zones are picked per hit: **`velocity`** — every zone whose `[loVel, hiVel]`
+contains the hit velocity sounds (layer quiet/loud samples for dynamics); **`round`** —
+round-robin over loaded zones (sample rotation / machine-gun fix). If no velocity range
+matches, the first loaded zone falls back so a hit is never silent.
+
+```
+AudioBufferSourceNode (per sounding zone) → zone gain → outputGain → [Filter]
+```
+
+**Parameters (flat `zoneN.*` blocks so the standard param/p-lock/JSON plumbing works):**
+`mode` (enum), `sample.speed`, per zone `zoneN.loVel`/`hiVel`/`root`/`level`/`start`/`end`/`pitch`,
+`output.level` (AudioParam). All except level JS-only.
+
+**Custom panel:** `MultiSamplerPanel.js` — GLOBAL group (mode/speed/level) + one bordered
+strip per zone (load/rec/clear + mini-waveform + LoVel/HiVel/Root/Level/Start/End knobs +
+Pitch toggle). CSS: `.multi-zone-strip` / `.multi-zone-canvas`.
+
+**Files:** `js/machines/MultiSamplerMachine.js`, `js/ui/panels/MultiSamplerPanel.js`,
+`tests/tests/machines/multi_sampler.js` (fully audio-tested — no worklet).
+
+> **Loudness:** the basic sample players (Sampler, WT-Sampler, Granular, Slicer,
+> TimeStretch, BeatRepeat, MultiSampler) are intentionally **absent from `LOUDNESS_TRIM`** —
+> they play recorded material that carries its own level, so no per-machine trim node is
+> wired. (SampleSwarm is the exception: its 7-voice sum is a synthesis-style multiplier and
+> *is* trimmed.)
+
+---
+
 ### MidiMachine (`type: 'midi'`)
 
 Routes sequencer note events to a MIDI output port instead of audio. No WebAudio nodes are created beyond a silent `outputGain` placeholder so the normal Track/VoicePool signal chain doesn't break.

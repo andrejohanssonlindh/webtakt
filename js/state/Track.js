@@ -70,6 +70,11 @@ import { StringsMachine }         from '../machines/StringsMachine.js';
 import { MoogishMachine }         from '../machines/MoogishMachine.js';
 import { MidiMachine }           from '../machines/MidiMachine.js';
 import { InputMachine }          from '../machines/InputMachine.js';
+import { GranularMachine }       from '../machines/GranularMachine.js';
+import { SlicerMachine }         from '../machines/SlicerMachine.js';
+import { TimeStretchMachine }    from '../machines/TimeStretchMachine.js';
+import { BeatRepeatMachine }     from '../machines/BeatRepeatMachine.js';
+import { MultiSamplerMachine }   from '../machines/MultiSamplerMachine.js';
 import { Filter }        from '../signal/Filter.js';
 import { Envelope }      from '../signal/Envelope.js';
 import { VoicePool }     from '../signal/VoicePool.js';
@@ -131,6 +136,11 @@ const MACHINES = {
   moogish:    MoogishMachine,
   'wt-sampler':     WavetableSamplerMachine,
   'sample-swarm':   SampleSwarmMachine,
+  granular:         GranularMachine,
+  slicer:           SlicerMachine,
+  stretch:          TimeStretchMachine,
+  'beat-repeat':    BeatRepeatMachine,
+  'multi-sampler':  MultiSamplerMachine,
   midi:             MidiMachine,
   input:            InputMachine,
 };
@@ -1473,11 +1483,18 @@ export class Track {
     // No-op for non-input machines.
     this._applyInputGate({ reset: true });
 
-    // Restore sampler buffer asynchronously if we have a store reference
-    if ((this.machine.type === 'sampler' || this.machine.type === 'sample-swarm') && this.machine.sampleId && this.sampleStore) {
+    // Restore single-buffer sampler buffer asynchronously if we have a store
+    // reference. Detected by the shared single-buffer protocol (setBuffer +
+    // sampleId), so sampler / sample-swarm / granular / slicer / stretch all
+    // reload without per-type branches.
+    if (typeof this.machine.setBuffer === 'function' && this.machine.sampleId && this.sampleStore) {
       this.sampleStore.load(this.machine.sampleId, this.audio.context).then(buf => {
         if (buf) this.machine.setBuffer(buf, this.machine.sampleId, this.machine.sampleName);
       });
+    }
+    // Restore MULTI-buffer machines (MultiSampler) via their own zone loader.
+    if (typeof this.machine.loadZoneBuffers === 'function' && this.sampleStore) {
+      this.machine.loadZoneBuffers(this.sampleStore, this.audio.context);
     }
     // Restore wt-sampler buffers asynchronously
     if (this.machine.type === 'wt-sampler' && this.sampleStore) {

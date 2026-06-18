@@ -10,7 +10,8 @@
 |---|---|
 | [`design/audio-signal-chain.md`](design/audio-signal-chain.md) | Per-track signal chain, filter architecture, FilterViz, envelope architecture, voice pool/selection, pan, DJ filter, audio constraints |
 | [`design/sequencer.md`](design/sequencer.md) | Clock/sequencer architecture, step data model, p-lock architecture, track nav/page control, record mode, drum mode, double-click step |
-| [`design/machines.md`](design/machines.md) | All machine types: drum machines, melodic synths, sampler, wavetable sampler; drum architecture; hidden param pattern |
+| [`design/machines.md`](design/machines.md) | All machine types: drum machines, melodic synths, samplers (sampler, wavetable sampler, sample swarm, granular, slicer, time-stretch, beat-repeat, multi-sampler + the shared single-buffer protocol); drum architecture; hidden param pattern |
+| [`design/creating-machines.md`](design/creating-machines.md) | **Authoring guide** — read before adding a machine: every registration point, the Machine contract, SPEC vs hand-written, single/multi-buffer + worklet skeletons, panel & test conventions, doc checklist |
 | [`design/fx.md`](design/fx.md) | DelayFX, BitcrushFX, ChorusFX, ReverbFX — parameters, signal routing, reorderable FX pipeline pane, UI, p-lock behaviour |
 | [`design/ui.md`](design/ui.md) | SynthPanel tabs, mixer tab, transport controls, scale quantisation, LFO destination groups, state/event flow |
 | [`design/state.md`](design/state.md) | Save/load (Project JSON), sound library, sample store |
@@ -74,6 +75,11 @@ js/
     WavetableMachine.js — Wavetable oscillator with morphing (8-entry bank via PeriodicWave)
     WavetableSamplerMachine.js — Two-sample wavetable: morph between sample A and B via AudioWorklet
     SampleSwarmMachine.js — 7-voice sample swarm: one sample played through 7 detuned BufferSourceNodes with spread + drift (type: 'sample-swarm')
+    GranularMachine.js  — Granular grain cloud: AudioWorklet sprays windowed grains; scan position (AudioParam) decoupled from pitch (type: 'granular')
+    SlicerMachine.js    — Slice-and-trigger: chop buffer into N slices, pick by note or per-step p-lock (type: 'slicer')
+    TimeStretchMachine.js — Tempo-locked loop player: OLA AudioWorklet stretches loop to project BPM, pitch independent; auto-detect orig BPM (type: 'stretch')
+    BeatRepeatMachine.js — Stutter/retrig roll: captures a slice, fires N tempo-synced repeats with gate + pitch ramp + decay (type: 'beat-repeat')
+    MultiSamplerMachine.js — Multi-zone sampler: up to 4 buffers mapped to velocity ranges (layer) or round-robin; multi-buffer (loadZoneBuffers) (type: 'multi-sampler')
     MidiMachine.js      — MIDI out machine: routes noteOn/noteOff to a selected MIDI output port/channel; params: channel (1–16), noteOffset (±24 semitones); no audio output (type: 'midi')
     KarplusMachine.js   — Karplus-Strong plucked string (noise burst + comb filter)
     MarimbaMachine.js   — Marimba bar: 3 tuned inharmonic sine partials (ratios ~1×/3.9×/9.9×) + mallet noise burst, each partial with independent decay
@@ -133,6 +139,11 @@ js/
       SamplerPanel.js         — Custom SYNTH tab for SamplerMachine: file picker, mic record, waveform + trim handles
       WavetableSamplerPanel.js — Custom SYNTH tab for WavetableSamplerMachine: dual file pickers + morph/speed/level controls
       SampleSwarmPanel.js     — Custom SYNTH tab for SampleSwarmMachine: SamplerPanel + swarm knob row
+      GranularPanel.js        — Custom SYNTH tab for GranularMachine: waveform with draggable position marker + cloud/grain/pitch knobs
+      SlicerPanel.js          — Custom SYNTH tab for SlicerMachine: waveform with slice grid (click to select) + slices/gate knobs
+      TimeStretchPanel.js     — Custom SYNTH tab for TimeStretchMachine: waveform trim + DETECT + tempo/pitch knobs + ratio readout
+      BeatRepeatPanel.js      — Custom SYNTH tab for BeatRepeatMachine: waveform capture region + roll/slice knobs + rate select
+      MultiSamplerPanel.js    — Custom SYNTH tab for MultiSamplerMachine: global controls + per-zone strips (load/wave/velocity-map)
       MidiPanel.js            — Custom SYNTH tab for MidiMachine (MIDI out): port/channel/note-offset
       TrigPanel.js            — TRIG tab: length/chance/detune/tone/nudge/condition knobs, voice cards, shift, note follow
       ScalesPanel.js          — SCALES tab: searchable scale dropdown, root strip, degree preview, keyboard fold
@@ -166,6 +177,8 @@ js/
     Scales.js           — Scale definitions (20 scales) + noteInScale() helper
   worklets/
     wavetable-sampler-processor.js — AudioWorkletProcessor for WavetableSamplerMachine
+    granular-processor.js          — AudioWorkletProcessor for GranularMachine (grain-cloud scheduler)
+    time-stretch-processor.js      — AudioWorkletProcessor for TimeStretchMachine (overlap-add stretch)
     patina-ladder-processor.js     — AudioWorkletProcessor: PATINA Moog transistor-ladder filter (Filter.js engine='analogue'); preloaded at boot by AudioEngine
     bitcrush-processor.js          — AudioWorkletProcessor for Crush2FX: true sample-and-hold downsample + bit quantize; preloaded at boot by AudioEngine
     stutter-processor.js           — AudioWorkletProcessor for StutterFX: rolling capture + latched tempo-synced slice loop (beat-repeat); preloaded at boot by AudioEngine
@@ -249,7 +262,7 @@ UI (reads AppState, calls Track/Sequencer/Machine methods)
 | Steps total | 64 per track |
 | Steps visible | 16 (one page) |
 | Step pages | Per-track page nav UI built |
-| Machines | SynthMachine, KickSilkMachine, KickHardMachine, AnalogueKickMachine, SnareMachine, AnalogueSnareMachine, HiHatMachine, AnalogueHiHatMachine, AnalogueTomMachine, FMMachine, SwarmMachine, NoiseMachine, TransientMachine, SamplerMachine, WavetableSamplerMachine, SampleSwarmMachine, CymbalMachine, AnalogueCymbalMachine, WoodMachine, ClappMachine, AnalogueClappMachine, WavetableMachine, KarplusMachine, MarimbaMachine, BassMachine, CombMachine, ChordMachine, MoogishMachine active; DrumMachine stubbed |
+| Machines | SynthMachine, KickSilkMachine, KickHardMachine, AnalogueKickMachine, SnareMachine, AnalogueSnareMachine, HiHatMachine, AnalogueHiHatMachine, AnalogueTomMachine, FMMachine, SwarmMachine, NoiseMachine, TransientMachine, SamplerMachine, WavetableSamplerMachine, SampleSwarmMachine, GranularMachine, SlicerMachine, TimeStretchMachine, BeatRepeatMachine, MultiSamplerMachine, CymbalMachine, AnalogueCymbalMachine, WoodMachine, ClappMachine, AnalogueClappMachine, WavetableMachine, KarplusMachine, MarimbaMachine, BassMachine, CombMachine, ChordMachine, MoogishMachine active; DrumMachine stubbed |
 | Filter | Two engines (`filter.engine`): **digital** biquad (LP/HP/BP/Notch/Peaking/Allpass + slope) and **analogue** PATINA Moog ladder worklet (24 dB/oct, self-oscillation, drive, drift, **keytrack**) + base filter (HPF+LPF), FilterViz with env ghost (approx curve in analogue mode). Analogue mode also sweeps the cutoff with RC (exponential) curves. |
 | Pan | Per-track stereo pan, p-lockable + LFO-assignable |
 | Delay | Per-track feedback delay, p-lockable + LFO-assignable |

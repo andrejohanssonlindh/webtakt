@@ -19,6 +19,11 @@ import { InputPanel }              from './panels/InputPanel.js';
 import { SamplerPanel }            from './panels/SamplerPanel.js';
 import { WavetableSamplerPanel }   from './panels/WavetableSamplerPanel.js';
 import { SampleSwarmPanel }        from './panels/SampleSwarmPanel.js';
+import { GranularPanel }           from './panels/GranularPanel.js';
+import { SlicerPanel }             from './panels/SlicerPanel.js';
+import { TimeStretchPanel }        from './panels/TimeStretchPanel.js';
+import { BeatRepeatPanel }         from './panels/BeatRepeatPanel.js';
+import { MultiSamplerPanel }       from './panels/MultiSamplerPanel.js';
 import { ArpPanel }                from './panels/ArpPanel.js';
 import { formatParam }             from './panels/formatParam.js';
 import { TrigPanel }            from './panels/TrigPanel.js';
@@ -697,6 +702,31 @@ export class SynthPanel {
     if (track.machine.type === 'sample-swarm') {
       const ctx = this._makePanelContext(track);
       new SampleSwarmPanel(this._content, ctx, this.sampleStore, this.audioContext);
+      return;
+    }
+    if (track.machine.type === 'granular') {
+      const ctx = this._makePanelContext(track);
+      new GranularPanel(this._content, ctx, this.sampleStore, this.audioContext);
+      return;
+    }
+    if (track.machine.type === 'slicer') {
+      const ctx = this._makePanelContext(track);
+      new SlicerPanel(this._content, ctx, this.sampleStore, this.audioContext);
+      return;
+    }
+    if (track.machine.type === 'stretch') {
+      const ctx = this._makePanelContext(track);
+      new TimeStretchPanel(this._content, ctx, this.sampleStore, this.audioContext);
+      return;
+    }
+    if (track.machine.type === 'beat-repeat') {
+      const ctx = this._makePanelContext(track);
+      new BeatRepeatPanel(this._content, ctx, this.sampleStore, this.audioContext);
+      return;
+    }
+    if (track.machine.type === 'multi-sampler') {
+      const ctx = this._makePanelContext(track);
+      new MultiSamplerPanel(this._content, ctx, this.sampleStore, this.audioContext);
       return;
     }
     if (track.machine.type === 'midi') {

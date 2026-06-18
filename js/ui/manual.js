@@ -1457,6 +1457,158 @@ export const MACHINE_MANUAL = {
     ],
   },
 
+  granular: {
+    title: 'SYNTH (Granular)',
+    blurb: 'A granular grain cloud. While a note is held it sprays a continuous ' +
+           'stream of tiny, overlapping grains read from the loaded sample. The ' +
+           'key trick: the scan POSITION and the PITCH are independent — freeze ' +
+           'the playhead and still play melodies, or sweep it slowly for an ' +
+           'evolving pad. Drag the waveform (or the Position knob) to move the ' +
+           'playhead; the purple band shows the Spray range. Hold a trig long ' +
+           'for a drone, short for a textured stab.',
+    items: [
+      ['Position', 'Where in the sample grains are taken from (0–100%). This is ' +
+                 'an AudioParam — assign an LFO or p-lock it per step to scan the ' +
+                 'cloud, or drag it on the waveform. The headline control.'],
+      ['Scan', 'Auto-advance speed of the playhead (−2×…+2×). 0 = frozen at ' +
+                 'Position (pad mode). Non-zero drifts the playhead forward/back ' +
+                 'on its own, turning the machine into a granular loop player.'],
+      ['Spread', 'Stereo width of the cloud (0–100%). Each grain is randomly ' +
+                 'panned within this range for a wide, diffuse texture.'],
+      ['Size', 'Grain length in ms (2–500). Short = buzzy/textural; long = ' +
+                 'smooth/airy. Interacts with Density for the overall character.'],
+      ['Density', 'Grains launched per second (1–200). Higher = thicker, smoother ' +
+                 'cloud (grains overlap); lower = sparse, stuttery, pointillist.'],
+      ['Spray', 'Random scatter of each grain’s start point around Position ' +
+                 '(0–100% of the buffer). A little adds life; a lot smears the ' +
+                 'cloud across the whole sample.'],
+      ['P.Jit', 'Per-grain pitch randomisation (0–100%). Detunes each grain a ' +
+                 'little for a shimmering, chorused texture.'],
+      ['Start / End', 'Trim region (0–100%). Grains, Position and Spray are all ' +
+                 'confined to this slice of the sample — Position is relative to it.'],
+      ['Speed', 'Base pitch multiplier of the grains (0.125×–4×), independent of ' +
+                 'Position.'],
+      ['Root', 'MIDI root note for pitch tracking (default C4=60).'],
+      ['Pitch', 'When on, keyboard notes transpose the grain pitch relative to ' +
+                 'Root. When off, fixed pitch regardless of note.'],
+      ['Rev', 'Read grains backwards through the sample.'],
+      ['Level', 'Master output level for this machine (0–100%).'],
+    ],
+  },
+
+  slicer: {
+    title: 'SYNTH (Slicer)',
+    blurb: 'A chop-and-trigger sampler. The loaded sample is divided into equal ' +
+           'slices; each step plays one slice. Drop in a drum loop, set Slices to ' +
+           '16, and every step can fire a different slice — classic breakbeat ' +
+           'chopping. Click a slice on the waveform to select it. Slices can be ' +
+           'picked by the played note OR locked per step (see SliceBy).',
+    items: [
+      ['Slices', 'How many equal slices the sample is cut into (1–64).'],
+      ['Slice', 'The active slice index. In FIXED mode this picks the slice (and ' +
+                 'is p-lockable per step for per-step chops); in NOTE mode it just ' +
+                 'reflects whatever the played note selected.'],
+      ['By (SliceBy)', 'NOTE = the MIDI note picks the slice (Base note plays ' +
+                 'slice 0, each semitone up advances one — chromatic chopping from ' +
+                 'a keyboard). FIXED = the Slice param/p-lock picks it regardless ' +
+                 'of note. Clicking a slice on the waveform switches to FIXED.'],
+      ['Base', 'In NOTE mode, the MIDI note that maps to slice 0 (default C4=60).'],
+      ['Start / End', 'Trim region (0–100%). The slices divide THIS region, not ' +
+                 'the whole buffer — trim to a clean loop, then slice it.'],
+      ['Gate', 'Fraction of each slice that plays (2–100%). Lower values cut the ' +
+                 'slice short for tighter, choppier hits.'],
+      ['Speed', 'Playback rate multiplier (0.125×–4×).'],
+      ['Gain', 'Pre-amp gain (0–20×).'],
+      ['Rev', 'Play the selected slice backwards.'],
+      ['Loop', 'Loop the selected slice region instead of playing it once.'],
+      ['Level', 'Master output level for this machine (0–100%).'],
+    ],
+  },
+
+  stretch: {
+    title: 'SYNTH (TimeStretch)',
+    blurb: 'A tempo-locked loop player. Plays a loop at the project BPM no matter ' +
+           'its original tempo, with pitch independent of tempo (time-stretch / ' +
+           '“warp”). Load a loop, hit DETECT (or set Orig BPM and Bars by hand), ' +
+           'and it locks to the song — speed up/slow down the project and the loop ' +
+           'follows without changing pitch. Hold the trig to keep it running.',
+    items: [
+      ['Orig BPM', 'The loop’s original tempo (40–300). The stretch amount is ' +
+                 'Orig BPM ÷ project BPM. DETECT estimates this; you can also dial ' +
+                 'it by hand.'],
+      ['Bars', 'How many bars the trimmed loop spans (1–8). DETECT uses this to ' +
+                 'compute Orig BPM from the loop’s length (4 beats per bar).'],
+      ['DETECT', 'Estimate Orig BPM from the trimmed region length × Bars and ' +
+                 'write it into the Orig BPM knob. Loading a file auto-detects once.'],
+      ['Sync', 'When on, the loop locks to the project BPM. When off, it plays at ' +
+                 'its original speed (1× — no stretching).'],
+      ['Transpose', 'Pitch the loop up/down in semitones (±24) without changing ' +
+                 'its tempo.'],
+      ['Grain', 'Time-stretch grain size in ms (20–200). Smaller = tighter ' +
+                 'transients but more warble; larger = smoother but smearier. A ' +
+                 'tradeoff to tune per loop.'],
+      ['Root', 'MIDI root note for note-tracking pitch (when Pitch is on).'],
+      ['Start / End', 'Trim the loop region (0–1). DETECT measures the trimmed ' +
+                 'length, so trim to a clean loop first.'],
+      ['Pitch', 'When on, keyboard notes transpose the loop relative to Root ' +
+                 '(still tempo-locked). When off, fixed pitch.'],
+      ['Loop', 'Loop the region continuously while the trig is held.'],
+      ['Rev', 'Play the loop backwards.'],
+      ['Level', 'Master output level for this machine (0–100%).'],
+    ],
+  },
+
+  'beat-repeat': {
+    title: 'SYNTH (BeatRepeat)',
+    blurb: 'A stutter / retrigger roll machine. Each step captures a slice of the ' +
+           'sample (drag the red capture region on the waveform) and fires it back ' +
+           'several times in a fast, tempo-locked roll — the classic glitch fill / ' +
+           'drum roll. P-lock Repeats and Rate per step for build-ups and stutters.',
+    items: [
+      ['Rate', 'The interval between repeats, locked to the tempo (1/4, 1/8, 1/16, ' +
+                 '1/32). Smaller = faster, tighter roll.'],
+      ['Repeats', 'How many hits are in the roll (1–32). 1 = a single one-shot; ' +
+                 'higher = a longer roll.'],
+      ['Start', 'Where the captured slice begins in the sample (0–100%).'],
+      ['Length', 'How much of the sample each repeat plays (0–100% of the buffer). ' +
+                 'Together with Start this is the captured slice that gets rolled.'],
+      ['Gate', 'Fraction of each repeat interval the hit actually sounds (5–100%). ' +
+                 'Lower = tighter, more staccato repeats with gaps between them.'],
+      ['P.Ramp', 'Pitch change added per successive repeat in semitones (±12). ' +
+                 'Positive = rising roll, negative = falling roll, 0 = flat.'],
+      ['Decay', 'Fades the roll out across its repeats (0 = flat/constant level, ' +
+                 '100% = fades to silence by the last repeat).'],
+      ['Speed', 'Playback rate multiplier of the captured slice (0.125×–4×).'],
+      ['Rev', 'Play the captured slice backwards.'],
+      ['Level', 'Master output level for this machine (0–100%).'],
+    ],
+  },
+
+  'multi-sampler': {
+    title: 'SYNTH (Multi Sampler)',
+    blurb: 'A multi-zone sampler — load up to four samples, each with its own ' +
+           'velocity range, root note and trim. Use it to layer soft/loud samples ' +
+           'for dynamics, build a small drum kit, or rotate samples on repeated ' +
+           'hits. MODE decides how zones are chosen per note.',
+    items: [
+      ['Mode', 'VEL LAYER = every zone whose velocity range covers the hit plays ' +
+                 '(layer quiet + loud samples for dynamics). ROUND-ROBIN = each ' +
+                 'note plays the next loaded zone in turn (sample rotation, avoids ' +
+                 'the “machine-gun” effect on repeated hits).'],
+      ['Speed', 'Global playback rate multiplier applied to every zone (0.125×–4×).'],
+      ['Level', 'Master output level for this machine (0–100%).'],
+      ['Zone LOAD / ⏺ / ✕', 'Per zone: load a file, record from the mic, or clear ' +
+                 'the zone. Each zone has its own mini-waveform.'],
+      ['Lo V / Hi V', 'The velocity range (0–127) this zone responds to in VEL ' +
+                 'LAYER mode. Overlap ranges to layer zones; split them to switch.'],
+      ['Root', 'MIDI root note this zone’s sample is tuned to (when Pitch is on).'],
+      ['Lvl', 'Per-zone level (0–4×) — balance the zones against each other.'],
+      ['Strt / End', 'Per-zone trim region (0–100%).'],
+      ['Pitch', 'When on, notes transpose this zone relative to its Root; off = ' +
+                 'fixed pitch (drum/one-shot).'],
+    ],
+  },
+
   // ── I/O ──────────────────────────────────────────────────────────────────
 
   input: {
