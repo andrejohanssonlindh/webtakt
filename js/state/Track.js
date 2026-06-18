@@ -470,6 +470,11 @@ export class Track {
       for (const env of this._pool.envelopes) {
         const g = env.ampGain.gain;
         g.cancelScheduledValues(t);
+        // Set BOTH the intrinsic value and a schedule point. The static pin has
+        // no ramp, so the immediate `.value` write and the `setValueAtTime` carry
+        // the same value — keeping the gate's state introspectable via `.value`
+        // (the scheduled event alone does not update `.value` until render).
+        g.value = open ? 1 : 0;
         g.setValueAtTime(open ? 1 : 0, t);
       }
       return;
@@ -485,6 +490,7 @@ export class Track {
     for (const env of this._pool.envelopes) {
       const g = env.ampGain.gain;
       g.cancelScheduledValues(t);
+      g.value = 0;          // intrinsic baseline (see note above; keeps `.value` truthful)
       g.setValueAtTime(0, t);
     }
   }
