@@ -21,14 +21,21 @@
  *   input → ap0..apN → fb → (loop) → panSide → wetGain ────────→ output
  *   lfo → +bias/−bias depth → ap.frequency   (left +, right −)
  *
+ * Rate is a unified Hz↔BPM sync knob (same model as AutoPanFX / ChorusFX), so
+ * the sweep can lock to tempo when you want it to.
+ *
  * Parameters:
- *   'phaser.rate'     — 0.05–8 Hz, default 0.4
- *   'phaser.depth'    — 0–1,       default 0.8
- *   'phaser.feedback' — 0–0.85,    default 0.5
- *   'phaser.wet'      — 0–1,       default 0
+ *   'phaser.rate'        — Hz (syncMode='hz'), 0.05–8, default 0.4
+ *   'phaser.syncMode'    — 'hz' | 'bpm', default 'hz'
+ *   'phaser.bpmCount32'  — 1/32 period count (syncMode='bpm'), default 32 (= 1 bar)
+ *   'phaser.depth'       — 0–1,       default 0.8
+ *   'phaser.feedback'    — 0–0.85,    default 0.5
+ *   'phaser.wet'         — 0–1,       default 0
  *
  * Public: the standard FX block interface.
  */
+
+import { count32ToHz, MUSICAL_SNAP_32 } from '../util/BpmSync.js';
 
 const STAGES    = 6;       // 6 stages = 3 notches → an obvious, classic phaser
 const CENTER_HZ = 1000;    // sweep centre
@@ -38,12 +45,15 @@ export class PhaserFX {
   /** @param {AudioContext} context */
   constructor(context) {
     this.context = context;
+    this._bpm = 120;
 
     this._params = {
-      'phaser.rate':     0.4,
-      'phaser.depth':    0.8,
-      'phaser.feedback': 0.5,
-      'phaser.wet':      0,
+      'phaser.rate':       0.4,
+      'phaser.syncMode':   'hz',
+      'phaser.bpmCount32':  32,    // 32 × 1/32 = 1 bar — a slow, classic phaser sweep
+      'phaser.depth':      0.8,
+      'phaser.feedback':   0.5,
+      'phaser.wet':        0,
     };
 
     this.enabled = false;
@@ -63,7 +73,7 @@ export class PhaserFX {
     // modulation swings AROUND that centre and stays positive.
     this._lfo = context.createOscillator();
     this._lfo.type = 'sine';
-    this._lfo.frequency.value = this._params['phaser.rate'];
+    this._lfo.frequency.value = this._effectiveRateHz();
     this._depthL = context.createGain();
     this._depthR = context.createGain();
     this._depthL.gain.value =  SWING_HZ * this._params['phaser.depth'];
@@ -133,6 +143,24 @@ export class PhaserFX {
   connectInput(sourceNode) { sourceNode.connect(this.inputNode); }
   disconnect() { this.outputNode.disconnect(); }
 
+  /** LFO frequency in Hz, honouring the Hz↔BPM sync mode. */
+  _effectiveRateHz() {
+    if (this._params['phaser.syncMode'] === 'bpm') {
+      return count32ToHz(this._params['phaser.bpmCount32'], this._bpm);
+    }
+    return this._params['phaser.rate'];
+  }
+
+  _applyRate(time) {
+    const t = time ?? this.context.currentTime;
+    this._lfo.frequency.setTargetAtTime(this._effectiveRateHz(), t, 0.05);
+  }
+
+  setBpm(bpm) {
+    this._bpm = bpm;
+    if (this._params['phaser.syncMode'] === 'bpm') this._applyRate();
+  }
+
   setEnabled(enabled) {
     this.enabled = enabled;
     this._applyMix(enabled ? this._params['phaser.wet'] : 0, this.context.currentTime);
@@ -148,7 +176,9 @@ export class PhaserFX {
     const t = time ?? this.context.currentTime;
     switch (path) {
       case 'phaser.rate':
-        this._lfo.frequency.setTargetAtTime(value, t, 0.01);
+      case 'phaser.bpmCount32':
+      case 'phaser.syncMode':
+        this._applyRate(t);
         break;
       case 'phaser.depth':
         this._depthL.gain.setTargetAtTime( SWING_HZ * value, t, 0.01);
@@ -169,10 +199,22 @@ export class PhaserFX {
 
   getParamList() {
     return [
-      { path: 'phaser.rate',     label: 'Rate',     type: 'number', min: 0.05, max: 8,    default: 0.4, modulatable: true, lfoMin: 0.05, lfoMax: 8,    plockMode: 'audioParam' },
+      // Unified Hz↔BPM rate knob (same model as AutoPanFX / ChorusFX). offLabel:'HZ'.
+      {
+        path: 'phaser.sync', label: 'Rate', type: 'sync',
+        modePath: 'phaser.syncMode',
+        msPath:   'phaser.rate',
+        bpmPath:  'phaser.bpmCount32',
+        offLabel: 'HZ',
+        bpmMin: 0.25, bpmMax: 64, bpmSnap: MUSICAL_SNAP_32,
+      },
       { path: 'phaser.depth',    label: 'Depth',    type: 'number', min: 0,    max: 1,    default: 0.8, modulatable: true, lfoMin: 0,    lfoMax: 1,    plockMode: 'audioParam' },
       { path: 'phaser.feedback', label: 'Feedback', type: 'number', min: 0,    max: 0.85, default: 0.5, modulatable: true, lfoMin: 0,    lfoMax: 0.85, plockMode: 'audioParam' },
       { path: 'phaser.wet',      label: 'Wet',      type: 'number', min: 0,    max: 1,    default: 0,   modulatable: true, lfoMin: 0,    lfoMax: 1,    plockMode: 'audioParam' },
+      // Backing params for the sync knob (hidden — the knob drives them).
+      { path: 'phaser.syncMode',   label: 'Sync',     type: 'enum',   options: ['hz','bpm'], default: 'hz', modulatable: false, plockMode: 'js', hidden: true },
+      { path: 'phaser.rate',       label: 'Rate',     type: 'number', min: 0.05, max: 8,  default: 0.4, modulatable: true, lfoMin: 0.05, lfoMax: 8,  plockMode: 'audioParam', hidden: true },
+      { path: 'phaser.bpmCount32', label: 'Division', type: 'number', min: 1,    max: 64, default: 32,  modulatable: true, plockMode: 'js', hidden: true },
     ];
   }
 

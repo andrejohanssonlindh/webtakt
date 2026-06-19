@@ -92,6 +92,9 @@ export class LiveArp {
     if (this._held.length === 0) this._stop();
   }
 
+  /** True while any note is latched into the arp (held keys feeding it). */
+  get hasHeld() { return this._held.length > 0; }
+
   /** Release everything (e.g. on track switch / arp disable). */
   releaseAll() {
     this._held = [];

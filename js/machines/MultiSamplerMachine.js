@@ -57,6 +57,9 @@ export class MultiSamplerMachine extends Machine {
     this._buffers     = new Array(MAX_ZONES).fill(null);
     this.zoneSampleIds   = new Array(MAX_ZONES).fill(null);
     this.zoneSampleNames = new Array(MAX_ZONES).fill('');
+    // Remote source URL per zone (archive.org / curated). Persisted so a zone
+    // re-fetches when its localStorage copy is missing — see loadZoneBuffers.
+    this.zoneSampleUrls  = new Array(MAX_ZONES).fill(null);
 
     this._roundIdx = 0;        // round-robin cursor (authoritative on canonical slot-0)
     this._forcedRoundIdx = null; // set by syncFrom on a firing slot for one hit
@@ -68,11 +71,14 @@ export class MultiSamplerMachine extends Machine {
 
   // ── Multi-buffer management ─────────────────────────────────────────────────
 
-  setBufferAt(i, buffer, id, name) {
+  setBufferAt(i, buffer, id, name, url = undefined) {
     if (i < 0 || i >= MAX_ZONES) return;
     this._buffers[i]        = buffer;
     this.zoneSampleIds[i]   = id;
     this.zoneSampleNames[i] = name;
+    // Only overwrite the url when one is passed (reloads from store don't carry
+    // it and must not wipe the persisted source).
+    if (url !== undefined) this.zoneSampleUrls[i] = url;
   }
 
   getBufferAt(i) { return this._buffers[i] ?? null; }
@@ -84,6 +90,7 @@ export class MultiSamplerMachine extends Machine {
     this._buffers[i]        = null;
     this.zoneSampleIds[i]   = null;
     this.zoneSampleNames[i] = '';
+    this.zoneSampleUrls[i]  = null;
   }
 
   /** RESET helper: drop every zone buffer. */
@@ -101,11 +108,27 @@ export class MultiSamplerMachine extends Machine {
   loadZoneBuffers(store, ctx) {
     if (!store) return;
     for (let i = 0; i < MAX_ZONES; i++) {
-      const id = this.zoneSampleIds[i];
-      if (!id) continue;
-      store.load(id, ctx).then(buf => {
+      const id  = this.zoneSampleIds[i];
+      const url = this.zoneSampleUrls[i];
+      if (!id && !url) continue;
+      store.load(id, ctx).then(async buf => {
+        // Local copy missing (big samples don't fit localStorage) but we kept
+        // the source URL — re-fetch + decode it (no store write).
+        if (!buf && url) buf = await this._fetchUrlBuffer(url, ctx);
         if (buf) this.setBufferAt(i, buf, id, this.zoneSampleNames[i]);
       });
+    }
+  }
+
+  /** Fetch + decode a remote zone sample URL. Returns null on any failure. */
+  async _fetchUrlBuffer(url, ctx) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const bytes = await res.arrayBuffer();
+      return await ctx.decodeAudioData(bytes.slice(0));
+    } catch (_) {
+      return null;
     }
   }
 
@@ -241,6 +264,7 @@ export class MultiSamplerMachine extends Machine {
       type:            this.type,
       zoneSampleIds:   [...this.zoneSampleIds],
       zoneSampleNames: [...this.zoneSampleNames],
+      zoneSampleUrls:  [...this.zoneSampleUrls],  // remote sources; re-fetched if local copy is gone
       params:          { ...this._params },
     };
   }
@@ -250,9 +274,12 @@ export class MultiSamplerMachine extends Machine {
       ? obj.zoneSampleIds.slice(0, MAX_ZONES) : new Array(MAX_ZONES).fill(null);
     this.zoneSampleNames = Array.isArray(obj.zoneSampleNames)
       ? obj.zoneSampleNames.slice(0, MAX_ZONES) : new Array(MAX_ZONES).fill('');
+    this.zoneSampleUrls  = Array.isArray(obj.zoneSampleUrls)
+      ? obj.zoneSampleUrls.slice(0, MAX_ZONES) : new Array(MAX_ZONES).fill(null);
     // pad to MAX_ZONES
     while (this.zoneSampleIds.length   < MAX_ZONES) this.zoneSampleIds.push(null);
     while (this.zoneSampleNames.length < MAX_ZONES) this.zoneSampleNames.push('');
+    while (this.zoneSampleUrls.length  < MAX_ZONES) this.zoneSampleUrls.push(null);
     Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v));
   }
 

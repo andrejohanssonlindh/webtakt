@@ -101,7 +101,7 @@ js/
     ReverbFX.js         — Convolution reverb with synthesised IR
     DistortionFX.js     — tanh waveshaper drive + tone LP (addable FX instance)
     CompressorFX.js     — DynamicsCompressorNode + makeup gain, dry/wet (addable FX instance)
-    PhaserFX.js         — STEREO phaser: 6 LFO-swept allpass stages per channel, L/R counter-sweep (right depth tap negated) + wider range + feedback (addable FX instance). Un-parked: the old mono version was too subtle
+    PhaserFX.js         — STEREO phaser: 6 LFO-swept allpass stages per channel, L/R counter-sweep (right depth tap negated) + wider range + feedback (addable FX instance). Rate is a Hz/BPM sync knob (same model as AutoPanFX). Un-parked: the old mono version was too subtle
     FXFilter.js         — Standalone post-sum biquad filter block (paraphonic; addable FX instance) — distinct from per-voice Filter.js
     NormalizerFX.js     — Live auto-gain leveller (addable FX instance): AnalyserNode taps the signal, rAF loop scales a GainNode toward a target level; auto-tracks upstream changes. A fast audio-thread brickwall DynamicsCompressor (threshold = Target dB) sits after the auto-gain to catch the transient that slips past the slow UI-thread loop
     EQ3FX.js            — 3-band EQ: low shelf / mid bell (tunable freq+Q) / high shelf, in-line (addable FX instance)

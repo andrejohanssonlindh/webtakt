@@ -152,6 +152,19 @@ export class Keyboard {
       // a held note once you'd switched away from its track.
       // For live-arp input mode on the prev track, we DO stop the arp runner
       // (it would otherwise loop forever with no key to stop it).
+      // If you switch tracks while physically holding keys, those open voices
+      // would otherwise be orphaned (frozen, ringing with no key to release
+      // them — STOP-ALL the only way out). The reasonable behaviour is to LATCH
+      // them: if the prev track didn't already have HOLD on, auto-enable it so
+      // the held notes become a proper hold latch rather than stuck voices. This
+      // covers both plain machine voices (_heldSlots) and arp-input mode, where
+      // the held notes live in the prev track's liveArp instead.
+      const prevHasHeld = this._heldSlots.size > 0 || !!prevTrack?.liveArp?.hasHeld;
+      if (prevTrack && !prevTrack.held && prevHasHeld) {
+        prevTrack.setHold(true);
+        // Reflect the new latch state in the HOLD button + TrackRow H badge.
+        this.state.emit('holdModeChanged', { holdMode: true, track: prevTrack });
+      }
       if (prevTrack?.held) {
         // Move the still-open keyboard voices into the track's latch stash,
         // keyed by midi note. They keep ringing; _flushLatched(track) releases

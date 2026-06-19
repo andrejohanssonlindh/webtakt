@@ -162,6 +162,9 @@ export class MultiSamplerPanel {
           const fname = /\.[a-z0-9]{2,4}$/i.test(name) ? name : `${name}.wav`;
           const file = new File([blob], fname, { type: blob.type || 'audio/wav' });
           await this._loadFile(i, file);
+          // Remember the remote source so saving the track persists this zone's
+          // link (re-fetched on reload when the local copy is gone).
+          this.machine.zoneSampleUrls[i] = url;
         },
       });
     });
@@ -307,7 +310,8 @@ export class MultiSamplerPanel {
       const arrayBuf = await file.arrayBuffer();
       const audioBuf = await this.audioContext.decodeAudioData(arrayBuf);
       const { id } = this.sampleStore.save(file.name, audioBuf);
-      this.machine.setBufferAt(i, audioBuf, id, file.name);
+      // Local file → no remote source (clear any prior URL on this zone).
+      this.machine.setBufferAt(i, audioBuf, id, file.name, null);
       this.ctx.getTrack?.()?._pool?.syncParams?.();
       this._nameEls[i].textContent = file.name;
       this._setupZoneCanvas(i);
@@ -344,7 +348,7 @@ export class MultiSamplerPanel {
         const audioBuf = await this.audioContext.decodeAudioData(await blob.arrayBuffer());
         const name = `zone${i}-rec-` + new Date().toISOString().slice(11, 19) + '.wav';
         const { id } = this.sampleStore.save(name, audioBuf);
-        this.machine.setBufferAt(i, audioBuf, id, name);
+        this.machine.setBufferAt(i, audioBuf, id, name, null); // mic rec → no remote source
         this.ctx.getTrack?.()?._pool?.syncParams?.();
         this._nameEls[i].textContent = name;
         this._setupZoneCanvas(i);

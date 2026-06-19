@@ -100,8 +100,11 @@ load `Track.fromJSON` tries `SampleStore.load(sampleId)` first; if that misses
 samples survive a reload as long as the source is still reachable. Failure
 (offline, item removed, CORS) degrades quietly — the track loads without audio.
 
-`MultiSamplerPanel` (per-zone buffers) does **not** yet persist zone URLs — a
-follow-up if remote multi-zone kits become common.
+`MultiSamplerMachine` does the same per zone via a parallel `zoneSampleUrls`
+array (persisted in toJSON/fromJSON, cleared in clearBufferAt). `loadZoneBuffers`
+re-fetches a zone from its URL when the store misses. Local/mic loads pass an
+explicit `null` url to `setBufferAt` so they clear any prior remote source;
+reloads from the store pass no url arg and leave the persisted source intact.
 
 ## Limitations / future
 

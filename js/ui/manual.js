@@ -621,8 +621,10 @@ export const MANUAL_CONTENT = {
            'is STEREO: the left and right notches sweep in opposite directions, so ' +
            'it also widens the image.',
     items: [
-      ['Rate', 'Speed of the sweep LFO (0.05–8 Hz). Slow = a long, lazy swoosh; ' +
-                'fast = a wobbly, vibrato-like churn.'],
+      ['Rate', 'Speed of the sweep LFO. Slow = a long, lazy swoosh; fast = a ' +
+                'wobbly, vibrato-like churn. Double-click the knob centre to switch ' +
+                'between free Hz (0.05–8 Hz) and tempo-synced BPM divisions, so the ' +
+                'sweep can lock to the beat (e.g. one full sweep per bar).'],
       ['Depth', 'How far the notches sweep (0–1). Wider depth = a more dramatic, ' +
                 'full-range swoosh; low depth = a narrow, subtle shimmer.'],
       ['Feedback', 'Feeds the output back through the allpass bank (0–0.9), ' +
