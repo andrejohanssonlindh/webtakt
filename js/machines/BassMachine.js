@@ -50,7 +50,7 @@ export class BassMachine extends Machine {
     'osc.detune':   { label: 'Detune', type: 'number', min: -100, max: 100, default: 0,
                       modulatable: true, lfoMin: -100, lfoMax: 100, hidden: true,
                       target: m => m._oscMain.detune, schedule: 'setTarget', tc: 0.005 },
-    'waveform':     { label: 'Waveform', type: 'enum', options: ['sawtooth','square'], group: 'OSC', plockMode: 'js',
+    'waveform':     { label: 'Waveform', type: 'enum', options: ['sawtooth','square'], default: 'sawtooth', group: 'OSC', plockMode: 'js',
                       apply: (v, t, m) => { m._oscMain.type = v; } },
     'sub.level':    { label: 'Sub', type: 'number', min: 0, max: 1, default: 0.4, group: 'OSC',
                       modulatable: true, lfoMin: 0, lfoMax: 1,

@@ -37,6 +37,25 @@
 const _suites   = [];
 let   _current  = null;
 
+// ─── Console guard ───────────────────────────────────────────────────────────────
+// A test fails if it logs an UNEXPECTED console.error/warn. This catches silent
+// regressions that don't throw — e.g. an oscillator getting an `undefined` type
+// (Web Audio falls back to a default and only logs). Messages matching the
+// allowlist below are EXPECTED in the offline OfflineAudioContext harness and are
+// ignored: AudioWorklet modules can't load offline, so worklet-backed machines/FX
+// and the analogue ladder filter deliberately log a warning and fall back to a
+// dry/digital path. Add a new entry here only for output that is genuinely benign
+// offline — never to silence a real bug.
+const _CONSOLE_ALLOW = [
+  /worklet load failed/i,
+  /worklet unavailable, passing dry/i,
+  /analogue ladder unavailable, staying digital/i,
+];
+
+function _isAllowed(msg) {
+  return _CONSOLE_ALLOW.some(re => re.test(msg));
+}
+
 export function suite(name, fn) {
   const s = { name, tests: [] };
   _suites.push(s);
@@ -358,11 +377,32 @@ export async function runAll(filter = {}) {
     for (const t of tests) {
       const start = performance.now();
       let status = 'pass', error = null;
+
+      // Capture unexpected console.error/warn for the duration of this test.
+      const _origErr = console.error, _origWarn = console.warn;
+      const _logged  = [];
+      const _capture = orig => (...args) => {
+        const msg = args.map(a => (a && a.message) ? a.message : String(a)).join(' ');
+        if (_isAllowed(msg)) return;       // expected offline noise → drop entirely
+        _logged.push(msg);
+        orig.apply(console, args);         // unexpected → surface it (and fail the test)
+      };
+      console.error = _capture(_origErr);
+      console.warn  = _capture(_origWarn);
+
       try {
         await t.fn();
+        if (_logged.length) {
+          status = 'fail';
+          error  = `unexpected console output: ${_logged[0]}` +
+                   (_logged.length > 1 ? ` (+${_logged.length - 1} more)` : '');
+        }
       } catch (e) {
         status = 'fail';
         error  = e.message;
+      } finally {
+        console.error = _origErr;
+        console.warn  = _origWarn;
       }
       suiteResult.tests.push({
         name:   t.name,
