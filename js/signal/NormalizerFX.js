@@ -44,8 +44,9 @@
  *   'norm.speed'  — adaptation speed 0.02–1, default 0.3. Low = slow, gentle
  *                   levelling; high = reacts fast (more pumping).
  *
- * `setEnabled(false)` freezes the gain at unity (transparent passthrough) and
- * stops the analysis loop, so a bypassed normaliser costs nothing.
+ * `setEnabled(false)` crossfades to a parallel dry bypass (routing around the
+ * ceiling compressor, which is NOT unity even at threshold 0 dB) and stops the
+ * analysis loop, so a bypassed normaliser is transparent and costs nothing.
  *
  * Public: the standard FX block interface (inputNode/outputNode/connect/
  * connectInput/disconnect/setEnabled/setParam/getParam/getParamList/
@@ -97,9 +98,20 @@ export class NormalizerFX {
     this._analyser.fftSize = 1024;
     this._buf = new Float32Array(this._analyser.fftSize);
 
-    // Wiring: signal passes input → autoGain → ceiling → output; the analyser
-    // taps the input for measurement only (dead-end, never feeding the output).
-    this.inputNode.connect(this._autoGain).connect(this._ceiling).connect(this.outputNode);
+    // Processed-path wet gain (0 when OFF) + parallel dry bypass (1 when OFF). A
+    // DynamicsCompressorNode is NOT transparent even at threshold 0 dB (built-in
+    // makeup boosts ~+3 dB), so OFF must route around the ceiling entirely rather
+    // than neutralise it. Default = OFF → wet=0 / bypass=1 → transparent.
+    this._wetGain = context.createGain();
+    this._wetGain.gain.value = 0;
+    this._bypassGain = context.createGain();
+    this._bypassGain.gain.value = 1;
+
+    // Wiring: processed path input → autoGain → ceiling → wetGain → output;
+    // dry bypass input → bypassGain → output; the analyser taps the input for
+    // measurement only (dead-end, never feeding the output).
+    this.inputNode.connect(this._autoGain).connect(this._ceiling).connect(this._wetGain).connect(this.outputNode);
+    this.inputNode.connect(this._bypassGain).connect(this.outputNode);
     this.inputNode.connect(this._analyser);
 
     // Decaying peak envelope of the input level, and the smoothed gain estimate.
@@ -123,8 +135,12 @@ export class NormalizerFX {
   setEnabled(enabled) {
     this.enabled = enabled;
     const t = this.context.currentTime;
-    // Bypassed → threshold 0 dB so the brickwall never engages (transparent).
-    this._ceiling.threshold.setTargetAtTime(enabled ? this._targetDb() : 0, t, 0.01);
+    // Crossfade dry bypass ↔ processed path. The ceiling compressor keeps its
+    // real threshold; muting the wet path (not neutralising the comp) is what
+    // makes OFF truly transparent.
+    this._ceiling.threshold.setTargetAtTime(this._targetDb(), t, 0.01);
+    this._wetGain.gain.setTargetAtTime(enabled ? 1 : 0, t, 0.01);
+    this._bypassGain.gain.setTargetAtTime(enabled ? 0 : 1, t, 0.01);
     if (enabled) {
       // Seed the follower at the Target (not 0) so the very first frame computes a
       // gain near unity and ramps in from there, instead of spiking to MAX_GAIN

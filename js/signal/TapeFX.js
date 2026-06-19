@@ -8,11 +8,17 @@
  * single add-only block (the back-compat base DelayFX is left untouched).
  *
  * Signal chain (internal):
- *   input → drive(sat) → dryGain ─────────────────────────────→ output
+ *   input → bypassGain ───────────────────────────────────────→ output (OFF: clean)
+ *   input → drive(sat) → dryGain ─────────────────────────────→ output (ON: saturated dry)
  *   input → drive(sat) → delayL ┐                              ┌→ wetL
  *                                ├ cross-feedback (ping-pong) ─┤
  *                               delayR ┘  via fbFilter (HF loss) └→ wetR
  *   wow/flutter LFOs → delayL/R.delayTime  (pitch wobble)
+ *
+ * Bypass MUST be transparent: the saturation waveshaper is always in the dry
+ * path, so a disabled Tape would otherwise colour/boost the signal just by being
+ * added. OFF routes a CLEAN parallel bypass (around the saturator) and mutes the
+ * saturated dry + wet. See tests/tests/fx_bypass_gain.js.
  *
  * Cross-feedback: delayL's output feeds delayR's input and vice-versa, so a hit
  * bounces L↔R (ping-pong). A one-pole lowpass in the feedback path darkens each
@@ -65,10 +71,14 @@ export class TapeFX {
     this.outputNode = context.createGain();
     this.outputNode.gain.value = 1;
 
+    // Saturated dry (the ON sound) and wet are both muted until enabled; a clean
+    // parallel bypass carries the signal untouched when OFF. Default = OFF.
     this._dryGain = context.createGain();
-    this._dryGain.gain.value = 1;
+    this._dryGain.gain.value = 0;
     this._wetGain = context.createGain();
     this._wetGain.gain.value = 0;
+    this._bypassGain = context.createGain();
+    this._bypassGain.gain.value = 1;
 
     // Tape saturation on the way in (waveshaper).
     this._sat = context.createWaveShaper();
@@ -116,6 +126,9 @@ export class TapeFX {
     this._flutLfo.start();
 
     // Wiring.
+    // Clean bypass (around the saturator) for the OFF state.
+    this.inputNode.connect(this._bypassGain).connect(this.outputNode);
+
     this.inputNode.connect(this._sat);
     this._sat.connect(this._dryGain).connect(this.outputNode);
 
@@ -192,8 +205,11 @@ export class TapeFX {
     this.enabled = enabled;
     const t = this.context.currentTime;
     const wet = enabled ? this._params['tape.wet'] : 0;
+    // ON: saturated dry + wet, clean bypass muted. OFF: only the clean bypass,
+    // so the always-present saturator never colours a disabled Tape.
     this._wetGain.gain.setTargetAtTime(wet, t, 0.005);
-    this._dryGain.gain.setTargetAtTime(enabled ? 1 - wet * 0.5 : 1, t, 0.005);
+    this._dryGain.gain.setTargetAtTime(enabled ? 1 - wet * 0.5 : 0, t, 0.005);
+    this._bypassGain.gain.setTargetAtTime(enabled ? 0 : 1, t, 0.005);
   }
 
   setParam(path, value, time) {

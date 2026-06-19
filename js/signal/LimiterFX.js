@@ -11,15 +11,21 @@
  * the output (in dB ≤ 0); makeup is implicit (drive the threshold down to get
  * louder, the ceiling holds the top).
  *
- * Signal chain (internal):  input → comp → ceilingGain → output
+ * Signal chain (internal):
+ *   input → comp → ceilingGain → wetGain ─→ output   (processed)
+ *   input → bypassGain ──────────────────→ output   (clean, for OFF state)
  *
  * Parameters:
  *   'lim.threshold' — dB, -40..0, default -6   (limiting onset)
  *   'lim.release'   — s, 0.01..0.5, default 0.1
  *   'lim.ceiling'   — dB, -12..0, default -0.3 (output cap)
  *
- * Public: the standard FX block interface. Bypass routes the comp at unity-ish
- * (threshold 0, ceiling 0 dB) — effectively transparent for normal-level signal.
+ * Public: the standard FX block interface. Bypass must be TRANSPARENT — a
+ * DynamicsCompressorNode is NOT unity even at threshold 0 dB (it applies an
+ * internal makeup/curve and boosts the level ~+3 dB), so we cannot just
+ * neutralise the comp. Instead disabled state routes the dry signal around the
+ * comp entirely (bypassGain=1, wetGain=0) and enabled state crossfades to the
+ * processed path. See tests/tests/fx_bypass_gain.js for the guarding invariant.
  */
 
 export class LimiterFX {
@@ -50,9 +56,18 @@ export class LimiterFX {
     this._ceiling = context.createGain();
     this._ceiling.gain.value = this._dbToGain(this._params['lim.ceiling']);
 
+    // Processed path wet gain (0 when bypassed) and a parallel dry bypass (1 when
+    // bypassed). Default = OFF, so wet=0 / bypass=1 → fully transparent.
+    this._wetGain = context.createGain();
+    this._wetGain.gain.value = 0;
+    this._bypassGain = context.createGain();
+    this._bypassGain.gain.value = 1;
+
     this.inputNode.connect(this._comp);
     this._comp.connect(this._ceiling);
-    this._ceiling.connect(this.outputNode);
+    this._ceiling.connect(this._wetGain).connect(this.outputNode);
+
+    this.inputNode.connect(this._bypassGain).connect(this.outputNode);
   }
 
   _dbToGain(db) { return Math.pow(10, db / 20); }
@@ -64,18 +79,22 @@ export class LimiterFX {
   setEnabled(enabled) {
     this.enabled = enabled;
     const t = this.context.currentTime;
-    // Bypassed → threshold 0 dB (nothing limited) + ceiling unity = transparent.
-    this._comp.threshold.setTargetAtTime(enabled ? this._params['lim.threshold'] : 0, t, 0.01);
-    this._ceiling.gain.setTargetAtTime(enabled ? this._dbToGain(this._params['lim.ceiling']) : 1, t, 0.01);
+    // Crossfade between the clean bypass and the processed path. The comp itself
+    // is left at its real params — muting the wet path (not neutralising the comp)
+    // is what makes OFF truly transparent.
+    this._wetGain.gain.setTargetAtTime(enabled ? 1 : 0, t, 0.01);
+    this._bypassGain.gain.setTargetAtTime(enabled ? 0 : 1, t, 0.01);
   }
 
   setParam(path, value, time) {
     this._params[path] = value;
     const t = time ?? this.context.currentTime;
     switch (path) {
-      case 'lim.threshold': if (this.enabled) this._comp.threshold.setTargetAtTime(value, t, 0.01); break;
-      case 'lim.release':   this._comp.release.setTargetAtTime(value, t, 0.01);                      break;
-      case 'lim.ceiling':   if (this.enabled) this._ceiling.gain.setTargetAtTime(this._dbToGain(value), t, 0.01); break;
+      // Comp/ceiling run their real params unconditionally; the wet gain mutes
+      // the processed path when OFF, so there's no need to neutralise them here.
+      case 'lim.threshold': this._comp.threshold.setTargetAtTime(value, t, 0.01);                  break;
+      case 'lim.release':   this._comp.release.setTargetAtTime(value, t, 0.01);                    break;
+      case 'lim.ceiling':   this._ceiling.gain.setTargetAtTime(this._dbToGain(value), t, 0.01);    break;
     }
   }
 
