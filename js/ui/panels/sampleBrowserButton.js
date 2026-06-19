@@ -54,4 +54,8 @@ async function loadUrlInto(panel, url, name) {
   const fname = /\.[a-z0-9]{2,4}$/i.test(name) ? name : `${name}.wav`;
   const file = new File([blob], fname, { type: blob.type || 'audio/wav' });
   await panel._loadFile(file);
+  // Remember where this sample came from so saving the track persists the link.
+  // Large samples don't fit in localStorage; on reload the machine re-fetches
+  // from this URL when the local copy is missing. (See SamplerMachine.toJSON.)
+  if (panel.machine) panel.machine.sampleUrl = url;
 }

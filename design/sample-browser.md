@@ -16,10 +16,27 @@ bytes and `decodeAudioData()` them directly — no API key, no OAuth (which is w
 Freesound was rejected). The `/download/` URL 302-redirects to a per-node host;
 the redirect target is also CORS-open, so a plain `fetch(url)` works end to end.
 
-Trade-off: archive.org is general archives, not a clean sample bank. Results are
-ranked by download count and items often bundle full tracks. The file lister
-hides files over 6 MB (likely songs, not one-shots) and de-dupes wav/mp3 copies
-of the same clip. The CURATED list is the antidote — a clean, finite set.
+Trade-off: archive.org is general archives, not a clean sample bank. The
+CURATED list is the antidote — a clean, finite set. Two filters keep the
+ARCHIVE tab usable:
+
+**Search relevance.** The `audio` mediatype is dominated by spoken-word
+collections (LibriVox audiobooks, old-time radio, podcasts), so a bare keyword
+like "bird" used to return Lord of the Rings and Julius Caesar. `search()` now
+matches the keyword against the item **title** (not full text) and excludes
+those collections/subjects (`EXCLUDE_COLLECTIONS` / `EXCLUDE_SUBJECTS`), sorted
+by downloads. If a title search returns nothing it retries once `broad` (full
+text) so unusual terms still get results.
+
+**One-shot vs. full track.** `listFiles()` hides files over 6 MB AND over
+`MAX_ONESHOT_SECONDS` (30 s), then de-dupes wav/mp3 copies of the same clip.
+Duration is the key filter: a 10-minute track encoded as Ogg Vorbis comes in
+*under* the 6 MB byte cap, so it used to load, draw a waveform, then play ten
+silent minutes on a single key-press — the classic "it loaded but won't play".
+archive.org reports `length` (seconds) per file, so we filter on real duration.
+When every file is hidden, the file list shows a **"+ show full-length files"**
+button that re-requests with `includeLarge` (for users who want to chop a full
+track themselves).
 
 ## Files
 
@@ -28,7 +45,7 @@ of the same clip. The CURATED list is the antidote — a clean, finite set.
 | `js/state/ArchiveSearch.js` | Pure data access — `search(query)` → items, `listFiles(id)` → load-ready audio-file URLs. No DOM. |
 | `js/state/CuratedSamples.js` | Loads `samples/curated.json`; in curator mode `add()`/`remove()` POST to the curate server (which writes the file). Detects curator via `GET /curate/status`. |
 | `js/ui/panels/SampleBrowser.js` | The overlay UI (CURATED + ARCHIVE tabs). Calls a host `onLoad(url, name)` callback — never touches the audio graph itself. |
-| `js/ui/panels/sampleBrowserButton.js` | `addBrowseButton(panel)` — inserts BROWSE next to a panel's `.sampler-load-btn`, fetches the chosen URL into a `File`, runs it through the panel's own `_loadFile(file)`. Shares one `CuratedSamples` instance across panels. |
+| `js/ui/panels/sampleBrowserButton.js` | `addBrowseButton(panel)` — inserts BROWSE next to a panel's `.sampler-load-btn`, fetches the chosen URL into a `File`, runs it through the panel's own `_loadFile(file)`, then records `panel.machine.sampleUrl` so saving the track persists the link. Shares one `CuratedSamples` instance across panels. |
 | `tools/curate_server.py` | Local dev server: serves the site AND writes `samples/curated.json` on `POST /curate/add` / `/curate/remove`. `GET /curate/status` lets the app detect it. 127.0.0.1 only. |
 | `samples/curated.json` | `{ version, items: [{name, category, url, source, license}] }`. Seeded from the public-domain `mailboxbadgerdrumsamplesvolume2` pack. |
 
@@ -65,6 +82,26 @@ This is the safety mechanic: with a plain static server (`python3 -m
 http.server`) or on GitHub Pages, `/curate/status` 404s, `isCurator` is false,
 and the ADD/REMOVE affordances never appear — visitors can only browse + load.
 The server binds 127.0.0.1 only, so it's not reachable from other machines.
+
+## Saving a track that uses a remote sample
+
+Local samples are stored in `SampleStore` (localStorage, base64 WAV) keyed by
+`sampleId`, and a track's `toJSON` persists just that id. But large samples
+silently overflow localStorage (`save()` returns `persisted:false`, which the
+panels ignore), so on reload the id resolves to nothing and the sample is lost.
+
+Single-buffer sampler machines (`SamplerMachine`, `BeatRepeatMachine`,
+`GranularMachine`, `SlicerMachine`, `TimeStretchMachine`, `SampleSwarmMachine`)
+therefore also carry a **`sampleUrl`** — set by the BROWSE load path, persisted
+in `toJSON`, restored in `fromJSON`, and cleared on `clearBuffer`. On project
+load `Track.fromJSON` tries `SampleStore.load(sampleId)` first; if that misses
+**and** a `sampleUrl` is present, it re-fetches + decodes from the URL
+(`Track._fetchUrlBuffer`, no localStorage write). So big archive.org / curated
+samples survive a reload as long as the source is still reachable. Failure
+(offline, item removed, CORS) degrades quietly — the track loads without audio.
+
+`MultiSamplerPanel` (per-zone buffers) does **not** yet persist zone URLs — a
+follow-up if remote multi-zone kits become common.
 
 ## Limitations / future
 

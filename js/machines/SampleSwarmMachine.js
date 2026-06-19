@@ -69,6 +69,7 @@ export class SampleSwarmMachine extends Machine {
     this._buffer    = null;
     this.sampleId   = null;
     this.sampleName = '';
+    this.sampleUrl  = null;  // remote source URL, persisted for re-fetch
 
     // Active sources from the last noteOn — replaced each trigger
     this._rootSrc  = null;
@@ -131,6 +132,7 @@ export class SampleSwarmMachine extends Machine {
     this._buffer    = null;
     this.sampleId   = null;
     this.sampleName = '';
+    this.sampleUrl  = null;  // remote source URL, persisted for re-fetch
   }
 
   get hasBuffer() {
@@ -365,6 +367,7 @@ export class SampleSwarmMachine extends Machine {
       type:       this.type,
       sampleId:   this.sampleId,
       sampleName: this.sampleName,
+      sampleUrl:  this.sampleUrl ?? null,  // remote source (archive.org); re-fetched if local copy is gone
       params:     { ...this._params },
     };
   }
@@ -372,6 +375,7 @@ export class SampleSwarmMachine extends Machine {
   fromJSON(obj) {
     this.sampleId   = obj.sampleId   ?? null;
     this.sampleName = obj.sampleName ?? '';
+    this.sampleUrl  = obj.sampleUrl  ?? null;
     Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v));
   }
 

@@ -1484,6 +1484,23 @@ export class Track {
   }
 
   /** @param {object} obj */
+  /**
+   * Fetch + decode a remote sample URL into an AudioBuffer (no localStorage
+   * write — these are the big samples that didn't fit there in the first place).
+   * Used to restore archive.org / curated samples on project load. Returns null
+   * on any failure (offline, item removed, CORS) so restore degrades quietly.
+   */
+  async _fetchUrlBuffer(url) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const bytes = await res.arrayBuffer();
+      return await this.audio.context.decodeAudioData(bytes.slice(0));
+    } catch (_) {
+      return null;
+    }
+  }
+
   fromJSON(obj) {
     this.muted        = obj.muted        ?? false;
     this.followSource = obj.followSource ?? null;
@@ -1510,9 +1527,13 @@ export class Track {
     // reference. Detected by the shared single-buffer protocol (setBuffer +
     // sampleId), so sampler / sample-swarm / granular / slicer / stretch all
     // reload without per-type branches.
-    if (typeof this.machine.setBuffer === 'function' && this.machine.sampleId && this.sampleStore) {
-      this.sampleStore.load(this.machine.sampleId, this.audio.context).then(buf => {
-        if (buf) this.machine.setBuffer(buf, this.machine.sampleId, this.machine.sampleName);
+    if (typeof this.machine.setBuffer === 'function' && (this.machine.sampleId || this.machine.sampleUrl) && this.sampleStore) {
+      const m = this.machine;
+      this.sampleStore.load(m.sampleId, this.audio.context).then(async buf => {
+        // Local copy missing (big samples don't fit localStorage) but we kept
+        // the source URL — re-fetch it from archive.org / the curated source.
+        if (!buf && m.sampleUrl) buf = await this._fetchUrlBuffer(m.sampleUrl);
+        if (buf) m.setBuffer(buf, m.sampleId, m.sampleName);
       });
     }
     // Restore MULTI-buffer machines (MultiSampler) via their own zone loader.

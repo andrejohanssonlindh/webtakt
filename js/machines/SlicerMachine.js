@@ -55,6 +55,7 @@ export class SlicerMachine extends Machine {
     this._buffer    = null;
     this.sampleId   = null;
     this.sampleName = '';
+    this.sampleUrl  = null;  // remote source URL, persisted for re-fetch
     this._duration  = 0;
 
     this._source = null;
@@ -81,6 +82,7 @@ export class SlicerMachine extends Machine {
     this._buffer    = null;
     this.sampleId   = null;
     this.sampleName = '';
+    this.sampleUrl  = null;  // remote source URL, persisted for re-fetch
     this._duration  = 0;
   }
 
@@ -226,6 +228,7 @@ export class SlicerMachine extends Machine {
       type:       this.type,
       sampleId:   this.sampleId,
       sampleName: this.sampleName,
+      sampleUrl:  this.sampleUrl ?? null,  // remote source (archive.org); re-fetched if local copy is gone
       params:     { ...this._params },
     };
   }
@@ -233,6 +236,7 @@ export class SlicerMachine extends Machine {
   fromJSON(obj) {
     this.sampleId   = obj.sampleId   ?? null;
     this.sampleName = obj.sampleName ?? '';
+    this.sampleUrl  = obj.sampleUrl  ?? null;
     Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v));
   }
 

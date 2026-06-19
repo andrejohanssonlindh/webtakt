@@ -30,6 +30,28 @@ const AUDIO_FORMATS = new Set([
 // and decoding them stalls the tab — hide them from the file list by default.
 const MAX_ONESHOT_BYTES = 6 * 1024 * 1024; // 6 MB
 
+// Duration cap. Size alone is a bad proxy: a 10-minute track encoded as Ogg
+// Vorbis can come in UNDER the 6 MB byte cap, so it passes the size filter,
+// loads, draws a waveform — then a single key-press plays ten minutes from a
+// silent intro and feels like "it doesn't play". archive.org gives us `length`
+// (seconds) in the metadata, so filter on actual duration. 30 s comfortably
+// covers one-shots and most loops while excluding full tracks.
+const MAX_ONESHOT_SECONDS = 30;
+
+// archive.org's audio mediatype is dominated by spoken-word collections
+// (LibriVox audiobooks, old-time radio, podcasts). A bare keyword like "bird"
+// matches the full text of those items and buries actual samples under
+// audiobooks. We exclude the worst offenders so music/SFX content floats up.
+// (Collection ids are archive.org's own — verified against live search.)
+const EXCLUDE_COLLECTIONS = [
+  'librivoxaudio',     // LibriVox audiobooks (huge)
+  'audio_bookspoetry', // other spoken-word books/poetry
+  'oldtimeradio',      // old-time radio dramas
+  'radioprograms',     // misc radio shows
+  'podcasts',          // podcast feeds
+];
+const EXCLUDE_SUBJECTS = ['audiobook', 'podcast', 'radio drama'];
+
 /**
  * Search archive.org audio items.
  * @param {string} query        free text (matched against title/subject/text)
@@ -40,8 +62,17 @@ const MAX_ONESHOT_BYTES = 6 * 1024 * 1024; // 6 MB
  */
 export async function search(query, opts = {}) {
   const rows = opts.rows ?? 30;
-  // Constrain to audio; sort by downloads so useful packs float up.
-  const q = `(${query}) AND mediatype:(audio)`;
+
+  // Match the keyword against the item TITLE rather than its full text — a
+  // search for "bird" should find items *named* for birds, not every audiobook
+  // chapter that says the word. Then drop the spoken-word collections/subjects
+  // that otherwise dominate mediatype:audio. Sort by downloads so the useful,
+  // well-shared packs float up. (opts.broad keeps the old full-text behaviour
+  // for the rare case a title search comes up empty.)
+  const field   = opts.broad ? '' : 'title:';
+  const exCols  = EXCLUDE_COLLECTIONS.map(c => `NOT collection:(${c})`).join(' AND ');
+  const exSubs  = EXCLUDE_SUBJECTS.map(s => `NOT subject:(${s})`).join(' AND ');
+  const q = `${field}(${query}) AND mediatype:(audio) AND ${exCols} AND ${exSubs}`;
   const params = new URLSearchParams();
   params.set('q', q);
   params.append('fl[]', 'identifier');
@@ -54,7 +85,15 @@ export async function search(query, opts = {}) {
   const res = await fetch(`${SEARCH_URL}?${params}`, { signal: opts.signal });
   if (!res.ok) throw new Error(`archive.org search HTTP ${res.status}`);
   const json = await res.json();
-  return (json?.response?.docs ?? []).map(d => ({
+  const docs = json?.response?.docs ?? [];
+
+  // Title search came up empty (unusual/long phrase) — retry once across the
+  // full text so the user still gets results rather than a blank list.
+  if (docs.length === 0 && !opts.broad) {
+    return search(query, { ...opts, broad: true });
+  }
+
+  return docs.map(d => ({
     identifier: d.identifier,
     title:      Array.isArray(d.title) ? d.title[0] : (d.title ?? d.identifier),
     downloads:  d.downloads ?? 0,
@@ -66,9 +105,10 @@ export async function search(query, opts = {}) {
  * entries. Skips oversized files (likely full tracks, not one-shots).
  * @param {string} identifier
  * @param {object} [opts]
- * @param {boolean} [opts.includeLarge]  include files over the one-shot cap
+ * @param {boolean} [opts.includeLarge]  include files over the one-shot caps
+ *                                       (byte size AND duration)
  * @param {AbortSignal} [opts.signal]
- * @returns {Promise<{name:string,url:string,format:string,size:number,source:string}[]>}
+ * @returns {Promise<{name:string,url:string,format:string,size:number,duration:number,source:string}[]>}
  */
 export async function listFiles(identifier, opts = {}) {
   const res = await fetch(`${META_URL}/${encodeURIComponent(identifier)}`, { signal: opts.signal });
@@ -86,7 +126,13 @@ export async function listFiles(identifier, opts = {}) {
 
   for (const f of ranked) {
     const size = parseInt(f.size, 10) || 0;
-    if (!opts.includeLarge && size > MAX_ONESHOT_BYTES) continue;
+    const duration = parseFloat(f.length) || 0; // seconds; 0 when archive omits it
+    if (!opts.includeLarge) {
+      if (size > MAX_ONESHOT_BYTES) continue;
+      // Duration is the better filter (see MAX_ONESHOT_SECONDS). Only applied
+      // when archive.org actually reported a length — keep unknown-length files.
+      if (duration && duration > MAX_ONESHOT_SECONDS) continue;
+    }
     const base = f.name.replace(/\.[^.]+$/, '');
     if (seen.has(base)) continue;
     seen.add(base);
@@ -95,6 +141,7 @@ export async function listFiles(identifier, opts = {}) {
       url:    `${DL_BASE}/${encodeURIComponent(identifier)}/${encodeURIComponent(f.name)}`,
       format: f.format || '',
       size,
+      duration,
       source: identifier,
     });
   }

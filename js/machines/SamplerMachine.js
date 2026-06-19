@@ -58,6 +58,9 @@ export class SamplerMachine extends Machine {
     this.sampleId = null;
     // Human-readable name (filename or 'mic recording')
     this.sampleName = '';
+    // Remote source URL (archive.org / curated) if loaded from one — persisted
+    // so the sample can be re-fetched when the local copy isn't available.
+    this.sampleUrl = null;
     // Duration cached from buffer
     this._duration = 0;
 
@@ -92,6 +95,7 @@ export class SamplerMachine extends Machine {
     this._buffer    = null;
     this.sampleId   = null;
     this.sampleName = '';
+    this.sampleUrl  = null;
     this._duration  = 0;
   }
 
@@ -207,6 +211,7 @@ export class SamplerMachine extends Machine {
       type:       this.type,
       sampleId:   this.sampleId,
       sampleName: this.sampleName,
+      sampleUrl:  this.sampleUrl ?? null,  // remote source (archive.org); re-fetched if local copy is gone
       params:     { ...this._params },
     };
   }
@@ -215,6 +220,7 @@ export class SamplerMachine extends Machine {
     // sampleId is handled externally (SampleStore loads and calls setBuffer)
     this.sampleId   = obj.sampleId   ?? null;
     this.sampleName = obj.sampleName ?? '';
+    this.sampleUrl  = obj.sampleUrl  ?? null;
     Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v));
   }
 

@@ -270,28 +270,58 @@ export class SampleBrowser {
     files.textContent = 'Loading file list…';
     itemRow.after(files);
 
+    this._loadFileList(it, files, false);
+  }
+
+  /**
+   * Populate one item's file list. By default only short one-shots/loops are
+   * shown (long full tracks are hidden — they "load but don't play" as a single
+   * note). `includeLarge` re-requests with the caps lifted, for the rare case a
+   * user wants a full track to chop themselves.
+   */
+  async _loadFileList(it, files, includeLarge) {
     this._abort?.abort();
     this._abort = new AbortController();
     try {
-      const list = await listFiles(it.identifier, { signal: this._abort.signal });
+      const list = await listFiles(it.identifier, { includeLarge, signal: this._abort.signal });
       files.innerHTML = '';
+
       if (list.length === 0) {
-        files.textContent = 'No decodable audio files (item may be a .zip archive).';
+        files.appendChild(document.createTextNode(includeLarge
+          ? 'No decodable audio files (item may be a .zip archive).'
+          : 'No short one-shots/loops here — only full-length tracks.'));
+        if (!includeLarge) files.appendChild(this._showLongBtn(it, files));
         return;
       }
+
       for (const f of list) {
         files.appendChild(this._fileRow({
           name:   f.name,
-          sub:    `${f.format} · ${formatSize(f.size)}`,
+          sub:    `${f.format} · ${formatSize(f.size)}${f.duration ? ' · ' + formatDuration(f.duration) : ''}`,
           url:    f.url,
           loadName: f.name,
           taggable: this.curator,
           tagEntry: { name: f.name.replace(/\.[^.]+$/, ''), category: guessCategory(f.name), url: f.url, source: it.identifier },
         }));
       }
+      // Offer the long files as an explicit opt-in (they were filtered out).
+      if (!includeLarge) files.appendChild(this._showLongBtn(it, files));
     } catch (err) {
       if (err.name !== 'AbortError') files.textContent = 'Failed: ' + err.message;
     }
+  }
+
+  /** A row-button that reloads the file list with the long-file caps lifted. */
+  _showLongBtn(it, files) {
+    const btn = document.createElement('button');
+    btn.className = 'btn sample-browser-showlong';
+    btn.textContent = '+ show full-length files';
+    btn.title = 'Include long tracks (a single note plays the whole thing — chop with sample.start/end)';
+    btn.addEventListener('click', () => {
+      files.innerHTML = 'Loading file list…';
+      this._loadFileList(it, files, true);
+    });
+    return btn;
   }
 
   // ── Shared file row ────────────────────────────────────────────
@@ -399,6 +429,14 @@ function formatSize(bytes) {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
   return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+function formatDuration(sec) {
+  if (sec < 1)  return sec.toFixed(2) + 's';
+  if (sec < 60) return sec.toFixed(1) + 's';
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 /** Cheap filename → category guess for the curator's convenience. */
