@@ -127,6 +127,7 @@ export class Keyboard {
     this._build();
     this._bindKeyboard();
     this._attachLiveArpHooks();
+    this._attachNoteLightHook();
 
     // Ensure state has the folding flag (may not exist on first load)
     if (state.keyFolding === undefined) state.keyFolding = false;
@@ -177,7 +178,13 @@ export class Keyboard {
       this._heldKeys.clear();
       this._keyToNote.clear();
       this.keyboardEl.querySelectorAll('.key.held').forEach(k => k.classList.remove('held'));
+      // Drop any in-flight play glows from the track we're leaving (its notes
+      // keep ringing but the keyboard now shows a different track) and re-point
+      // the note-light hook at the newly selected track.
+      this.keyboardEl.querySelectorAll('.key.play-seq, .key.play-arp')
+        .forEach(k => k.classList.remove('play-seq', 'play-arp'));
       this._attachLiveArpHooks();  // cover any tracks added at runtime
+      this._attachNoteLightHook(); // light only the selected track's notes
       this._applyScale(); this._updateKeyLabels();
       // Re-show the held-key highlights for the track we just switched TO if it
       // still has notes latched (non-arp HOLD stash) or a looping arp under HOLD.
@@ -259,6 +266,8 @@ export class Keyboard {
       this._heldKeys.clear();
       this._keyToNote.clear();
       this.keyboardEl.querySelectorAll('.key.held').forEach(k => k.classList.remove('held'));
+      this.keyboardEl.querySelectorAll('.key.play-seq, .key.play-arp')
+        .forEach(k => k.classList.remove('play-seq', 'play-arp'));
     });
 
     // Hold mode: when turned off, flush all latched notes by running real note-offs
@@ -330,6 +339,52 @@ export class Keyboard {
 
   get _rootNote() {
     return this.octave * 12;
+  }
+
+  /**
+   * Register the note-light hook on the currently selected track and clear it on
+   * all others, so generated notes (sequencer steps, arp) light up keys only for
+   * the track the keyboard is showing. Called on construction and every track
+   * switch. The hook receives (note, source, startTime, offTime) where source is
+   * 'seq' (sequencer step → red glow) or 'arp' (arpeggiator → green glow), and the
+   * times are AudioContext times so the glow lines up with the sound + gate.
+   */
+  _attachNoteLightHook() {
+    const sel = this.state.selectedTrack;
+    this.state.project.tracks.forEach(track => {
+      track.noteLightHook = (track === sel)
+        ? (note, source, startTime, offTime) => this._lightNote(note, source, startTime, offTime)
+        : null;
+    });
+  }
+
+  /**
+   * Briefly light the key for `midiNote` to show a generated note playing. The
+   * note may be outside the visible 2-octave range (the keyboard only renders the
+   * current octave pair) — in that case there's no key to light and we skip it.
+   * Timing mirrors the trig glow: convert the AudioContext start/off times to
+   * wall-clock via the currentTime delta, then add/remove the glow class with
+   * setTimeout so the light respects the note length / arp gate.
+   *
+   * @param {number} midiNote
+   * @param {'seq'|'arp'} source  'seq' → red, 'arp' → green
+   * @param {number} startTime    AudioContext time the note starts
+   * @param {number} offTime      AudioContext time the note's gate ends
+   */
+  _lightNote(midiNote, source, startTime, offTime) {
+    const keyEl = this.keyboardEl.querySelector(`.key[data-note="${midiNote}"]`);
+    if (!keyEl) return;
+    const cls = source === 'arp' ? 'play-arp' : 'play-seq';
+
+    const ctx     = this.state.project.audio.context;
+    const nowMs   = performance.now();
+    const audioNow = ctx.currentTime;
+    const onDelay  = Math.max(0, (startTime - audioNow) * 1000);
+    // Hold the glow at least a short minimum so very short gates still flash.
+    const offDelay = Math.max(onDelay + 60, (offTime - audioNow) * 1000);
+
+    setTimeout(() => keyEl.classList.add(cls),    onDelay);
+    setTimeout(() => keyEl.classList.remove(cls), offDelay);
   }
 
   async _ensureAudio() {

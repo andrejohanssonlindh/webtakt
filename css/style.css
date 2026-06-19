@@ -2172,6 +2172,17 @@ body {
   background: var(--accent-dim);
 }
 
+/* Generated-note play glows: sequencer steps AND the arp's lead/input note light
+   keys red ('.play-seq'); the arp's generated/rolled notes light green
+   ('.play-arp'). Red wins even over '.held' so the arp's lead note (the key you're
+   physically holding) flashes red as it fires instead of staying amber. Green
+   yields to '.held' (:not(.held)) so other held keys keep their amber press
+   highlight rather than fighting the green on every cycle. */
+.key.white-key.play-arp:not(.held) { background: var(--green); }
+.key.black-key.play-arp:not(.held) { background: #176b39; }
+.key.white-key.play-seq { background: var(--step-border-note); }
+.key.black-key.play-seq { background: #7a241b; }
+
 /* Scale-blocked keys */
 .key.white-key.scale-blocked {
   background: #6a6560;

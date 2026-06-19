@@ -195,6 +195,10 @@ export class LiveArp {
    */
   _fireEvent(ev) {
     const track = this.track;
+    // Light the on-screen key for this arp note (respects its gate): the cycle's
+    // LEAD note — the key the user actually pressed (ev.root) — lights red like a
+    // played note, while the arp's generated/rolled notes light green.
+    track.noteLightHook?.(ev.note, ev.root ? 'seq' : 'arp', ev.time, ev.offTime);
     // NB: no `track.muted` gate here — the live arp is driven by held keys /
     // MIDI-in (Keyboard.js only), i.e. live play, which stays audible on a muted
     // track. Mute silences the SEQUENCER, not live input. See Track.mute().

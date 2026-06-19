@@ -147,14 +147,31 @@ suite('Sync knob (MS/BPM unified)', () => {
     const held = [{ note: 60, velocity: 100 }, { note: 72, velocity: 90 }]; // C4, C5
     const { events, cycleSec } = arp.buildInputCycle(held, 0);
 
-    assert.ok(events.length === 5, 'noteCount events generated');
+    // The cycle LEADS with the held note(s) themselves (all roots, flagged
+    // root:true, played as pressed), then noteCount-1 random notes. So with a
+    // 2-note chord held: 2 lead events + (5-1) random = 6 events.
+    const leads   = events.filter(ev => ev.root);
+    const rolls   = events.filter(ev => !ev.root);
+    assert.ok(leads.length === held.length, 'lead = one event per held root');
+    assert.ok(rolls.length === 5 - 1, 'noteCount-1 random events after the lead');
+    assert.ok(events.length === held.length + (5 - 1), 'lead + random event count');
     assert.near(cycleSec, 5 * 0.25, 1e-9, 'cycle length = noteCount * gap');
-    // Equal spacing (variance 0).
-    assert.near(events[1].time - events[0].time, 0.25, 1e-9, 'equal gap from bpm count');
 
-    // Every note must sit within ±range of one of the held roots and carry that
-    // root's velocity.
-    events.forEach(ev => {
+    // Lead notes are the held pitches exactly, at t0, carrying their own velocity.
+    leads.forEach(ev => {
+      const h = held.find(x => x.note === ev.note);
+      assert.ok(h, `lead note ${ev.note} is a held pitch`);
+      assert.ok(ev.velocity === h.velocity, 'lead note carries its key velocity');
+      assert.near(ev.time, 0, 1e-9, 'lead notes start at t0');
+    });
+
+    // Random notes start one gap after the lead and are equally spaced (variance 0).
+    assert.near(rolls[0].time, 0.25, 1e-9, 'first random note a gap after the lead');
+    assert.near(rolls[1].time - rolls[0].time, 0.25, 1e-9, 'equal gap from bpm count');
+
+    // Every random note must sit within ±range of one of the held roots and carry
+    // that root's velocity.
+    rolls.forEach(ev => {
       const ok = held.some(h => Math.abs(ev.note - h.note) <= 3);
       assert.ok(ok, `note ${ev.note} within ±range of a held root`);
       const root = held.find(h => Math.abs(ev.note - h.note) <= 3);

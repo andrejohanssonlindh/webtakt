@@ -548,6 +548,8 @@ getVisibleSteps() {
         // Build under any sampled arp-LFO offset (p-lock is already applied).
         const events = withArpLfo(() => arp.buildEvents(finalNote, trigVel, time, offTime, stepLenSec));
         events.forEach(ev => {
+          // Light the on-screen key green for the arp note (respects its gate).
+          this.track.noteLightHook?.(ev.note, 'arp', ev.time, ev.offTime);
           const oscOff = ev.offTime + release;
           const voice  = this.track._pool?.nextVoice(ev.time);
           // Capture idle state BEFORE claim() overwrites _freeAt with this note's end.
@@ -570,6 +572,8 @@ getVisibleSteps() {
           });
         });
       } else {
+        // Light the on-screen key red for the plain sequencer note (its gate).
+        this.track.noteLightHook?.(finalNote, 'seq', time, offTime);
         const oscOffTime = offTime + release;
         const voice    = this.track._pool?.nextVoice(time);
         // Capture idle state BEFORE claim() overwrites _freeAt with this note's end.

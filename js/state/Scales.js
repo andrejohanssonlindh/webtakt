@@ -42,5 +42,29 @@ export function noteInScale(midiNote, scaleIndex, leadNote) {
   return def.intervals.includes(pitchClass);
 }
 
+/**
+ * Snap `midiNote` to the nearest note that belongs to the given scale/root.
+ * Chromatic (scaleIndex 0) and unknown scales pass the note through unchanged.
+ * Ties (a note exactly between two scale tones) resolve upward. Used by the
+ * random arpeggiator so a selected scale constrains the rolled notes.
+ * @param {number} midiNote
+ * @param {number} scaleIndex — index into SCALE_DEFS (0 = chromatic)
+ * @param {number} leadNote   — MIDI root note (pitch class 0–11 used)
+ * @returns {number} an in-scale MIDI note (clamped 0–127)
+ */
+export function snapToScale(midiNote, scaleIndex, leadNote) {
+  const def = SCALE_DEFS[scaleIndex];
+  if (!def || scaleIndex === 0) return midiNote;
+  if (noteInScale(midiNote, scaleIndex, leadNote)) return midiNote;
+  // Search outward (±1, ±2 …) for the closest in-scale note; +d preferred on ties.
+  for (let d = 1; d <= 12; d++) {
+    const up = midiNote + d;
+    if (up <= 127 && noteInScale(up, scaleIndex, leadNote)) return up;
+    const down = midiNote - d;
+    if (down >= 0 && noteInScale(down, scaleIndex, leadNote)) return down;
+  }
+  return midiNote;
+}
+
 /** Note names for the lead-note knob display */
 export const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];

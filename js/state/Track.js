@@ -311,6 +311,12 @@ export class Track {
     // with the transport stopped.
     this.liveArp = new LiveArp(this);
 
+    // Visual note-light hook, set by the Keyboard on the selected track:
+    //   (note, source, startTime, offTime) => void   (source: 'seq' | 'arp')
+    // Lets generated notes (sequencer steps + arp) light up the on-screen keys
+    // (red for sequencer, green for arp). Null on non-selected tracks.
+    this.noteLightHook = null;
+
     this.outputGain.connect(this.tremGain);
     this.tremGain.connect(this.pannerNode);
     // Wire pannerNode → [FX blocks in _fxOrder] → outputBus.
@@ -353,10 +359,13 @@ export class Track {
     // Nudge quantize: 0 = keep recorded nudge, 1 = full quantize (nudge → 0)
     this.nudgeQuantize = 0;
 
-    // Scale constraint: index into SCALE_DEFS (0 = chromatic / no filter)
-    this.scaleIndex = 0;
-    // Lead note (root) for scale, 0–11 (pitch class, C=0)
-    this.leadNote   = 0;
+    // Scale constraint: index into SCALE_DEFS (0 = chromatic / no filter) and the
+    // lead note (root) pitch class 0–11. Exposed as accessors (below) that mirror
+    // the value into the arpeggiator so its random modes only roll in-scale notes;
+    // the backing fields are set here directly before the accessors are first read.
+    this._scaleIndex = 0;
+    this._leadNote   = 0;
+    this.arp.setScale(0, 0);
 
     // DJ filter: -1 = full LPF, 0 = flat, +1 = full HPF
     this.djFilter = 0;
@@ -383,6 +392,15 @@ export class Track {
       ccMappings:    [],    // [{ cc: number, param: string }]
     };
   }
+
+  // Scale constraint accessors — mirror every write into the arpeggiator so its
+  // random modes only roll in-scale notes. UI (ScalesPanel) and fromJSON assign
+  // these directly, so keeping the mirror here means no caller has to remember to
+  // sync the arp separately.
+  get scaleIndex()  { return this._scaleIndex; }
+  set scaleIndex(v) { this._scaleIndex = v; this.arp.setScale(this._scaleIndex, this._leadNote); }
+  get leadNote()    { return this._leadNote; }
+  set leadNote(v)   { this._leadNote = v; this.arp.setScale(this._scaleIndex, this._leadNote); }
 
   /** Canonical machine (slot 0) — used by UI panels for param reads/writes. */
   get machine()  { return this._pool?.machine;  }

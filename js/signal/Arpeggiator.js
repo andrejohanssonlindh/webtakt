@@ -81,6 +81,7 @@
  */
 
 import { count32ToSeconds, divToCount32 } from '../util/BpmSync.js';
+import { snapToScale } from '../state/Scales.js';
 
 export const ARP_CHORD_DEFS = {
   major:  [0,  4,  7, 12],
@@ -106,6 +107,12 @@ export class Arpeggiator {
   constructor() {
     this._bpm = 120;
 
+    // Scale constraint for random modes — kept in sync by the owning Track.
+    // 0 = chromatic (no filtering). Only the random/input-random generators snap
+    // to it; chord/manual offsets are authored deliberately and pass through.
+    this._scaleIndex = 0;
+    this._leadNote   = 0;
+
     this.enabled = false;
 
     this._params = {
@@ -129,6 +136,10 @@ export class Arpeggiator {
       noteCount: 4,
       range:     12,
       rGate:     0,    // 0 = 90% of gap; >0 = explicit ms
+      // Direction bias for the rolled interval, -1..+1 (0 = symmetric ±range).
+      // +1 → only notes higher than the root; -1 → only lower. Intermediate
+      // values skew the random window up/down. See _biasedInterval().
+      bias:      0,
     };
 
     // Ping-pong direction tracker for updown pattern
@@ -201,6 +212,51 @@ export class Arpeggiator {
 
   setBpm(bpm) {
     this._bpm = bpm;
+  }
+
+  /**
+   * Set the scale constraint used by the random modes. Called by Track whenever
+   * its scaleIndex/leadNote change (scaleChanged) so the arp always rolls notes
+   * the selected scale allows.
+   * @param {number} scaleIndex — index into SCALE_DEFS (0 = chromatic / no filter)
+   * @param {number} leadNote   — MIDI root pitch class (0–11)
+   */
+  setScale(scaleIndex, leadNote) {
+    this._scaleIndex = scaleIndex ?? 0;
+    this._leadNote   = leadNote   ?? 0;
+  }
+
+  /** Snap a rolled random note to the current scale (no-op when chromatic). */
+  _snap(note) {
+    return snapToScale(note, this._scaleIndex, this._leadNote);
+  }
+
+  /**
+   * Roll a random semitone interval within ±range, skewed by the `bias` param
+   * (-1..+1). The unbiased roll spans the unit window [-1, 1]; bias slides one
+   * edge of that window toward the centre so the run leans up or down:
+   *   bias  0 → [-1, 1]  symmetric (full ±range)
+   *   bias +1 → [ 0, 1]  only notes ≥ the root (higher)
+   *   bias -1 → [-1, 0]  only notes ≤ the root (lower)
+   * Intermediate values skew proportionally. Returned interval is rounded to a
+   * whole semitone and scaled by `range`.
+   * @param {number} range  semitone half-range (≥1)
+   * @returns {number} signed semitone offset from the root
+   */
+  _biasedInterval(range) {
+    const bias = Math.max(-1, Math.min(1, this._params.bias ?? 0));
+    const lo   = bias > 0 ? (bias - 1) : -1;   // +bias lifts the lower edge toward 0
+    const hi   = bias < 0 ? (bias + 1) :  1;   // -bias drops the upper edge toward 0
+    const u    = lo + Math.random() * (hi - lo);
+    let interval = Math.round(u * range);
+    // At full bias the run must stay strictly on one side of the root: a rounded
+    // 0 would sound the root note, so push it one semitone in the biased direction
+    // (clamped to ±range). Partial bias still allows the root (interval 0).
+    if (interval === 0) {
+      if (bias >=  1) interval =  Math.min(1, range);
+      if (bias <= -1) interval = -Math.min(1, range);
+    }
+    return interval;
   }
 
   /**
@@ -346,12 +402,21 @@ export class Arpeggiator {
     const p     = this._params;
     const roots = held.slice().sort((a, b) => a.note - b.note);
 
-    // Resolve the step list into a timeline once (offset-from-t0 + gate), since
-    // every held root runs the SAME steps. Each root then plays this timeline in
-    // PARALLEL (all starting at t0), so holding a chord arps every note together
-    // rather than queueing one note's whole figure before the next.
+    // The cycle always LEADS with the held note(s) themselves — the user doesn't
+    // author a "first step" for the root; it's implicitly the key they pressed,
+    // lit red on the keyboard (root:true) like a played note. The manual step list
+    // then defines the SUBSEQUENT figure, each step a relative semitone move from
+    // the held root, queued after the lead note. The lead note's gap is the first
+    // step's gap (or a default) so the figure flows on naturally.
+    const leadGapSec  = this._gapSec(
+      p.steps[0]?.syncMode ?? 'ms', p.steps[0]?.speed ?? 150, p.steps[0]?.bpmCount32 ?? 4);
+    const leadGateSec = p.steps[0]?.gate > 0 ? p.steps[0].gate / 1000 : leadGapSec * 0.9;
+
+    // Resolve the manual steps into a timeline once (offset-from-lead + gate),
+    // since every held root runs the SAME steps. Each root plays this timeline in
+    // PARALLEL (all starting together), so a chord arps every note at once.
     const slots = [];
-    let   offset = 0;
+    let   offset = leadGapSec;   // steps begin after the lead (root) note
     for (const step of p.steps) {
       const gapSec  = this._gapSec(step.syncMode, step.speed, step.bpmCount32);
       // No step length to inherit in live input — gate 0 falls back to legato
@@ -363,6 +428,9 @@ export class Arpeggiator {
 
     const events = [];
     for (const { note: rootNote, velocity } of roots) {
+      // Lead (root) note — the key as pressed, lit red.
+      events.push({ note: rootNote, velocity, time: t0, offTime: t0 + leadGateSec, root: true });
+      // Subsequent manual figure, relative to this root.
       for (const slot of slots) {
         const note = Math.max(0, Math.min(127, rootNote + slot.semitone));
         const time = t0 + slot.at;
@@ -370,7 +438,7 @@ export class Arpeggiator {
       }
     }
 
-    // One root's figure defines the cycle length — they all share it (parallel).
+    // One root's figure (lead + steps) defines the cycle length — all roots share it.
     const cycleSec = Math.max(0.001, offset);
     return { events, cycleSec };
   }
@@ -394,13 +462,27 @@ export class Arpeggiator {
     const gapSec  = this._gapSec(p.syncMode, p.speed, p.bpmCount32);
     const gateSec = this._gateSec(gapSec, p.rGate);
 
+    // The cycle always LEADS with the note(s) the user actually pressed — the
+    // input note itself, not a random roll — so a NOTES=4 run on a held C4 is
+    // "C4 + 3 random" rather than 4 random notes. The root is flagged `root:true`
+    // so the keyboard lights it like the played note (red), and is NOT snapped or
+    // offset (it's exactly what was pressed). When a chord is held the whole chord
+    // sounds on the first slot, then count-1 random notes roll around the held set.
     const events = [];
     let   cursor = t0;
-    for (let i = 0; i < count; i++) {
-      // Pick a random held key as this note's root, then offset by ±range.
+
+    // Slot 0 — the held input note(s), played as pressed.
+    for (const h of held) {
+      events.push({ note: h.note, velocity: h.velocity, time: cursor, offTime: cursor + gateSec, root: true });
+    }
+    cursor += gapSec;
+
+    // Slots 1..count-1 — random rolls around the held key(s) (green on the keys).
+    for (let i = 1; i < count; i++) {
       const root     = held[Math.floor(Math.random() * held.length)];
-      const interval = Math.round((Math.random() * 2 - 1) * range);
-      const note     = Math.max(0, Math.min(127, root.note + interval));
+      const interval = this._biasedInterval(range);
+      // Snap the rolled note into the selected scale (no-op when chromatic).
+      const note     = Math.max(0, Math.min(127, this._snap(root.note + interval)));
 
       const isMiddle = i > 0 && i < count - 1;
       let effectiveGap = gapSec;
@@ -443,11 +525,12 @@ export class Arpeggiator {
     const gapSec  = this._gapSec(p.syncMode, p.speed, p.bpmCount32);
     const gateSec = this._gateSec(gapSec, p.rGate);
 
-    const intervals = Array.from({ length: count }, () =>
-      Math.round((Math.random() * 2 - 1) * range)
-    );
+    const intervals = Array.from({ length: count }, () => this._biasedInterval(range));
 
-    return this._spaceNotes(intervals, rootNote, velocity, t0, gapSec, gateSec, p.variance);
+    // Random mode snaps each rolled note into the selected scale (no-op when
+    // chromatic). Chord/manual modes don't pass `snap` — their offsets are
+    // authored deliberately and must play exactly as written.
+    return this._spaceNotes(intervals, rootNote, velocity, t0, gapSec, gateSec, p.variance, true);
   }
 
   // ── Shared helpers ──────────────────────────────────────────────────────────
@@ -455,12 +538,13 @@ export class Arpeggiator {
   /**
    * Lay out notes with equal spacing + optional variance on middle notes.
    */
-  _spaceNotes(intervals, rootNote, velocity, t0, gapSec, noteLenSec, variance) {
+  _spaceNotes(intervals, rootNote, velocity, t0, gapSec, noteLenSec, variance, snap = false) {
     const events = [];
     let   cursor = t0;
 
     for (let i = 0; i < intervals.length; i++) {
-      const note = Math.max(0, Math.min(127, rootNote + intervals[i]));
+      const raw  = snap ? this._snap(rootNote + intervals[i]) : rootNote + intervals[i];
+      const note = Math.max(0, Math.min(127, raw));
       const isMiddle = i > 0 && i < intervals.length - 1;
       let effectiveGap = gapSec;
       if (isMiddle && variance > 0) {

@@ -163,6 +163,11 @@ export const MANUAL_CONTENT = {
       ['On-screen keyboard (phone)', 'Tap keys to play; multitouch chords work. ' +
                  'On phone it\'s live-play only — to write pitches into steps, ' +
                  'use a computer keyboard or the step editor.'],
+      ['Key play-glow', 'As the selected track plays, its keys light up to show ' +
+                 'what\'s sounding: red for notes fired by the sequencer track and ' +
+                 'for an arp\'s lead/input note (the key you pressed), green for the ' +
+                 'arp\'s generated/rolled notes. The glow follows each note\'s length ' +
+                 '/ arp gate. Other held keys keep the amber press highlight.'],
     ],
   },
 
@@ -245,7 +250,10 @@ export const MANUAL_CONTENT = {
                  'subsequent steps are relative (+/−).'],
       ['Mode: RANDOM', 'Generate random notes within a range around the root. NOTES ' +
                  'sets how many notes to pick each cycle; RANGE ± sets the semitone ' +
-                 'window above and below.'],
+                 'window above and below; BIAS skews the run up or down from the root. ' +
+                 'When a SCALE is selected (not Chromatic) ' +
+                 'each rolled note snaps to the nearest in-scale pitch, so the random ' +
+                 'run always stays in key.'],
       ['Mode: INPUT', 'Live keyboard-driven mode. Hold keys to form the chord and the ' +
                  'arpeggiator plays those held pitches. The held keys are the chord — ' +
                  'no step needed. Releasing the keys stops the arp and lets the last ' +
@@ -253,16 +261,20 @@ export const MANUAL_CONTENT = {
                  'on the chord latches and keeps arpeggiating even after you lift your ' +
                  'fingers or switch to another track; turn HOLD off to stop it. ' +
                  'Enable RECORD to capture what you play into the pattern.'],
-      ['Mode: INPUT MANUAL', 'Live keyboard-driven version of MANUAL. The custom step ' +
-                 'sequence (per-step semitone offset, RATE and GATE) plays relative to ' +
-                 'the key you hold instead of a sequencer step: step 1 is the held note, ' +
-                 'later steps are semitone moves from it. Hold a chord and the figure ' +
-                 'runs from each held note at the same time. RECORD captures it too.'],
-      ['Mode: INPUT RANDOM', 'Live keyboard-driven version of RANDOM. The same ' +
-                 'generator (NOTES count, RANGE ±, RATE, GATE, VARIANCE) rolls its ' +
-                 'random run around the key(s) you hold instead of a sequencer root, ' +
-                 're-rolled every cycle. Hold a chord and each random note picks one ' +
-                 'of the held keys as its centre. RECORD captures it too.'],
+      ['Mode: INPUT MANUAL', 'Live keyboard-driven version of MANUAL. Each cycle ' +
+                 'starts with the key you hold (the input note, lit red), then your ' +
+                 'custom step sequence (per-step semitone offset, RATE and GATE) plays ' +
+                 'as the figure after it, each step a semitone move relative to the ' +
+                 'held note — you don\'t author the first note, it\'s always the pressed ' +
+                 'key. Hold a chord and the figure runs from each held note at the same ' +
+                 'time. RECORD captures it too.'],
+      ['Mode: INPUT RANDOM', 'Live keyboard-driven version of RANDOM. Each cycle ' +
+                 'leads with the key you hold (the input note, lit red), then NOTES−1 ' +
+                 'random notes (RANGE ±, RATE, GATE, VARIANCE) roll around the held ' +
+                 'key(s) — so NOTES=4 on a held C4 is C4 plus 3 random notes — re-rolled ' +
+                 'every cycle. Hold a chord and the whole chord leads, then each random ' +
+                 'note picks one of the held keys as its centre. With a SCALE selected ' +
+                 'each rolled note snaps into key. RECORD captures it too.'],
       ['PATTERN', 'Direction the arp traverses its notes: Up, Down, UpDown, or Random.'],
       ['RATE', 'How fast the arp fires notes. Double-click the knob centre to toggle ' +
                  'MS↔BPM mode. In BPM mode it snaps to musical divisions (e.g. 1/8, ' +
@@ -274,6 +286,10 @@ export const MANUAL_CONTENT = {
       ['NOTES (Random mode)', 'How many notes to randomly select each cycle.'],
       ['RANGE ± (Random mode)', 'Semitone window above and below the root within ' +
                  'which random notes are chosen.'],
+      ['BIAS (Random mode)', 'Skews which side of the root the random notes land on. ' +
+                 '0% = symmetric (both above and below). +100% = only notes higher ' +
+                 'than the root; -100% = only lower. Values in between lean the run ' +
+                 'up or down. Applies to RANDOM and INPUT RANDOM.'],
     ],
   },
 

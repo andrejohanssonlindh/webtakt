@@ -411,6 +411,24 @@ export class ArpPanel {
     this._widgets.push(rangeKnob);
     row1.appendChild(rangeKnob.el);
 
+    // BIAS: direction skew for the rolled notes. 0% = symmetric ±range; +100% =
+    // only notes higher than the root; -100% = only lower. Bipolar (centre 0).
+    const biasKnob = new KnobWidget({
+      label:   'BIAS',
+      min:     -1,
+      max:     1,
+      value:   arp.getParam('bias'),
+      bipolar: true,
+      size:    64,
+      fmt:     v => {
+        const pct = Math.round(v * 100);
+        return (pct > 0 ? '+' : '') + pct + '%';
+      },
+      onChange: v => arp.setParam('bias', v),
+    });
+    this._widgets.push(biasKnob);
+    row1.appendChild(biasKnob.el);
+
     body.appendChild(row1);
 
     body.appendChild(this._makeSpeedGateRow(arp, 'speed', 'bpmCount32', 'syncMode', 'rGate'));
