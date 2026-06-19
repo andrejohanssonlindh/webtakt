@@ -24,8 +24,12 @@
  *   test(name, fn)       — declare a test inside a suite; fn receives assert helpers
  *   assert.gt(a, b, msg) / assert.lt / assert.near / assert.ok
  *
- *   runAll()             — run all registered suites, write results to localStorage,
- *                          and render them in #results
+ *   runAll(filter)       — run registered suites (optionally filtered by suite/test
+ *                          name substring), write results to localStorage, and
+ *                          render them in #results.
+ *
+ *   listSuites()         — return [{ name, tests:[name,…] }] for every registered
+ *                          suite (used to build the picker UI).
  */
 
 // ─── Result store ──────────────────────────────────────────────────────────────
@@ -309,18 +313,49 @@ export async function renderSteps(track, ctx, sampleRate, stepCount, stepSec, st
 
 // ─── Runner ────────────────────────────────────────────────────────────────────
 
-export async function runAll() {
+/**
+ * List every registered suite and its test names (no execution).
+ * @returns {{name:string, tests:string[]}[]}
+ */
+export function listSuites() {
+  return _suites.map(s => ({ name: s.name, tests: s.tests.map(t => t.name) }));
+}
+
+/**
+ * Run registered suites and report results.
+ *
+ * @param {object}  [filter]
+ * @param {string}  [filter.suite] — only run suites whose name contains this
+ *                                   substring (case-insensitive)
+ * @param {string}  [filter.test]  — only run tests whose name contains this
+ *                                   substring (case-insensitive)
+ * @param {Set<string>} [filter.suites] — exact suite names to run (from the picker)
+ */
+export async function runAll(filter = {}) {
   // Deterministic noise for the whole suite: swap Math.random for a seeded PRNG in
   // the noise-buffer fillers (white + pink) BEFORE any machine renders, so
   // peak/RMS-based audio tests don't flake on an unlucky draw. Production keeps
   // Math.random (analogue voices must vary). See js/util/AudioBuffers.js.
   seedNoiseRandom();
 
-  const results = { timestamp: new Date().toISOString(), suites: [] };
+  const suiteQ = (filter.suite ?? '').toLowerCase();
+  const testQ  = (filter.test  ?? '').toLowerCase();
+  const exact  = filter.suites ?? null;  // Set of exact suite names, or null
+
+  const matchSuite = name =>
+    (exact ? exact.has(name) : true) &&
+    (suiteQ ? name.toLowerCase().includes(suiteQ) : true);
+  const matchTest = name =>
+    testQ ? name.toLowerCase().includes(testQ) : true;
+
+  const results = { timestamp: new Date().toISOString(), suites: [], filtered: !!(suiteQ || testQ || exact) };
 
   for (const s of _suites) {
+    if (!matchSuite(s.name)) continue;
+    const tests = s.tests.filter(t => matchTest(t.name));
+    if (tests.length === 0) continue;
     const suiteResult = { name: s.name, tests: [] };
-    for (const t of s.tests) {
+    for (const t of tests) {
       const start = performance.now();
       let status = 'pass', error = null;
       try {
@@ -373,5 +408,6 @@ function _renderResults(results) {
     }
   }
 
-  append(`\n${pass} passed, ${fail} failed — ${results.timestamp}`, fail > 0 ? '#f88' : '#8f8');
+  const tag = results.filtered ? ' (filtered)' : '';
+  append(`\n${pass} passed, ${fail} failed${tag} — ${results.timestamp}`, fail > 0 ? '#f88' : '#8f8');
 }

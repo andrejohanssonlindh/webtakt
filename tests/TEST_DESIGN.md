@@ -25,9 +25,34 @@ The tests run entirely in-browser against `OfflineAudioContext` (no speakers, no
 
 1. Serve the project: `python3 -m http.server 8000`
 2. Open `http://localhost:8000/tests/index.html` in Firefox
-3. Click **Run All Tests**
+3. Click **Run All** (the full suite is 2+ min — see *Running a subset* below to go faster)
 4. Results appear in-page with green/red per line
 5. Click **Copy Results** or **Save to File** to share the report
+
+### Running a subset
+
+The full suite takes 2+ minutes, so the runner can scope what it executes.
+Filtering happens in `runAll(filter)` (runner.js); the UI in `index.html` drives it
+three ways:
+
+- **Suite picker** — click **Suites ▾** to reveal a checklist of every registered
+  suite (with test counts). Tick the ones you want and press **Run Selected**.
+  Each row also has a **run** link to run that one suite immediately.
+- **Filter box** — type a substring; **Run Selected** then runs only tests whose
+  *name* contains it (e.g. `reverb`). Combine with checked suites to narrow further.
+  Press Enter in the box to run.
+- **URL params** — deep-link a scoped run:
+  - `?suite=fx` — only suites whose name contains "fx"
+  - `?test=reverb` — only tests whose name contains "reverb"
+  - add `&run` to auto-run on load, e.g. `tests/index.html?suite=fx&run`
+
+  (`suite=`/`test=` here are case-insensitive substring matches, not exact names.)
+
+`runAll(filter)` accepts `{ suite, test, suites }`:
+`suite`/`test` are case-insensitive substring filters; `suites` is a `Set` of exact
+suite names (used by the picker). A filtered report is tagged `(filtered)` in its
+summary line so a partial run is never mistaken for a clean full pass.
+`listSuites()` returns `[{ name, tests:[…] }]` and is what builds the picker.
 
 ---
 
@@ -43,6 +68,12 @@ tests/
     lfo.js                — LFO core behaviour: depth=0 baseline, depth=100 variation, TRG determinism
     lfo_machine_params.js — LFO wiring tests for every modulatable param on every machine + signal chain
     plocks.js             — p-lock apply and restore tests
+    fx_chain.js           — per-track reorderable FX pipeline order + panic/silence (flush) behaviour
+    fx_blocks.js          — second-wave add-only FX blocks: addable, in-chain, audio passes, params round-trip
+    fx_bypass_gain.js     — INVARIANT: adding a DISABLED FX of any type must not change the track level
+                            (a bypassed block must pass dry at unity). Caught Tape's always-on saturation
+                            in the dry path. Sweeps every addable type, one test each, full-buffer RMS vs bare.
+    fx_worklets.js        — worklet-backed FX (crush2/stutter): chain survives them (degrade to dry offline)
     filter_engine.js      — digital/analogue filter engine switch (analogue = PATINA ladder worklet; pass-with-note if worklet unavailable offline)
     machines/
       synth.js

@@ -25,6 +25,40 @@
     }
     button:hover { background: #444; }
     button:disabled { opacity: 0.4; cursor: default; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 1rem; }
+    .toolbar button { margin-bottom: 0; }
+    #filter {
+      background: #1a1a1a;
+      color: #fff;
+      border: 1px solid #555;
+      padding: 0.5rem 0.7rem;
+      font-family: monospace;
+      font-size: 0.95rem;
+      border-radius: 3px;
+      min-width: 14rem;
+    }
+    #picker {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1rem;
+      max-height: 16rem;
+      overflow-y: auto;
+      font-size: 0.82rem;
+    }
+    #picker.hidden { display: none; }
+    .suite-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.15rem 0; }
+    .suite-row label { flex: 1; cursor: pointer; }
+    .suite-row .count { color: #666; }
+    .suite-row a {
+      color: #8cf; text-decoration: none; border: 1px solid #345;
+      padding: 0 0.5rem; border-radius: 3px; font-size: 0.78rem;
+    }
+    .suite-row a:hover { background: #234; }
+    .picker-actions { margin: 0.25rem 0 0.6rem; }
+    .picker-actions a { color: #8cf; text-decoration: none; margin-right: 0.8rem; cursor: pointer; }
+    .picker-actions a:hover { text-decoration: underline; }
     #status {
       color: #888;
       font-size: 0.85rem;
@@ -45,15 +79,23 @@
 </head>
 <body>
   <h1>Webtakt Audio Tests</h1>
-  <p>Runs against OfflineAudioContext — no speakers required. Results are saved to localStorage.</p>
-  <button id="run">Run All Tests</button>
-  <button id="copy" style="display:none">Copy Results</button>
-  <button id="save" style="display:none">Save to File</button>
+  <p>Runs against OfflineAudioContext — no speakers required. Results are saved to localStorage.<br>
+     Filter box matches test names; check suites below to run a subset. Deep-link with
+     <code>?suite=fx</code>, <code>?test=reverb</code>, add <code>&amp;run</code> to auto-run.</p>
+  <div class="toolbar">
+    <button id="run">Run All</button>
+    <button id="runSel">Run Selected</button>
+    <input id="filter" type="text" placeholder="filter test names… (e.g. reverb)">
+    <button id="pickToggle">Suites ▾</button>
+    <button id="copy" style="display:none">Copy Results</button>
+    <button id="save" style="display:none">Save to File</button>
+  </div>
+  <div id="picker" class="hidden"></div>
   <div id="status">Ready.</div>
   <pre id="results"></pre>
 
   <script type="module">
-    import { runAll } from './runner.js';
+    import { runAll, listSuites } from './runner.js';
 
     // Import all test suites so they register via suite() / test() calls
     import './tests/lfo.js';
@@ -63,6 +105,7 @@
     import './tests/sequencer_move.js';
     import './tests/fx_chain.js';
     import './tests/fx_blocks.js';
+    import './tests/fx_bypass_gain.js';
     import './tests/fx_worklets.js';
     import './tests/machines/synth.js';
     import './tests/machines/kick_silk.js';
@@ -101,31 +144,114 @@
     import './tests/analogue_flow.js';
     import './tests/moogish_tail.js';
 
-    const btn    = document.getElementById('run');
-    const copy   = document.getElementById('copy');
-    const save   = document.getElementById('save');
-    const status = document.getElementById('status');
-    const pre    = document.getElementById('results');
+    const btn       = document.getElementById('run');
+    const runSel    = document.getElementById('runSel');
+    const filterBox = document.getElementById('filter');
+    const pickToggle= document.getElementById('pickToggle');
+    const picker    = document.getElementById('picker');
+    const copy      = document.getElementById('copy');
+    const save      = document.getElementById('save');
+    const status    = document.getElementById('status');
+    const pre       = document.getElementById('results');
 
-    btn.addEventListener('click', async () => {
-      btn.disabled = true;
+    const allButtons = [btn, runSel, pickToggle];
+
+    // ── Suite picker ─────────────────────────────────────────────────────────
+    const suites = listSuites();   // [{ name, tests:[…] }]
+
+    function selectedSuites() {
+      return new Set(
+        [...picker.querySelectorAll('input[type=checkbox]:checked')].map(cb => cb.value)
+      );
+    }
+
+    function buildPicker() {
+      picker.textContent = '';
+      const actions = document.createElement('div');
+      actions.className = 'picker-actions';
+      const all  = document.createElement('a'); all.textContent  = 'select all';
+      const none = document.createElement('a'); none.textContent = 'select none';
+      all.onclick  = () => picker.querySelectorAll('input').forEach(cb => cb.checked = true);
+      none.onclick = () => picker.querySelectorAll('input').forEach(cb => cb.checked = false);
+      actions.append(all, none);
+      picker.appendChild(actions);
+
+      for (const s of suites) {
+        const row = document.createElement('div');
+        row.className = 'suite-row';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox'; cb.value = s.name;
+        cb.id = 'pk_' + s.name.replace(/[^a-z0-9]+/gi, '_');
+        const label = document.createElement('label');
+        label.htmlFor = cb.id;
+        label.innerHTML = `${s.name} <span class="count">(${s.tests.length})</span>`;
+        const only = document.createElement('a');
+        only.textContent = 'run';
+        only.title = 'Run only this suite';
+        only.onclick = () => run({ suites: new Set([s.name]) });
+        row.append(cb, label, only);
+        picker.appendChild(row);
+      }
+    }
+    buildPicker();
+
+    pickToggle.addEventListener('click', () => picker.classList.toggle('hidden'));
+
+    // ── Run driver ───────────────────────────────────────────────────────────
+    async function run(filter = {}) {
+      allButtons.forEach(b => b.disabled = true);
       copy.style.display = 'none';
-      status.textContent = 'Running…';
+      save.style.display = 'none';
+      const scope = filter.suites ? [...filter.suites].join(', ')
+                  : filter.suite  ? `suite~"${filter.suite}"`
+                  : filter.test   ? `test~"${filter.test}"`
+                  : 'all';
+      status.textContent = `Running ${scope}…`;
+      status.style.color = '#888';
       try {
-        const results = await runAll();
-        const pass = results.suites.flatMap(s => s.tests).filter(t => t.status === 'pass').length;
-        const fail = results.suites.flatMap(s => s.tests).filter(t => t.status === 'fail').length;
-        status.textContent = `Done — ${pass} passed, ${fail} failed.`;
-        status.style.color = fail > 0 ? '#f88' : '#8f8';
-        copy.style.display = '';
-        save.style.display = '';
+        const results = await runAll(filter);
+        const flat = results.suites.flatMap(s => s.tests);
+        const pass = flat.filter(t => t.status === 'pass').length;
+        const fail = flat.filter(t => t.status === 'fail').length;
+        if (flat.length === 0) {
+          status.textContent = `No tests matched ${scope}.`;
+          status.style.color = '#fc8';
+        } else {
+          status.textContent = `Done (${scope}) — ${pass} passed, ${fail} failed.`;
+          status.style.color = fail > 0 ? '#f88' : '#8f8';
+          copy.style.display = '';
+          save.style.display = '';
+        }
       } catch (e) {
         status.textContent = `Runner error: ${e.message}`;
         status.style.color = '#f88';
         console.error(e);
       }
-      btn.disabled = false;
+      allButtons.forEach(b => b.disabled = false);
+    }
+
+    btn.addEventListener('click', () => run());
+    runSel.addEventListener('click', () => {
+      const sel = selectedSuites();
+      const filter = { test: filterBox.value.trim() || undefined };
+      if (sel.size > 0) filter.suites = sel;
+      run(filter);
     });
+    filterBox.addEventListener('keydown', e => {
+      if (e.key === 'Enter') runSel.click();
+    });
+
+    // ── URL-param driving: ?suite=…&test=…&run ───────────────────────────────
+    const params = new URLSearchParams(location.search);
+    const urlFilter = {};
+    if (params.has('suite')) urlFilter.suite = params.get('suite');
+    if (params.has('test'))  { urlFilter.test = params.get('test'); filterBox.value = params.get('test'); }
+    if (urlFilter.suite || urlFilter.test) {
+      if (params.has('run')) run(urlFilter);
+      else status.textContent = `Ready — press Run Selected for ${
+        urlFilter.suite ? `suite~"${urlFilter.suite}"` : ''}${
+        urlFilter.test ? ` test~"${urlFilter.test}"` : ''} (or add &run to the URL).`;
+    }
 
     copy.addEventListener('click', () => {
       navigator.clipboard.writeText(pre.textContent).then(() => {
