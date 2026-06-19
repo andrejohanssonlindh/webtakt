@@ -643,7 +643,8 @@ export class Keyboard {
 
     // In input-arp mode the step write happens per arp-fired note (captureArpNote),
     // not on key-down — so skip the normal record/edit step write here.
-    const stepIndex = liveArp
+    // Hold mode: the note is latched for playback only — never record it.
+    const stepIndex = liveArp || this.state.holdMode
       ? -1
       : (this.state.recording
           ? (this.state.recordStepIndex ?? -1)

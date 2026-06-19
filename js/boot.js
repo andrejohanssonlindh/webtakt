@@ -146,8 +146,9 @@ midiEngine.init().then(() => {
           track._midiInVoices.set(note, voice);
           machine?.noteOn(finalNote, velocity, time);
           envelope?.scheduleNote(time, time + 30, { note: finalNote, velocity });
-          // Record into the playhead step (no-op unless record mode is armed)
-          midiRecorder.noteOn(track, finalNote, velocity, ctx.currentTime);
+          // Record into the playhead step (no-op unless record mode is armed,
+          // and never when hold is on — held notes are for playback only).
+          if (!track.held) midiRecorder.noteOn(track, finalNote, velocity, ctx.currentTime);
         }
 
         // Fire followers
