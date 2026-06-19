@@ -26,6 +26,23 @@ import { Track }       from './Track.js';
 import { SampleStore } from './SampleStore.js';
 
 const TRACK_COUNT_DEFAULT = 8;
+
+/**
+ * Default machine per track index for a fresh project — a mixed analogue/digital
+ * starter kit. Indices past this list (tracks 9–12) fall back to 'synth'.
+ *   0 kick · 1 snare · 2 hihat (all analogue) · 3 bass · 4 moogish (analogue-ish)
+ *   5 synth (digital) · 6 sampler · 7 granular.
+ */
+const DEFAULT_MACHINES = [
+  'kick.analogue',
+  'snare.analogue',
+  'hihat.analogue',
+  'bass',
+  'moogish',
+  'synth',
+  'sampler',
+  'granular',
+];
 const TRACK_COUNT_MIN     = 1;
 const TRACK_COUNT_MAX     = 12;
 const STORAGE_KEY         = 'webtakt_project';
@@ -69,6 +86,11 @@ export class Project {
     const t = new Track(i, this.audio, this.clock, this.busGain);
     t.sampleStore = this.sampleStore;
     if (this._midiEngine) t.setMidiEngine(this._midiEngine);
+    // Give a fresh project a varied starter kit instead of 8 identical synths:
+    // analogue drums → bass → analogue-style + digital synth → samplers. Only
+    // applies to brand-new tracks; fromJSON() overwrites the type on load.
+    const def = DEFAULT_MACHINES[i];
+    if (def && def !== 'synth') t.setMachine(def);
     return t;
   }
 

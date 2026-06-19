@@ -16,6 +16,8 @@
 import { KnobWidget } from '../KnobWidget.js';
 import { bufferToWav } from '../../state/SampleStore.js';
 import { MAX_ZONES } from '../../machines/MultiSamplerMachine.js';
+import { SampleBrowser } from './SampleBrowser.js';
+import { CuratedSamples } from '../../state/CuratedSamples.js';
 
 const ZONE_WAVE_H = 56;
 
@@ -143,6 +145,27 @@ export class MultiSamplerPanel {
     });
     fileLabel.appendChild(fileInput);
     head.appendChild(fileLabel);
+
+    // BROWSE (curated + archive.org) into this specific zone.
+    const browseBtn = document.createElement('button');
+    browseBtn.className = 'btn sampler-browse-btn';
+    browseBtn.textContent = '🔍';
+    browseBtn.title = 'Browse curated + archive.org samples into this zone';
+    browseBtn.addEventListener('click', () => {
+      this._curated = this._curated || new CuratedSamples();
+      new SampleBrowser({
+        curated: this._curated,
+        onLoad: async (url, name) => {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const blob = await res.blob();
+          const fname = /\.[a-z0-9]{2,4}$/i.test(name) ? name : `${name}.wav`;
+          const file = new File([blob], fname, { type: blob.type || 'audio/wav' });
+          await this._loadFile(i, file);
+        },
+      });
+    });
+    head.appendChild(browseBtn);
 
     const recBtn = document.createElement('button');
     recBtn.className = 'btn sampler-rec-btn';

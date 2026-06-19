@@ -1,0 +1,216 @@
+{
+  "_comment": "Webtakt curated sample list. CC0 / public-domain one-shots fetched live from archive.org (CORS-open, no auth). Add entries with the local curator (★ TAG in the sample browser) — it downloads an updated copy to drop in here. Each item: {name, category, url, source, license}.",
+  "version": 1,
+  "items": [
+    {
+      "name": "Analog Kick 2",
+      "category": "kick",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Analog%20Kick%202.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "kick-6:9:2015",
+      "category": "kick",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/kick-6%3A9%3A2015.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "Analog Kick 1",
+      "category": "kick",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Analog%20Kick%201.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "Electronic Kick 1",
+      "category": "kick",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Electronic%20Kick%201.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "Kick- 10:30:2015",
+      "category": "kick",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Kick-%2010%3A30%3A2015.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "Analog Snare 2",
+      "category": "snare",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Analog%20Snare%202.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "Analog Snare 1",
+      "category": "snare",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Analog%20Snare%201.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "Analog Snare 3",
+      "category": "snare",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Analog%20Snare%203.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "Analog Snare 4",
+      "category": "snare",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Analog%20Snare%204.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "Analog Clap 1",
+      "category": "snare",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Analog%20Clap%201.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "440hat10:30:2015",
+      "category": "hat",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/440hat10%3A30%3A2015.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "noizehat1-10:30:2015",
+      "category": "hat",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/noizehat1-10%3A30%3A2015.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "Analog Hihat 1",
+      "category": "hat",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Analog%20Hihat%201.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "Analog Cymbal 2",
+      "category": "hat",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Analog%20Cymbal%202.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "HiHat- 5:2",
+      "category": "hat",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/HiHat-%205%3A2.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "Analog Low Tom 2",
+      "category": "tom",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Analog%20Low%20Tom%202.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "Risset drum conga",
+      "category": "tom",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Risset%20drum%20conga.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "hi tom-10:30:2015",
+      "category": "tom",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/hi%20tom-10%3A30%3A2015.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "Analog Low Tom 1",
+      "category": "tom",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Analog%20Low%20Tom%201.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "Analog Conga 1",
+      "category": "tom",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Analog%20Conga%201.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "Tink",
+      "category": "perc",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Tink.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "Volume Click",
+      "category": "perc",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Volume%20Click.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "Stick-10:30:2015",
+      "category": "perc",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Stick-10%3A30%3A2015.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "stick 2-10:30:2015",
+      "category": "perc",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/stick%202-10%3A30%3A2015.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "Analog Clave 3",
+      "category": "perc",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Analog%20Clave%203.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "point07sec brown noise",
+      "category": "synth",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/point07sec%20brown%20noise.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "point07sec pink noise",
+      "category": "synth",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/point07sec%20pink%20noise.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "sawtooth one",
+      "category": "synth",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/sawtooth%20one.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "Sawtooth low",
+      "category": "synth",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/Sawtooth%20low.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    },
+    {
+      "name": "7:1-80Hz Squarewave",
+      "category": "synth",
+      "url": "https://archive.org/download/mailboxbadgerdrumsamplesvolume2/7%3A1-80Hz%20Squarewave.wav",
+      "source": "mailboxbadgerdrumsamplesvolume2",
+      "license": "Public Domain"
+    }
+  ]
+}

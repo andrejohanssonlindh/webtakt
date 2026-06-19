@@ -6,6 +6,11 @@ and play.
 
 See [DESIGN.md](DESIGN.md) for the architecture overview.
 
+To curate the built-in sample list, run `python3 tools/curate_server.py` instead
+of the plain static server — it serves the app and lets the sample browser's
+★ ADD / ✕ buttons edit `samples/curated.json` directly (then commit). See
+[design/sample-browser.md](design/sample-browser.md).
+
 ## License
 
 Webtakt is licensed under the

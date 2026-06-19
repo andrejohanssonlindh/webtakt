@@ -1390,9 +1390,18 @@ export const MACHINE_MANUAL = {
   sampler: {
     title: 'SYNTH (Sampler)',
     blurb: 'A single-buffer sample player. Load an audio file via the panel ' +
-           'buttons, set the playback region and options, then use it as a ' +
-           'melodic or percussive instrument on the track.',
+           'buttons (or 🔍 BROWSE the built-in library), set the playback ' +
+           'region and options, then use it as a melodic or percussive ' +
+           'instrument on the track.',
     items: [
+      ['🔍 BROWSE', 'Opens the sample browser (on every sampler machine). Two ' +
+                 'tabs: CURATED — a hand-picked list of free/public-domain ' +
+                 'one-shots; and ARCHIVE.ORG — a live search of the Internet ' +
+                 'Archive\'s public audio (no login). Pick an item to list its ' +
+                 'audio files, then LOAD one straight into the sampler. Samples ' +
+                 'stream from the host, so loading needs a connection. ' +
+                 '(Running the local curate server adds ★ ADD / ✕ buttons that ' +
+                 'edit the curated list itself — author-only.)'],
       ['Start / End', 'Normalised playback region within the loaded sample (0–1). ' +
                  'Start sets where playback begins; End sets where it stops. Use ' +
                  'these to trim a region from a longer file.'],

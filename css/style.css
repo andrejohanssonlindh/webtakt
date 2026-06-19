@@ -3871,6 +3871,144 @@ body {
   padding: 4px 10px;
 }
 
+/* BROWSE — opens the curated + archive.org sample browser. Accent-tinted to
+ * read as the "discover more" sibling of the plain LOAD FILE button. */
+.sampler-browse-btn {
+  font-size: 1rem;
+  padding: 4px 10px;
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+.sampler-browse-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
+
+/* ─── SAMPLE BROWSER OVERLAY (curated + archive.org) ──────────── */
+.sample-browser-box {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  width: min(760px, 94vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.sample-browser-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.sample-browser-title {
+  color: var(--accent);
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  margin-right: 6px;
+}
+.sample-browser-tab.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.sample-browser-curator {
+  color: var(--green);
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  margin-right: 4px;
+}
+.sample-browser-close {
+  padding: 2px 9px;
+}
+
+.sample-browser-search {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.sample-browser-search .modal-input { flex: 1; }
+
+.sample-browser-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.sample-browser-chip {
+  font-size: 0.85rem;
+  padding: 2px 9px;
+}
+.sample-browser-chip.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.sample-browser-body {
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 2px;
+  min-height: 120px;
+}
+
+.sample-browser-item,
+.sample-browser-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  background: var(--surface-3);
+  border: 1px solid transparent;
+}
+.sample-browser-item:hover,
+.sample-browser-file:hover { border-color: var(--border); }
+
+.sample-browser-item-main { flex: 1; min-width: 0; }
+.sample-browser-item-name,
+.sample-browser-file-name {
+  color: var(--text-bright);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sample-browser-item-sub,
+.sample-browser-file-sub {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+.sample-browser-file-info { flex: 1; min-width: 0; }
+
+.sample-browser-files {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px 4px 8px 20px;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+.sample-browser-loadbtn {
+  padding: 3px 12px;
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+.sample-browser-loadbtn:hover { background: var(--accent-glow); }
+.sample-browser-tag { padding: 3px 9px; font-size: 0.85rem; }
+.sample-browser-tag.active { border-color: var(--green); color: var(--green); }
+.sample-browser-extlink { padding: 3px 9px; }
+
+.sample-browser-status {
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  min-height: 1.1em;
+}
+
 @keyframes pulse-rec {
   from { opacity: 1; }
   to   { opacity: 0.5; }

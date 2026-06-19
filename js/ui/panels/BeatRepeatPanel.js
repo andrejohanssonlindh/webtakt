@@ -14,6 +14,7 @@
 
 import { KnobWidget } from '../KnobWidget.js';
 import { bufferToWav } from '../../state/SampleStore.js';
+import { addBrowseButton } from './sampleBrowserButton.js';
 
 const WAVEFORM_H = 100;
 
@@ -155,6 +156,7 @@ export class BeatRepeatPanel {
     addKnob(outG, 'output.level', 'LEVEL', 0, 1, v => Math.round(v * 100) + '%');
 
     this.container.appendChild(wrap);
+    addBrowseButton(this);
 
     requestAnimationFrame(() => { this._setupCanvas(); this._drawWaveform(); });
     const ro = new ResizeObserver(() => { this._setupCanvas(); this._drawWaveform(); });

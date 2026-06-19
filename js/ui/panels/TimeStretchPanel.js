@@ -14,6 +14,7 @@
 
 import { KnobWidget } from '../KnobWidget.js';
 import { bufferToWav } from '../../state/SampleStore.js';
+import { addBrowseButton } from './sampleBrowserButton.js';
 
 const WAVEFORM_H = 100;
 
@@ -163,6 +164,7 @@ export class TimeStretchPanel {
     outG.appendChild(this._readoutEl);
 
     this.container.appendChild(wrap);
+    addBrowseButton(this);
     this._updateReadout();
 
     requestAnimationFrame(() => { this._setupCanvas(); this._drawWaveform(); });

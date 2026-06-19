@@ -16,6 +16,7 @@
 
 import { KnobWidget } from '../KnobWidget.js';
 import { formatCount32, MUSICAL_SNAP_32 } from '../../util/BpmSync.js';
+import { addBrowseButton } from './sampleBrowserButton.js';
 
 const WAVE_H  = 72;  // canvas CSS height per slot (matches .wt-sampler-waveform)
 const SNAP_PX = 10;  // pixel snap zone for handle pick-up
@@ -170,6 +171,7 @@ export class WavetableSamplerPanel {
     this.ctx.activeWidgets.push(sweepSpeedKnob);
 
     this.container.appendChild(wrap);
+    addBrowseButton(this);
 
     // Initial draw after layout settles
     requestAnimationFrame(() => {

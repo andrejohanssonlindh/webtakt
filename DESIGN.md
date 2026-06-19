@@ -15,6 +15,7 @@
 | [`design/fx.md`](design/fx.md) | DelayFX, BitcrushFX, ChorusFX, ReverbFX — parameters, signal routing, reorderable FX pipeline pane, UI, p-lock behaviour |
 | [`design/ui.md`](design/ui.md) | SynthPanel tabs, mixer tab, transport controls, scale quantisation, LFO destination groups, state/event flow |
 | [`design/state.md`](design/state.md) | Save/load (Project JSON), sound library, sample store |
+| [`design/sample-browser.md`](design/sample-browser.md) | 🔍 BROWSE on samplers: curated CC0 list + live archive.org search (CORS-open, no auth), the shared addBrowseButton wiring, and the local curate-server curator mode (tools/curate_server.py) |
 | [`design/tests.md`](design/tests.md) | Audio test suite architecture, coverage, how the Clock shim works |
 
 ---
@@ -25,7 +26,7 @@ A browser-based modular step sequencer / synthesizer inspired by Elektron Syntak
 Built in vanilla HTML5 + JavaScript. No build step, no framework, no package manager.
 Served via `python3 -m http.server 8000` and opened in Chrome.
 
-**Current scope:** 8–12 tracks (configurable at runtime via TRACKS +/− in the transport bar, default 8), unlimited steps per track (configurable per track, 16 visible per page), SynthMachine as primary voice, full suite of synthesis drum voices and melodic machines. MIDI out (MidiMachine per track), MIDI In note + CC routing per track (live play, record-to-pattern, and live-arp input), MIDI clock sync out (24 PPQN).
+**Current scope:** 8–12 tracks (configurable at runtime via TRACKS +/− in the transport bar, default 8), unlimited steps per track (configurable per track, 16 visible per page), SynthMachine as primary voice, full suite of synthesis drum voices and melodic machines. A fresh project ships a mixed starter kit rather than 8 identical synths — `Project.DEFAULT_MACHINES` sets tracks 1-8 to analogue kick/snare/hihat, bass, moogish, synth, sampler, granular (indices past the list fall back to synth); `fromJSON()` overrides the type on load. MIDI out (MidiMachine per track), MIDI In note + CC routing per track (live play, record-to-pattern, and live-arp input), MIDI clock sync out (24 PPQN).
 
 ---
 
@@ -33,6 +34,7 @@ Served via `python3 -m http.server 8000` and opened in Chrome.
 
 ```
 index.html
+favicon.svg              — knob-motif app icon (amber pointer on a dark dial)
 css/
   style.css
 js/
@@ -144,6 +146,8 @@ js/
       TimeStretchPanel.js     — Custom SYNTH tab for TimeStretchMachine: waveform trim + DETECT + tempo/pitch knobs + ratio readout
       BeatRepeatPanel.js      — Custom SYNTH tab for BeatRepeatMachine: waveform capture region + roll/slice knobs + rate select
       MultiSamplerPanel.js    — Custom SYNTH tab for MultiSamplerMachine: global controls + per-zone strips (load/wave/velocity-map)
+      SampleBrowser.js        — 🔍 BROWSE overlay (all samplers): CURATED list + live archive.org search, LOAD into the sampler. See design/sample-browser.md
+      sampleBrowserButton.js  — addBrowseButton(panel): inserts BROWSE next to LOAD FILE, fetches chosen URL → File → panel._loadFile()
       MidiPanel.js            — Custom SYNTH tab for MidiMachine (MIDI out): port/channel/note-offset
       TrigPanel.js            — TRIG tab: length/chance/detune/tone/nudge/condition knobs, voice cards, shift, note follow
       ScalesPanel.js          — SCALES tab: searchable scale dropdown, root strip, degree preview, keyboard fold
@@ -174,6 +178,8 @@ js/
     SoundLibrary.js     — Sound library, two sources one list: USER sounds in localStorage (save/load/delete) + FACTORY sounds shipped as files in sounds/ (async init() fetches sounds/index.json manifest → each sound JSON). Factory merged by id only if not already present (user copy wins); flagged `factory:true`, never written to localStorage (re-fetched each load so preset fixes ship). Old persisted `seed_*` entries are migrated out on load. Regenerate factory files via tools/bake_sounds.py.
     FXLibrary.js        — Global FX-pipeline preset store (localStorage `webtakt_fx_presets`, no factory presets). Preset = `{ name, tags, createdAt, fx:{ delayFX,bitcrushFX,chorusFX,reverbFX,fxOrder,fxInstances } }` via Track.exportFXPreset()/applyFXPreset(). save(name,tags,track)/load/delete/rename/setTags/allTags. Track-agnostic. SAVE inline in FX pane; LOAD opens FXPresetModal (audition dry vs pipeline, apply, edit, delete).
     SampleStore.js      — Sample store. load(id) resolves: in-memory cache → localStorage (WAV-base64, user imports) → shipped samples/<id>.wav (factory samples a sound references). Exports bufferToWav() for sound export.
+    ArchiveSearch.js    — Pure archive.org access for the sample browser: search(query)→items, listFiles(id)→load-ready audio-file URLs. CORS-open, no auth. See design/sample-browser.md.
+    CuratedSamples.js   — Loads samples/curated.json (curated CC0 one-shots); in curator mode add()/remove() POST to tools/curate_server.py (writes the file). Detects curator via GET /curate/status.
     Scales.js           — Scale definitions (20 scales) + noteInScale() / snapToScale() helpers (snapToScale snaps a note to the nearest in-scale pitch; used by the random arp modes via Track.scaleIndex/leadNote → arp.setScale)
   worklets/
     wavetable-sampler-processor.js — AudioWorkletProcessor for WavetableSamplerMachine

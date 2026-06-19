@@ -17,6 +17,7 @@
 
 import { KnobWidget } from '../KnobWidget.js';
 import { bufferToWav } from '../../state/SampleStore.js';
+import { addBrowseButton } from './sampleBrowserButton.js';
 
 const WAVEFORM_H = 100; // canvas CSS height in px
 
@@ -190,6 +191,7 @@ export class SamplerPanel {
     outG.appendChild(this._sampleLenBtn);
 
     this.container.appendChild(wrap);
+    addBrowseButton(this);
 
     // Initial draw — defer one frame so layout is settled
     requestAnimationFrame(() => {
