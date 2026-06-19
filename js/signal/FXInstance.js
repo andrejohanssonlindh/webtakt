@@ -54,6 +54,7 @@ export class FXInstance {
   destroy()            { return (this.fx.destroy ?? this.fx.disconnect).call(this.fx); }
   setEnabled(on)       { return this.fx.setEnabled?.(on); }
   setBpm(bpm)          { return this.fx.setBpm?.(bpm); }
+  flush()              { return this.fx.flush?.(); }
 
   // ── Path namespacing ───────────────────────────────────────
 

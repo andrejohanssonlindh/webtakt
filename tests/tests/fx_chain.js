@@ -339,3 +339,123 @@ suite('FX chain (presets)', () => {
   });
 
 });
+
+suite('FX chain (panic / silence)', () => {
+
+  /**
+   * Fire a note at t=0.05, let the delay buffer fill, call track.silence() at
+   * suspendAt via OfflineAudioContext.suspend(), then measure the tail RMS.
+   * `addedDelays` stacks extra delay instances on top of the base delay.
+   */
+  async function panicTailRms({ suspendAt, totalSec, wet, feedback, delayTime, addedDelays = 0 }) {
+    const sampleRate = 44100;
+
+    // suspend() must be registered before startRendering().
+    // We create the ctx ourselves so the suspend is pre-registered, then build
+    // a track against it using the same shim pattern as makeOfflineTrack.
+    const ctx = new OfflineAudioContext(1, Math.ceil(sampleRate * totalSec), sampleRate);
+    const suspendPromise = ctx.suspend(suspendAt);
+
+    const fxBus = ctx.createGain();
+    fxBus.connect(ctx.destination);
+    const audioShim = { context: ctx, fxBus };
+
+    const clock = {
+      bpm: 120,
+      ticksPerBeat: 4,
+      get _secondsPerTick() { return 60 / (this.bpm * this.ticksPerBeat); },
+      register() {}, unregister() {},
+      audio: audioShim,
+    };
+
+    const { Track } = await import('../../js/state/Track.js');
+    const track = new Track(0, audioShim, clock);
+    track.setMachine('synth');
+
+    // Base delay: max wet + high feedback
+    track.delayFX.setParam('delay.time',     delayTime ?? 0.1);
+    track.delayFX.setParam('delay.feedback', feedback  ?? 0.9);
+    track.delayFX.setParam('delay.wet',      wet       ?? 1.0);
+    track.delayFX.setEnabled(true);
+
+    // Stacked added delay instances
+    for (let i = 0; i < addedDelays; i++) {
+      const id  = track.addFX('delay');
+      const blk = track.getFXBlock(id);
+      blk.setParam(`${id}.delay.time`,     delayTime ?? 0.1);
+      blk.setParam(`${id}.delay.feedback`, feedback  ?? 0.9);
+      blk.setParam(`${id}.delay.wet`,      wet       ?? 1.0);
+      blk.setEnabled(true);
+    }
+
+    // Fire one note to fill the delay buffer
+    fireStep(track, 0.05, { note: 60, velocity: 127, length: 2 });
+
+    const renderPromise = ctx.startRendering();
+    await suspendPromise;
+    track.silence(ctx.currentTime);
+    ctx.resume();
+
+    const rendered = await renderPromise;
+    const buf      = rendered.getChannelData(0);
+    // Measure from 50 ms after the silence call to let gain ramps complete.
+    const tailStart = Math.floor((suspendAt + 0.05) * sampleRate);
+    return rms(buf.slice(tailStart));
+  }
+
+  test('silence() kills the base delay at max wet+feedback', async () => {
+    const tailRms = await panicTailRms({ suspendAt: 0.4, totalSec: 1.5 });
+    assert.lt(tailRms, 0.001, `base delay still ringing after silence (rms=${tailRms.toFixed(6)})`);
+  });
+
+  test('silence() kills a stacked added delay (FXInstance.flush() path)', async () => {
+    const tailRms = await panicTailRms({ suspendAt: 0.4, totalSec: 1.5, addedDelays: 1 });
+    assert.lt(tailRms, 0.001, `stacked delay still ringing after silence (rms=${tailRms.toFixed(6)})`);
+  });
+
+  test('delay is still audible after the 2.1 s restore window', async () => {
+    // flush() schedules feedback+wet restore at t+2.1 s. Fire a second note
+    // after that window and confirm the delay tail is measurable.
+    const sampleRate  = 44100;
+    const suspendAt   = 0.3;
+    const totalSec    = 4.0;
+    const ctx         = new OfflineAudioContext(1, Math.ceil(sampleRate * totalSec), sampleRate);
+    const suspendPromise = ctx.suspend(suspendAt);
+
+    const fxBus = ctx.createGain();
+    fxBus.connect(ctx.destination);
+    const audioShim = { context: ctx, fxBus };
+    const clock = {
+      bpm: 120, ticksPerBeat: 4,
+      get _secondsPerTick() { return 60 / (this.bpm * this.ticksPerBeat); },
+      register() {}, unregister() {},
+      audio: audioShim,
+    };
+
+    const { Track } = await import('../../js/state/Track.js');
+    const track = new Track(0, audioShim, clock);
+    track.setMachine('synth');
+    track.delayFX.setParam('delay.time',     0.1);
+    track.delayFX.setParam('delay.feedback', 0.8);
+    track.delayFX.setParam('delay.wet',      0.9);
+    track.delayFX.setEnabled(true);
+
+    fireStep(track, 0.05, { note: 60, velocity: 127, length: 2 });
+
+    const renderPromise = ctx.startRendering();
+    await suspendPromise;
+    track.silence(ctx.currentTime);   // flush at t≈0.3
+    ctx.resume();
+
+    // Second note at t=2.6, well past the 2.1 s restore point (t=0.3+2.1=2.4)
+    fireStep(track, 2.6, { note: 60, velocity: 127, length: 2 });
+
+    const rendered  = await renderPromise;
+    const buf       = rendered.getChannelData(0);
+    const tailStart = Math.floor(2.8 * sampleRate);
+    const tailEnd   = Math.floor(3.5 * sampleRate);
+    const tailRms   = rms(buf.slice(tailStart, tailEnd));
+    assert.gt(tailRms, 0.0005, `delay silent after restore window — effect broken (rms=${tailRms.toFixed(6)})`);
+  });
+
+});

@@ -1018,6 +1018,11 @@ export class Track {
     this.liveArp?.releaseAll();
     if (this._pool) this._pool.silence(t);
     else this.envelope?.silence(t);
+    // Flush feedback loops in every FX block that has one (e.g. Delay stacked
+    // at max wet/feedback) so panic actually stops them.
+    for (const id of this.getFXBlockIds()) {
+      try { this._fxBlocks[id]?.flush?.(); } catch (_) {}
+    }
     // Continuous live input is a monitor, not a ringing note — STOP/panic cuts
     // the instant of sound but the input keeps working, so re-arm its gate. The
     // stream itself is untouched (use the panel's toggle to actually stop it).

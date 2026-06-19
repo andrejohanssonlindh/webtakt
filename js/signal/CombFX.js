@@ -91,6 +91,14 @@ export class CombFX {
   connectInput(sourceNode) { sourceNode.connect(this.inputNode); }
   disconnect() { this.outputNode.disconnect(); }
 
+  flush() {
+    const t = this.context.currentTime;
+    const savedFb = this._fb.gain.value;
+    this._fb.gain.cancelScheduledValues(t);
+    this._fb.gain.setValueAtTime(0, t);
+    this._fb.gain.setValueAtTime(savedFb, t + 0.5);
+  }
+
   setEnabled(enabled) {
     this.enabled = enabled;
     const t = this.context.currentTime;

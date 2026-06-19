@@ -97,6 +97,33 @@ export class DelayFX {
     this.outputNode.disconnect();
   }
 
+  /**
+   * Kill the delay immediately (panic/stop-all). Zeroes feedback (breaks the
+   * self-loop), wet (cuts delay output), and the output node (prevents dry
+   * signal from a ringing upstream delay feeding a downstream one). Schedules
+   * a restore after the buffer drains so the effect still works on resume.
+   */
+  flush() {
+    const t        = this.context.currentTime;
+    const savedFb  = this._feedbackGain.gain.value;
+    const savedWet = this._wetGain.gain.value;
+    const savedOut = this.outputNode.gain.value;
+
+    this._feedbackGain.gain.cancelScheduledValues(t);
+    this._feedbackGain.gain.setValueAtTime(0, t);
+
+    this._wetGain.gain.cancelScheduledValues(t);
+    this._wetGain.gain.setValueAtTime(0, t);
+
+    this.outputNode.gain.cancelScheduledValues(t);
+    this.outputNode.gain.setValueAtTime(0, t);
+
+    // Restore after the delay buffer has had time to drain (max delay = 2 s).
+    this._feedbackGain.gain.setValueAtTime(savedFb,  t + 2.1);
+    this._wetGain.gain.setValueAtTime(savedWet, t + 2.1);
+    this.outputNode.gain.setValueAtTime(savedOut, t + 2.1);
+  }
+
   /** Enable or bypass the effect without changing the wet param value. */
   setEnabled(enabled) {
     this.enabled = enabled;
