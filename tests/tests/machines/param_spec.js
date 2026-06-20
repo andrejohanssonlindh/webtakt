@@ -114,15 +114,19 @@ const EXPECTED = {
     { path: 'output.level', label: 'Level',      type: 'number', min: 0, max: 1, default: 0.75, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
   ],
   clapp: [
-    { path: 'tone',         label: 'Tone',   type: 'number', min: 800, max: 6000, default: 3000, modulatable: true, lfoMin: 800, lfoMax: 6000, group: 'TONE', plockMode: 'audioParam' },
-    { path: 'snap',         label: 'Snap',   type: 'number', min: 0.3, max: 4, default: 1.2, modulatable: true, lfoMin: 0.3, lfoMax: 4, group: 'TONE', plockMode: 'audioParam' },
+    // tone/snap defaults retuned in the 2026-06 clap rework (lowpass filter +
+    // fused single-stream design); these are the new intended descriptors.
+    { path: 'tone',         label: 'Tone',   type: 'number', min: 800, max: 6000, default: 2800, modulatable: true, lfoMin: 800, lfoMax: 6000, group: 'TONE', plockMode: 'audioParam' },
+    { path: 'snap',         label: 'Snap',   type: 'number', min: 0.3, max: 4, default: 0.8, modulatable: true, lfoMin: 0.3, lfoMax: 4, group: 'TONE', plockMode: 'audioParam' },
     { path: 'decay',        label: 'Decay',  type: 'number', min: 0.05, max: 1.0, default: 0.3, group: 'SHAPE', plockMode: 'js' },
     { path: 'spread',       label: 'Spread', type: 'number', min: 0, max: 30, default: 8, group: 'SHAPE', plockMode: 'js' },
     { path: 'output.level', label: 'Level',  type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
   ],
   'clapp.analogue': [
-    { path: 'tone',         label: 'Tone',   type: 'number', min: 800, max: 6000, default: 2400, modulatable: true, lfoMin: 800, lfoMax: 6000, group: 'TONE', plockMode: 'audioParam' },
-    { path: 'snap',         label: 'Snap',   type: 'number', min: 0.3, max: 4, default: 1.2, modulatable: true, lfoMin: 0.3, lfoMax: 4, group: 'TONE', plockMode: 'audioParam' },
+    // tone/snap defaults retuned in the 2026-06 clap rework (fused single-stream
+    // design); these are the new intended descriptors.
+    { path: 'tone',         label: 'Tone',   type: 'number', min: 800, max: 6000, default: 1800, modulatable: true, lfoMin: 800, lfoMax: 6000, group: 'TONE', plockMode: 'audioParam' },
+    { path: 'snap',         label: 'Snap',   type: 'number', min: 0.3, max: 4, default: 0.8, modulatable: true, lfoMin: 0.3, lfoMax: 4, group: 'TONE', plockMode: 'audioParam' },
     { path: 'decay',        label: 'Decay',  type: 'number', min: 0.05, max: 1.0, default: 0.3, group: 'SHAPE', plockMode: 'js' },
     { path: 'spread',       label: 'Spread', type: 'number', min: 0, max: 30, default: 8, group: 'SHAPE', plockMode: 'js' },
     { path: 'output.level', label: 'Level',  type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },

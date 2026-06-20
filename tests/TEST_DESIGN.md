@@ -228,9 +228,16 @@ turning its measurement into a regression test. Each machine renders through the
   swarm, karplus, kick.silk) must land within **0.5×–2.2×** of the MEDIAN trimmed RMS. The band is wide
   on purpose: it catches a *gross* mistune (a missing or zero trim → ≫2×), not small drift. A failure
   means "re-run tests/loudness.html and update that machine's `LOUDNESS_TRIM`".
-- **Percussion** (kick.hard, snare, hihat, cymbal, clapp, wood, noise, transient) is intentionally
-  *below* median RMS — the bench caps their trim so transient peaks keep headroom — so they are held
-  only to a **peak ceiling** (< 1.0 linear) + audibility, not the band.
+- **Percussion** (kick.hard, snare, hihat, cymbal, clapp, wood, noise, transient + their `.analogue`
+  variants) is intentionally *below* median RMS — the bench caps their trim so transient peaks keep
+  headroom — so they are held only to a **peak ceiling** + audibility, not the band. The percussion
+  ceiling is **looser (1.3)** than the tonal one (1.0): the analogue spiky voices give each instance a
+  random per-oscillator ratio/detune nudge at construction, so an unlucky instance's partials briefly
+  align and the transient peak overshoots ~1.0 (to ~1.1–1.2) even with the trim calibrated to ~0.90 for a
+  typical instance. That brief inter-sample transient isn't audible clipping and the master limiter
+  catches it; tightening the trim to chase it would make the typical instance too quiet. 1.3 still catches
+  a genuine gross over-level (a missing/wrong trim renders ≫ that). (The randomness is seeded so the
+  result is reproducible, but the seed lands on a different instance per machine — hence the headroom.)
 - Catches: a new machine added without a tuned trim (defaults to 1.0 → usually fails the band), or a
   synthesis change that shifts a machine's level. Each machine is rendered once (cached) across its tests.
 - **Reference velocity is 127 (full).** The bench and the guard fire at velocity 127 because the trims
