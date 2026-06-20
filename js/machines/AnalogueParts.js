@@ -26,7 +26,10 @@
 import { noiseRandomValue } from '../util/AudioBuffers.js';
 
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-export const rand  = (lo = -1, hi = 1) => lo + Math.random() * (hi - lo);
+// Routes through the (test-seedable) noise random source so the per-instance
+// tolerances/drift that analogue machines bake at construction are deterministic
+// under the test harness. In production this is Math.random (full variation).
+export const rand  = (lo = -1, hi = 1) => lo + noiseRandomValue() * (hi - lo);
 
 /**
  * Imperfect oscillator spectrum (ported from Patina makeImperfectWave).
@@ -142,7 +145,7 @@ export class DriftClock {
     const t = this.ctx.currentTime;
     this.params.forEach((param, i) => {
       const st = this._state[i];
-      if (Math.random() < 0.25) st.target = rand() * cents;
+      if (noiseRandomValue() < 0.25) st.target = rand() * cents;
       st.value += (st.target - st.value) * 0.3;
       param.setTargetAtTime(this.baseFor(i) + st.value, t, this.tc);
     });

@@ -115,6 +115,16 @@ export class SynthPanel {
   openManual() {
     const track = this.state.selectedTrack;
     const machineType = track?.machine?.type;
+
+    // On phone the STEPS pseudo-tab is a surface driven by a body class, not
+    // state.activeTab (which still holds the last real tab). When that surface is
+    // up the user is looking at the step grid, so show its manual rather than the
+    // stale active tab's. Desktop never sets the class, so this is phone-only.
+    if (document.body.classList.contains('phone-show-steps')) {
+      this._manual.show('steps', machineType, null);
+      return;
+    }
+
     let fxType = null;
     if (this.state.activeTab === 'fx' && this.state.fxSelectedBlockId && track) {
       fxType = track.getFXType(this.state.fxSelectedBlockId);

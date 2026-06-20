@@ -31,6 +31,36 @@
  */
 
 export const MANUAL_CONTENT = {
+  // STEPS is the phone-only pseudo-tab (the step-grid surface). It has no desktop
+  // tab — on desktop the grid is always visible — but on phone it's a full surface
+  // toggled by the STEPS button, so the 📖 manual must have a page for it (the
+  // overlay keys off the active surface, see SynthPanel.openManual).
+  steps: {
+    title: 'STEPS',
+    blurb: 'The step grid for the selected track — where you program the pattern. ' +
+           'On phone this is a full surface (the STEPS tab) shown instead of the ' +
+           'synth panel, since both can\'t fit at once; tap STEPS to return here, or ' +
+           'any other tab to leave it. Each cell is one step in the sequence.',
+    items: [
+      ['Tap a cell', 'Toggles a note on/off at that step. A lit cell fires the ' +
+                 'track\'s current note when the sequencer reaches it; tap again to ' +
+                 'clear it.'],
+      ['Select a step', 'Tap a step to select it (without clearing). The TRIG and ' +
+                 'other tabs then edit THAT step — its length, velocity, condition, ' +
+                 'and p-locks. Knob moves on a selected step write a per-step p-lock ' +
+                 'instead of the track default.'],
+      ['Step number', 'Each cell shows its position in the pattern. Beat-start steps ' +
+                 '(1, 5, 9, 13…) are marked so you can read the grid at a glance.'],
+      ['Voice dots', 'Green dots count the note voices recorded on a step; white dots ' +
+                 'show notes from earlier steps still ringing across this one (a long ' +
+                 'note painting its sustain). More dots = a denser, more polyphonic step.'],
+      ['Condition dot', 'A small marker means the step has a fire condition or reduced ' +
+                 'chance set on the TRIG tab — it won\'t fire every pass.'],
+      ['Pages', 'Patterns longer than 16 steps are split into pages of 16. Use the ' +
+                 'page controls to move between them; the grid shows one page at a time.'],
+    ],
+  },
+
   filter: {
     title: 'FILTER',
     blurb: 'Shapes the timbre by removing frequencies. The big knobs drive a ' +

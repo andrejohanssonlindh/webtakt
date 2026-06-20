@@ -238,12 +238,17 @@ turning its measurement into a regression test. Each machine renders through the
   always scales amp by `velocity/127`), so firing at a lower velocity would scale every measurement and
   invalidate the calibration. `makeStep`'s default velocity is likewise 127.
 - **Noise is deterministic IN TESTS.** The runner calls `seedNoiseRandom()` once at the top of `runAll()`,
-  swapping the `Math.random` source inside `getNoiseBuffer` (white) and `makePinkBuffer` (analogue/pink) for
-  a seeded mulberry32 PRNG. White/pink noise is statistically identical regardless of seed, but fixed content
-  makes peak/RMS reproducible — without it the peak-ceiling and noise-variance tests flaked on an unlucky
-  draw (results differed run-to-run and Chrome vs Firefox). **Production keeps `Math.random`** — analogue
-  voices must vary (seeding it made the 8 moogish pool voices share one buffer → audible "every-8th-note"
-  artifact). Per-voice tolerance/drift (`AnalogueParts.rand` / `DriftClock`) stays random in both.
+  swapping the `Math.random` source inside `getNoiseBuffer` (white), `makePinkBuffer` (analogue/pink), and
+  `AnalogueParts.rand` (per-instance tolerance/drift) for a seeded mulberry32 PRNG. White/pink noise is
+  statistically identical regardless of seed, but fixed content makes peak/RMS reproducible — without it the
+  peak-ceiling and noise-variance tests flaked on an unlucky draw (results differed run-to-run and Chrome vs
+  Firefox). The analogue percussion (notably `hihat.analogue`) was the other flake source: its six inharmonic
+  oscillators get a random per-instance ratio/detune nudge at construction via `AnalogueParts.rand`, so an
+  unlucky instance summed to a peak >1.0 and tripped the peak-ceiling check only sometimes. Routing `rand`
+  through the seedable source makes that instance fixed under test (for a fixed test order). **Production keeps
+  `Math.random`** — analogue voices must vary (seeding it made the 8 moogish pool voices share one buffer →
+  audible "every-8th-note" artifact); the seed is installed only for the test run. `DriftClock` wanders in
+  real time and doesn't advance during offline render, so it isn't a render-determinism factor.
 
 ---
 
