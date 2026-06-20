@@ -69,18 +69,30 @@ export function divToSeconds(div, bpm) {
 export const GRID_UNIT_QN = 4 / GRID_BASE;
 
 /**
- * FX sync knobs sweep a SUB-grid this many steps finer than the base grid, so
- * they can land between musical divisions (the gap the user hit between 1/32 and
- * 1/16). At 16, there are 15 sub-steps between adjacent base-grid units. Stored
- * counts become fractional (multiples of 1/FINE_STEP) — count32ToSeconds and
- * formatCount32 both handle fractional input. Envelopes/LFO/arp keep integer
- * counts (they don't opt into the sub-grid), so their stored defaults are
- * unchanged.
+ * Display resolution for the fractional remainder of a count. formatCount32
+ * splits a count into whole grid units + a remainder of 1/FINE_STEP-th of a
+ * unit; at 16 the remainder can name 1/64 (8/16) and 1/128 (4/16) cleanly. This
+ * is a LABEL granularity only — free drag quantizes to the user's grid (see
+ * `quantizeCount`), so the remainder in practice is always 0, a 1/64 or a 1/128.
  */
 export const FINE_STEP = 16;
 
-/** Smallest fractional grid increment the FX sync knobs move in. */
+/** Smallest fractional grid increment the formatter can name. */
 export const FINE_INCREMENT = 1 / FINE_STEP;
+
+/**
+ * Free-drag quantize step in stored 1/32 units. The user's Settings grid sets
+ * how finely the sync knobs move WITHOUT shift: 1/32 → 1 unit, 1/64 → 0.5,
+ * 1/128 → 0.25. Stored counts stay in 1/32 units (GRID_BASE is fixed) so a 1/64
+ * step is simply 0.5. `setSnapResolution()` keeps this in sync with the snap
+ * points whenever the grid setting changes.
+ */
+let _quantStep = 1;
+
+/** Quantize a free-dragged count to the current grid step (1/32, 1/64, 1/128). */
+export function quantizeCount(count) {
+  return Math.round(count / _quantStep) * _quantStep;
+}
 
 /** Convert a grid count (may be fractional) + BPM to seconds. */
 export function count32ToSeconds(count, bpm) {
@@ -134,6 +146,10 @@ export let MUSICAL_SNAP_32 = _buildSnap(32);
  */
 export function setSnapResolution(finestBase) {
   MUSICAL_SNAP_32 = _buildSnap(finestBase);
+  // Free drag steps one grid unit at the chosen resolution. GRID_BASE units span
+  // a whole note; finestBase units span a whole note at the new resolution, so
+  // one step = GRID_BASE / finestBase stored 1/32 units (32→1, 64→0.5, 128→0.25).
+  _quantStep = GRID_BASE / finestBase;
 }
 
 // Clean fraction names keyed by grid-unit count (derived from GRID_BASE).
@@ -148,26 +164,31 @@ const _COUNT32_NAME = (() => {
   return names;
 })();
 
+// Sub-1/32 remainders the formatter can name, keyed by 1/FINE_STEP units.
+// 8/16 of a 1/32 unit = 1/64, 4/16 = 1/128. Anything else falls back to "·N".
+const _FINE_REM_NAME = { 8: `1/${GRID_BASE * 2}`, 4: `1/${GRID_BASE * 4}`, 12: `3/${GRID_BASE * 4}` };
+
 /**
  * Human-readable label for a grid count (may be fractional). Exact divisions
  * render clean ("1/4"); otherwise the largest clean division ≤ count plus the
- * remainder ("1/8 + 1/32", "3/16 + 1/32"). Fractional sub-grid values append a
- * "·N" fine-step suffix so the knob shows movement between divisions.
+ * remainder ("1/8 + 1/32", "3/16 + 1/32"). A fractional remainder (the knob now
+ * lands on 1/64 / 1/128 when the user raises the grid) reads as "+ 1/64" etc.
  */
 export function formatCount32(count) {
   const n = Math.max(FINE_INCREMENT, count);
   // Snap to the fine grid first, then split into whole + fine remainder so a
-  // value like 8.9999 reads as "1/4" (9 → next whole), not "1/8 ·16".
+  // value like 8.9999 reads as "1/4" (9 → next whole), not "1/8 + 1/64".
   const fineTotal = Math.round(n * FINE_STEP);
   const whole   = Math.floor(fineTotal / FINE_STEP);
   const fineRem = fineTotal - whole * FINE_STEP;
   if (whole === 0) {
-    // Sub-one-unit value (only reachable on the fine FX sub-grid).
-    return `1/${GRID_BASE} ·-${FINE_STEP - fineRem}`;
+    // Sub-one-unit value (only reachable when the grid is 1/64 or finer).
+    return _FINE_REM_NAME[fineRem] ?? `1/${GRID_BASE} ·-${FINE_STEP - fineRem}`;
   }
   const baseLabel = _formatWholeCount(whole);
   if (fineRem === 0) return baseLabel;
-  return `${baseLabel} ·${fineRem}`;
+  const remName = _FINE_REM_NAME[fineRem];
+  return remName ? `${baseLabel} + ${remName}` : `${baseLabel} ·${fineRem}`;
 }
 
 /** Label for an integer grid count (the clean/remainder logic). */

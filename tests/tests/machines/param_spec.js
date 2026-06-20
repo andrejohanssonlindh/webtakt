@@ -160,6 +160,25 @@ const EXPECTED = {
     { path: 'attack.decay', label: 'Atk Decay', type: 'number', min: 0.005, max: 0.05, default: 0.015, group: 'ATTACK', plockMode: 'js' },
     { path: 'output.level', label: 'Level',     type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
   ],
+  tom: [
+    { path: 'tune',         label: 'Tune',      type: 'number', min: 60, max: 400, default: 110, modulatable: true, lfoMin: 60, lfoMax: 400, group: 'TONE', plockMode: 'audioParam' },
+    { path: 'decay',        label: 'Decay',     type: 'number', min: 0.1, max: 1.5, default: 0.45, group: 'TONE', plockMode: 'js' },
+    { path: 'sweep',        label: 'Sweep',     type: 'number', min: 1, max: 4, default: 2.0, group: 'TONE', plockMode: 'js' },
+    { path: 'sweep.time',   label: 'Swp Time',  type: 'number', min: 0.05, max: 0.6, default: 0.25, group: 'TONE', plockMode: 'js' },
+    { path: 'tone',         label: 'Tone',      type: 'number', min: 0, max: 1, default: 0.25, group: 'TONE', plockMode: 'js' },
+    { path: 'click',        label: 'Click',     type: 'number', min: 0, max: 1, default: 0.3, group: 'ATTACK', plockMode: 'js' },
+    { path: 'click.decay',  label: 'Clk Decay', type: 'number', min: 0.003, max: 0.04, default: 0.012, group: 'ATTACK', plockMode: 'js' },
+    { path: 'output.level', label: 'Level',     type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+  ],
+  'tom.fm': [
+    { path: 'tune',         label: 'Tune',     type: 'number', min: 60, max: 400, default: 120, modulatable: true, lfoMin: 60, lfoMax: 400, group: 'TONE', plockMode: 'audioParam' },
+    { path: 'decay',        label: 'Decay',    type: 'number', min: 0.1, max: 1.5, default: 0.4, group: 'TONE', plockMode: 'js' },
+    { path: 'sweep',        label: 'Sweep',    type: 'number', min: 1, max: 4, default: 1.6, group: 'TONE', plockMode: 'js' },
+    { path: 'ratio',        label: 'Ratio',    type: 'number', min: 0.5, max: 12, default: 2.5, group: 'FM', plockMode: 'js' },
+    { path: 'fm',           label: 'FM',       type: 'number', min: 0, max: 1, default: 0.5, group: 'FM', plockMode: 'js' },
+    { path: 'fm.decay',     label: 'FM Decay', type: 'number', min: 0.05, max: 1, default: 0.35, group: 'FM', plockMode: 'js' },
+    { path: 'output.level', label: 'Level',    type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+  ],
   noise: [
     { path: 'color',        label: 'Color',      type: 'number', min: 0, max: 1, default: 0.3, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'COLOR', plockMode: 'js' },
     { path: 'color.freq',   label: 'Color Freq', type: 'number', min: 200, max: 8000, default: 2000, modulatable: true, lfoMin: 200, lfoMax: 8000, group: 'COLOR', plockMode: 'audioParam' },
@@ -301,6 +320,8 @@ const RESOLVES = {
   cymbal: ['tune', 'tone', 'body', 'resonance', 'output.level'],
   'cymbal.analogue': ['tune', 'tone', 'body', 'resonance', 'output.level'],
   'tom.analogue': ['tune', 'output.level'],
+  tom: ['tune', 'output.level'],
+  'tom.fm': ['tune', 'output.level'],
   noise: ['color.freq', 'body.freq', 'body.level', 'output.level'],
   karplus: ['output.level'],
   comb: ['output.level'],
@@ -320,7 +341,7 @@ suite('Param spec (declarative machines)', () => {
   for (const type of [
     'synth', 'snare', 'snare.analogue', 'chord',
     'kick.silk', 'kick.hard', 'kick.analogue', 'hihat', 'hihat.analogue',
-    'clapp', 'clapp.analogue', 'cymbal', 'cymbal.analogue', 'tom.analogue',
+    'clapp', 'clapp.analogue', 'cymbal', 'cymbal.analogue', 'tom.analogue', 'tom', 'tom.fm',
     'noise', 'karplus', 'comb', 'marimba', 'transient', 'wood',
     'bass', 'swarm', 'strings', 'moogish', 'sampler',
   ]) {

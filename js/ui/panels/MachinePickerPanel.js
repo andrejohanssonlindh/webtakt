@@ -26,6 +26,8 @@ export const MACHINE_GROUPS = [
       { type: 'hihat',     label: 'HiHat',     desc: 'Inharmonic oscs' },
       { type: 'hihat.analogue', label: 'HiHat Analog', desc: 'Analogue hi-hat + drift (Patina)' },
       { type: 'tom.analogue', label: 'Tom Analog', desc: 'Analogue tuned tom + drift (Patina)' },
+      { type: 'tom',       label: 'Tom',       desc: 'Clean digital tuned tom + click' },
+      { type: 'tom.fm',    label: 'Tom FM',    desc: 'Metallic FM tom (inharmonic bite)' },
       { type: 'cymbal',    label: 'Cymbal',    desc: 'Crash / ride cymbal' },
       { type: 'cymbal.analogue', label: 'Cymbal Analog', desc: 'Analogue cymbal + drift (Patina)' },
       { type: 'clapp',     label: 'Clapp',     desc: '808-style layered clap' },

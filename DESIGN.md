@@ -65,7 +65,9 @@ js/
     AnalogueSnareMachine.js — Analogue snare: Snare structure with imperfect-triangle body + per-instance tolerance + thermal drift + pink-noise snares (type: 'snare.analogue'); built on AnalogueParts.js
     HiHatMachine.js     — Synthesis hi-hat: 6 inharmonic square oscs + HP filter
     AnalogueHiHatMachine.js — Analogue hi-hat: 6 imperfect-square oscs with per-instance ratio tolerance + thermal drift + HP filter (type: 'hihat.analogue'); built on AnalogueParts.js
-    AnalogueTomMachine.js — Analogue tuned tom: imperfect-sine body + pitch sweep + thermal drift + pink-noise attack + soft-clip (type: 'tom.analogue'); no digital sibling; built on AnalogueParts.js
+    AnalogueTomMachine.js — Analogue tuned tom: imperfect-sine body + pitch sweep + thermal drift + pink-noise attack + soft-clip (type: 'tom.analogue'); built on AnalogueParts.js
+    TomMachine.js       — Digital tuned tom: clean sine+triangle body + fast pitch drop + white-noise click (type: 'tom'); SPEC-driven
+    TomFMMachine.js     — FM tuned tom: metallic modulator→carrier FM pair + FM-depth env + pitch sweep (type: 'tom.fm'); SPEC-driven
     AnalogueClappMachine.js — Analogue clap: Clapp's 3 staggered bursts but pink noise + per-instance spread tolerance (type: 'clapp.analogue'); built on AnalogueParts.js
     AnalogueCymbalMachine.js — Analogue cymbal: 6 imperfect-square oscs with per-instance ratio tolerance + thermal drift + HPF/BP, closed/mid/open tiers (type: 'cymbal.analogue'); built on AnalogueParts.js
     FMMachine.js        — 4-operator FM synth; per-op ADSR envelopes
@@ -170,7 +172,7 @@ js/
   util/
     BpmSync.js          — Shared BPM-sync utility. Unified sync-knob model: 1/32-note integer counts (count32ToSeconds, MUSICAL_SNAP_32, formatCount32, divToCount32). Used by DelayFX, ReverbFX, LFO, Arpeggiator. Legacy DIV_QN/SYNC_DIVISIONS/divToSeconds kept for load back-compat.
   state/
-    Track.js            — Owns VoicePool + sequencer + filter + FX chain + LFOs + pannerNode + Arpeggiator. FX chain order is REORDERABLE (`_fxOrder` / `setFXOrder` / `_rewireFXChain`; default delay→crush→chorus→reverb) — see design/audio-signal-chain.md → Reorderable FX pipeline. `analogue` flag (setAnalogue) drives the whole analogue flow as a unit: filter engine, RC envelopes, keytrack, velocity, chorus
+    Track.js            — Owns VoicePool + sequencer + filter + FX chain + LFOs + pannerNode + Arpeggiator. FX chain order is REORDERABLE (`_fxOrder` / `setFXOrder` / `_rewireFXChain`; default delay→crush→chorus→reverb) — see design/audio-signal-chain.md → Reorderable FX pipeline. `analogue` flag (setAnalogue) drives the whole analogue flow as a unit: filter engine, RC envelopes, keytrack, velocity, chorus. `setMachine` applies it as a DEFAULT from the machine's nature (ANALOGUE_MACHINES set: moogish + every `*.analogue` drum → analogue ladder, all else → digital); fromJSON re-asserts a saved project's engine afterward, and the user can override via the FILTER ANALOGUE switch
     Project.js          — 8–12 tracks (dynamic), BPM, export/import JSON file. Owns a per-deck busGain (tracks route here → master fxBus). loadDeckJSON/reset for the deck layer.
     DeckManager.js      — Two-deck DJ layer: owns Project A + B (shared Clock/AudioEngine, beatmatched), constant-power crossfader on the two busGains, per-deck silence, "control" (which deck the UI edits), load/unload. See design/ui.md → Deck Tab.
     AppState.js         — Selected track/step, active tab/LFO, event bus. `.project` is a getter following the controlled deck (DeckManager).
@@ -268,7 +270,7 @@ UI (reads AppState, calls Track/Sequencer/Machine methods)
 | Steps total | 64 per track |
 | Steps visible | 16 (one page) |
 | Step pages | Per-track page nav UI built |
-| Machines | SynthMachine, KickSilkMachine, KickHardMachine, AnalogueKickMachine, SnareMachine, AnalogueSnareMachine, HiHatMachine, AnalogueHiHatMachine, AnalogueTomMachine, FMMachine, SwarmMachine, NoiseMachine, TransientMachine, SamplerMachine, WavetableSamplerMachine, SampleSwarmMachine, GranularMachine, SlicerMachine, TimeStretchMachine, BeatRepeatMachine, MultiSamplerMachine, CymbalMachine, AnalogueCymbalMachine, WoodMachine, ClappMachine, AnalogueClappMachine, WavetableMachine, KarplusMachine, MarimbaMachine, BassMachine, CombMachine, ChordMachine, MoogishMachine active; DrumMachine stubbed |
+| Machines | SynthMachine, KickSilkMachine, KickHardMachine, AnalogueKickMachine, SnareMachine, AnalogueSnareMachine, HiHatMachine, AnalogueHiHatMachine, AnalogueTomMachine, TomMachine, TomFMMachine, FMMachine, SwarmMachine, NoiseMachine, TransientMachine, SamplerMachine, WavetableSamplerMachine, SampleSwarmMachine, GranularMachine, SlicerMachine, TimeStretchMachine, BeatRepeatMachine, MultiSamplerMachine, CymbalMachine, AnalogueCymbalMachine, WoodMachine, ClappMachine, AnalogueClappMachine, WavetableMachine, KarplusMachine, MarimbaMachine, BassMachine, CombMachine, ChordMachine, MoogishMachine active; DrumMachine stubbed |
 | Filter | Two engines (`filter.engine`): **digital** biquad (LP/HP/BP/Notch/Peaking/Allpass + slope) and **analogue** PATINA Moog ladder worklet (24 dB/oct, self-oscillation, drive, drift, **keytrack**) + base filter (HPF+LPF), FilterViz with env ghost (approx curve in analogue mode). Analogue mode also sweeps the cutoff with RC (exponential) curves. |
 | Pan | Per-track stereo pan, p-lockable + LFO-assignable |
 | Delay | Per-track feedback delay, p-lockable + LFO-assignable |

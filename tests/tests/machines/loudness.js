@@ -48,7 +48,7 @@ const TONAL = [
 // Percussion: intentionally sit below median RMS (trim capped for peak headroom).
 // Only checked for audibility + no clipping, not the band.
 const PERCUSSION = ['kick.hard', 'kick.analogue', 'snare', 'snare.analogue', 'hihat', 'hihat.analogue',
-                    'tom.analogue', 'cymbal', 'cymbal.analogue', 'clapp', 'clapp.analogue', 'wood', 'noise', 'transient'];
+                    'tom.analogue', 'tom', 'tom.fm', 'cymbal', 'cymbal.analogue', 'clapp', 'clapp.analogue', 'wood', 'noise', 'transient'];
 
 // How far a tonal machine may stray from the median before it's a failure.
 // Wide on purpose — a gross mistune (missing/zero trim) is ≫ 2×; small drift is fine.

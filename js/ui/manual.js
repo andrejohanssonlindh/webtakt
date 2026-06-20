@@ -1380,6 +1380,43 @@ export const MACHINE_MANUAL = {
     ],
   },
 
+  'tom': {
+    title: 'SYNTH (Tom)',
+    blurb: 'Clean digital tom. A pure sine body blended with a triangle under a ' +
+           'fast pitch drop, plus a short noise click — DX/PCM-style electronic ' +
+           'tom, no analogue drift.',
+    items: [
+      ['Tune', 'Body frequency (60–400 Hz). Sets the pitch of the tom.'],
+      ['Decay', 'Amplitude decay (0.1–1.5s).'],
+      ['Sweep', 'Pitch sweep multiplier at hit start (1×–4×).'],
+      ['Swp Time', 'How much of the decay the pitch drop spans (5–60%). ' +
+                   'Lower = snappier drop.'],
+      ['Tone', 'Triangle blend into the sine body (0–100%). Adds odd-harmonic ' +
+               'bite; 0% = pure sine.'],
+      ['Click', 'Level of the white-noise attack click.'],
+      ['Clk Decay', 'Fade time of the attack click (3–40ms).'],
+      ['Level', 'Master output level for this machine (0–100%).'],
+    ],
+  },
+
+  'tom.fm': {
+    title: 'SYNTH (Tom FM)',
+    blurb: 'Metallic FM tom. A modulator→carrier FM pair: at high Ratio the ' +
+           'sidebands turn inharmonic for a bell/metal edge that blooms on the ' +
+           'attack then settles.',
+    items: [
+      ['Tune', 'Carrier frequency (60–400 Hz). Sets the pitch of the tom.'],
+      ['Decay', 'Amplitude decay (0.1–1.5s).'],
+      ['Sweep', 'Carrier pitch sweep multiplier at hit start (1×–4×).'],
+      ['Ratio', 'Modulator:carrier frequency ratio (0.5–12). Higher = more ' +
+                'inharmonic / metallic.'],
+      ['FM', 'FM index / depth (0–100%). Amount of metallic sideband content.'],
+      ['FM Decay', 'How much of the decay the FM-depth envelope spans (5–100%). ' +
+                   'Short = metallic content fades fast to a purer tone.'],
+      ['Level', 'Master output level for this machine (0–100%).'],
+    ],
+  },
+
   'clapp.analogue': {
     title: 'SYNTH (Clapp Analog)',
     blurb: 'The Patina analogue clap. Layered pink-noise bursts through a ' +

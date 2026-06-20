@@ -122,13 +122,32 @@ Analogue counterpart to Cymbal via the shared `AnalogueParts.js` helpers (see An
 Parameters: as Cymbal, plus `drift` (0–1, plock — read by DriftClock).
 
 ### AnalogueTomMachine (`type: 'tom.analogue'`)
-Tuned analogue drum — there is **no digital "Tom" machine**; this is a focused single-body pitched drum, closest in structure to the analogue kick but tuned higher, with no sub and a soft pink-noise attack rather than a hard punch. The body is an imperfect-sine `PeriodicWave` with a per-instance tuning tolerance and a `DriftClock` on its `detune` (scaled by `drift`); a per-note pitch sweep writes `.frequency` (drift writes `.detune` — no conflict). The body passes through a soft-clip waveshaper.
+Tuned analogue drum — the warm member of the tom trio (digital `tom` and FM `tom.fm` are the others). A focused single-body pitched drum, closest in structure to the analogue kick but tuned higher, with no sub and a soft pink-noise attack rather than a hard punch. The body is an imperfect-sine `PeriodicWave` with a per-instance tuning tolerance and a `DriftClock` on its `detune` (scaled by `drift`); a per-note pitch sweep writes `.frequency` (drift writes `.detune` — no conflict). The body passes through a soft-clip waveshaper.
 ```
 _tuneOsc (imperfect sine, +tol/drift) → _bodyGain (per-note) → _shaper → outputGain → [Filter]
 PinkNoiseSource (per-note) → _attackGain (bypasses shaper) ───────────────────────────┘
 ```
 Parameters: `tune` (Hz, LFO+plock), `decay`, `sweep`, `drive` (1–4, plock — rebuilds curve), `drift` (0–1, plock), `attack` (pink-noise attack level), `attack.decay`, `output.level` (LFO+plock).
-**Loudness:** brand-new voice with no digital sibling — its `LOUDNESS_TRIM` is a placeholder (1.0) and **must** be measured on `tests/loudness.html`.
+**Loudness:** measured on `tests/loudness.html` → 0.44.
+
+### TomMachine (`type: 'tom'`)
+Digital tom — the clean counterpart to the analogue tom. Deliberately precise (no imperfect spectra, no drift): a pure sine body blended with a triangle (`tone`, odd-harmonic bite) under a fast pitch drop, plus a short white-noise click for attack. DX/PCM-era electronic-tom character. Both oscillators are persistent (LFO binds to the sine's `.frequency`, the canonical `tune` target; `tune.apply` writes both); per-note GainNodes shape the decay.
+```
+_sineOsc (sine) → _bodyGain (per-note) ─┐
+_triOsc  (tri)  → _toneGain → _bodyGain ┤→ outputGain → [Filter]
+NoiseSource (per-note) → _clickGain ────┘
+```
+Parameters: `tune` (Hz, LFO+plock), `decay`, `sweep`, `sweep.time` (fraction of decay the pitch drop spans), `tone` (triangle blend, plock — writes `_toneGain`), `click` (white-noise attack level), `click.decay`, `output.level` (LFO+plock).
+**Loudness:** START 0.44 (≈ analogue tom body) — verify on `tests/loudness.html`.
+
+### TomFMMachine (`type: 'tom.fm'`)
+FM tom — metallic, synthetic tuned drum. A single modulator→carrier FM pair: at high `ratio` the sidebands are non-integer multiples of the carrier, so the body rings with a bell/metal edge. A `fm.decay` shorter than the amp decay makes the metallic content bloom on the attack then settle to a purer tone (the classic FM-percussion gesture). Carrier + modulator are persistent (LFO binds to the carrier's `.frequency`); per-note GainNodes shape the amp + FM-depth envelopes. The `fm` index (0–1) maps to a peak carrier-frequency deviation scaled by pitch.
+```
+_modOsc (sine) → _modGain (per-note, = FM depth) → _carOsc.frequency
+_carOsc (sine) → _ampGain (per-note) → outputGain → [Filter]
+```
+Parameters: `tune` (Hz, LFO+plock — `tune.apply` retunes the modulator at `ratio`), `decay`, `sweep`, `ratio` (mod:car ratio, plock — high = metallic), `fm` (FM index/depth), `fm.decay` (fraction of decay the FM env spans), `output.level` (LFO+plock).
+**Loudness:** START 0.50 — verify on `tests/loudness.html`.
 
 ### WoodMachine (`type: 'wood'`)
 Clave / wood block / rimshot / cowbell. Two resonant bandpass filters (ring1, ring2) driven by a looping noise source through per-note decay gains, plus a sine click burst. `mix` knob blends between the two resonator bands.

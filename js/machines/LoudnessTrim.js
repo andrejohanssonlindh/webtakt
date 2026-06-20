@@ -35,6 +35,8 @@ export const LOUDNESS_TRIM = {
   'kick.analogue': 0.34,  // measured: RMS 0.072 ≈ kick.hard, lands on median (GAIN× 0.96)
   'synth':        0.39,
   'tom.analogue': 0.44,   // measured: imperfect-sine body is loud (RMS 0.154) — pulled to median (peak 0.30, safe)
+  'tom':          0.44,   // digital tom: sine+tri body ≈ analogue tom amplitude — START; verify via tests/loudness.html
+  'tom.fm':       0.50,   // FM tom: metallic sidebands add harmonics (a touch quieter RMS) — START; verify via tests/loudness.html
   'wavetable':    0.44,
   'bass':         0.46,
   'moogish':      0.42,   // PATINA-derived dual imperfect saws ≈ synth/wavetable level (verify via tests/loudness.html)

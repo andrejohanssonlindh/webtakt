@@ -46,6 +46,8 @@ import { AnalogueKickMachine } from '../machines/AnalogueKickMachine.js';
 import { AnalogueSnareMachine } from '../machines/AnalogueSnareMachine.js';
 import { AnalogueHiHatMachine } from '../machines/AnalogueHiHatMachine.js';
 import { AnalogueTomMachine }   from '../machines/AnalogueTomMachine.js';
+import { TomMachine }           from '../machines/TomMachine.js';
+import { TomFMMachine }         from '../machines/TomFMMachine.js';
 import { AnalogueClappMachine } from '../machines/AnalogueClappMachine.js';
 import { AnalogueCymbalMachine } from '../machines/AnalogueCymbalMachine.js';
 import { KickSilkMachine }  from '../machines/KickSilkMachine.js';
@@ -126,6 +128,8 @@ const MACHINES = {
   clapp:      ClappMachine,
   'clapp.analogue': AnalogueClappMachine,
   'tom.analogue': AnalogueTomMachine,
+  tom:        TomMachine,
+  'tom.fm':   TomFMMachine,
   wavetable:  WavetableMachine,
   karplus:    KarplusMachine,
   marimba:    MarimbaMachine,
@@ -144,6 +148,19 @@ const MACHINES = {
   midi:             MidiMachine,
   input:            InputMachine,
 };
+
+/**
+ * Machine types whose nature is analogue — loading one defaults this track's
+ * filter to the Moog ladder engine (and the rest of the analogue flow). Covers
+ * Moogish plus every PATINA `*.analogue` drum. setMachine applies the default on
+ * a machine swap; a saved project's explicit `analogue`/`filter.engine` overrides
+ * it later in fromJSON, and the user can flip the engine knob afterward.
+ */
+const ANALOGUE_MACHINES = new Set([
+  'moogish',
+  'kick.analogue', 'snare.analogue', 'hihat.analogue', 'tom.analogue',
+  'clapp.analogue', 'cymbal.analogue',
+]);
 
 /**
  * FX block type → factory. Used by Track.addFX(type) to build ADDED instances
@@ -517,6 +534,13 @@ export class Track {
     // (it has no notes to open it). Leaving input → close the gate again. reset:
     // a machine swap is an explicit intent to establish a clean gate baseline.
     this._applyInputGate({ reset: true });
+
+    // Filter follows the machine's nature: analogue-family machines default to
+    // the Moog ladder, everything else to the digital biquad. This is a DEFAULT
+    // applied on the swap — fromJSON re-asserts a saved project's engine after
+    // this runs, and the user can flip the engine knob afterwards. (Safe during
+    // the constructor's first setMachine: filter + chorusFX already exist.)
+    this.setAnalogue(ANALOGUE_MACHINES.has(type));
   }
 
   /**

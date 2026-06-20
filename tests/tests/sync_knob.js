@@ -8,9 +8,39 @@
  */
 
 import { suite, test, assert, makeOfflineTrack, fireStep, rms } from '../runner.js';
-import { count32ToSeconds, divToCount32 } from '../../js/util/BpmSync.js';
+import { count32ToSeconds, divToCount32, quantizeCount, formatCount32,
+         setSnapResolution } from '../../js/util/BpmSync.js';
 
 suite('Sync knob (MS/BPM unified)', () => {
+
+  test('BpmSync: free-drag quantizes to the Settings grid (1/32 / 1/64 / 1/128)', () => {
+    // The synced knobs step one grid unit per the user's resolution. Stored
+    // counts are always in 1/32 units, so 1/64 → 0.5-unit steps, 1/128 → 0.25.
+    try {
+      setSnapResolution(32);                       // default: whole 1/32 units
+      assert.ok(quantizeCount(30.4) === 30, '1/32 grid: 30.4 → 30');
+      assert.ok(quantizeCount(30.6) === 31, '1/32 grid: 30.6 → 31');
+
+      setSnapResolution(64);                        // 1/64 → 0.5-unit steps
+      assert.near(quantizeCount(30.4), 30.5, 1e-9, '1/64 grid: 30.4 → 30.5');
+      assert.near(quantizeCount(30.2), 30.0, 1e-9, '1/64 grid: 30.2 → 30');
+
+      setSnapResolution(128);                       // 1/128 → 0.25-unit steps
+      assert.near(quantizeCount(30.2), 30.25, 1e-9, '1/128 grid: 30.2 → 30.25');
+      assert.near(quantizeCount(30.1), 30.0,  1e-9, '1/128 grid: 30.1 → 30');
+
+      // Labels: clean divisions, integer remainders, and the fractional 1/64 //
+      // 1/128 tail all read cleanly (no "·N" sub-step noise for grid values).
+      assert.ok(formatCount32(32)   === '1/1',            '32 → 1/1');
+      assert.ok(formatCount32(30)   === '1/2 + 14/32',    '30 → 1/2 + 14/32');
+      assert.ok(formatCount32(30.5) === '1/2 + 14/32 + 1/64',  '30.5 → +1/64');
+      assert.ok(formatCount32(30.25) === '1/2 + 14/32 + 1/128', '30.25 → +1/128');
+      assert.ok(formatCount32(0.5)  === '1/64',  'bare 0.5 → 1/64');
+      assert.ok(formatCount32(0.25) === '1/128', 'bare 0.25 → 1/128');
+    } finally {
+      setSnapResolution(32);                        // restore default for other tests
+    }
+  });
 
   test('BpmSync: count32ToSeconds + divToCount32 are consistent', () => {
     // 120 BPM: one 1/32 = (60/120)/8 = 0.0625s. 8×1/32 = 1/4 = 0.5s.

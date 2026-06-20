@@ -173,6 +173,23 @@ not `filter.node` directly.
 `filter.engine` (enum `digital` | `analogue`, default `digital`, p-lockable) selects which DSP
 runs after the base filters. Available on **every** track, switchable live in the FILTER tab.
 
+**Default follows the machine.** `Track.setMachine` applies the engine as a default from the
+loaded machine's nature: the `ANALOGUE_MACHINES` set (Moogish + every `*.analogue` drum) defaults
+to the analogue ladder via `setAnalogue(true)`; all other machines default to `digital`. This is a
+swap-time default only — `fromJSON` re-asserts a saved project's `analogue`/`filter.engine` after
+the swap, and the user can flip the FILTER ANALOGUE switch afterward (it sticks until the next
+machine change). The machine preview (MachinePickerPanel) auditions then restores via `fromJSON`,
+so it self-corrects the engine too.
+
+Because the analogue starter-kit tracks now request the ladder during **synchronous Project
+construction** — before AudioEngine's fire-and-forget worklet preload (`ladderReady`) resolves —
+`Filter._setEngine` **self-heals**: if the `patina-ladder` worklet isn't registered yet, it keeps
+the analogue intent in `_params`, stays wired digital, and re-issues `audioWorklet.addModule()`
+(idempotent — resolves when the shared preload finishes), re-running the switch on resolve. Guarded
+by `_ladderRetrying` and re-checked against `filter.engine` so a flip-back during the async gap
+wins. In the offline test harness the worklet never loads, so the retry rejects and falls back to
+digital with the allow-listed warning (audio render is digital either way).
+
 - **digital** — the biquad cascade above (`node` + slope stages). Unchanged default behaviour.
 - **analogue** — the **PATINA Moog transistor-ladder** running in an AudioWorklet
   (`js/worklets/patina-ladder-processor.js`): Huovilainen 4-pole filter with tanh saturation,
@@ -309,10 +326,16 @@ center** toggles the mode (the body shows `MS`/`HZ`/`BPM`). Core helpers live in
   params (LFO/chorus/vibrato/sweep) treat the count as an oscillator **period** via
   `count32ToHz(count, bpm)`.
 - **Display** shows the nearest division + 1/32 remainder (`5` → `1/8 + 1/32`);
-  clean divisions render clean (`8` → `1/4`). `formatCount32` handles this.
+  clean divisions render clean (`8` → `1/4`). A fractional 1/64 / 1/128 tail (only
+  reachable when the Settings grid is raised) reads as `+ 1/64` / `+ 1/128`.
+  `formatCount32` handles this.
 - **Shift snaps to the next musical division** (`MUSICAL_SNAP_32`).
-- **FX/LFO knobs are continuous** (fractional counts via a `FINE_STEP` sub-grid);
-  envelopes/arp use integer counts.
+- **FX free-drag quantizes to the Settings grid** (`quantizeCount`): one clean grid
+  unit per step — 1/32 by default, 1/64 / 1/128 when the user raises the grid.
+  Stored counts stay in 1/32 units, so a 1/64 step is +0.5. (Earlier builds swept a
+  fixed `FINE_STEP=16` sub-grid here, which landed between divisions as `·N` noise;
+  `FINE_STEP` is now display-only — the remainder granularity for the label.)
+  Envelopes/arp still use integer counts.
 - **LFO in BPM mode is always continuous/native** — the LFO modulates the
   underlying *seconds* AudioParam, never a JS-stepped value.
 - **Both modes are p-lockable**: ms-seconds via `audioParam`, the 1/32 count via
@@ -335,10 +358,12 @@ own `_makeSyncKnob` helper for the same model.
 
 **User-settable finest grid.** The Settings pane exposes a finest division
 (1/32 / 1/64 / 1/128). It does **not** change `GRID_BASE` (that would reinterpret
-every stored count). Instead `BpmSync.setSnapResolution(gridBase)` reassigns the
-live `MUSICAL_SNAP_32` array (prepending sub-1/32 targets) and lowers the FX
-knobs' `bpmMin` to reach them; stored counts stay in 1/32 units. `MUSICAL_SNAP_32`
-is an exported live `let` binding so panels read it fresh.
+every stored count). Instead `BpmSync.setSnapResolution(gridBase)` (a) reassigns the
+live `MUSICAL_SNAP_32` array (prepending sub-1/32 targets) and (b) sets the
+free-drag quantize step used by `quantizeCount` (`GRID_BASE / gridBase` → 1, 0.5 or
+0.25 stored 1/32 units). FX knobs' `bpmMin` is lowered to 0.25 to reach the finer
+snaps; stored counts stay in 1/32 units. `MUSICAL_SNAP_32` is an exported live `let`
+binding so panels read it fresh.
 
 **Back-compat.** Every migrated class maps legacy `*.bpmDiv` enum strings → 1/32
 count in `fromJSON` (via `divToCount32`) and deletes the legacy key. Covered by

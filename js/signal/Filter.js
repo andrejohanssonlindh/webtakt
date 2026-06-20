@@ -40,6 +40,14 @@
 
 const EXTRA_STAGES = 7; // 7 extra → 8 poles max (96 dB/oct)
 
+// Page-relative path to the analogue ladder worklet module. AudioEngine preloads
+// this at boot (fire-and-forget), but a filter can be switched to 'analogue'
+// BEFORE that load resolves (e.g. setMachine applies an analogue-machine default
+// during synchronous Project construction). addModule() is idempotent and resolves
+// once the module is registered regardless of who kicked it off, so _setEngine
+// re-issues it and self-heals the switch on resolve rather than failing to digital.
+const LADDER_WORKLET_PATH = 'js/worklets/patina-ladder-processor.js';
+
 // Map the UI resonance knob (biquad Q, 0.1–20) onto the analogue ladder's
 // resonance range (0–1.15, where > ~1.0 self-oscillates). Linear so the top of
 // the knob reaches self-oscillation; clamped to the ladder's worklet range.
@@ -215,9 +223,29 @@ export class Filter {
           numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1],
         });
       } catch (err) {
-        console.warn('Filter: analogue ladder unavailable, staying digital.', err);
-        this._params['filter.engine'] = 'digital';
-        return;
+        // The worklet module isn't registered yet (a filter switched to analogue
+        // before AudioEngine's boot-time preload resolved — e.g. an analogue
+        // machine default applied during Project construction). Keep the analogue
+        // INTENT in _params (so a UI re-render shows analogue), stay wired digital
+        // for now, and retry once the module loads. addModule() is idempotent, so
+        // re-issuing it just resolves when the shared preload finishes. Guard the
+        // retry against the user/project flipping the engine back meanwhile.
+        if (this.context.audioWorklet && !this._ladderRetrying) {
+          this._ladderRetrying = true;
+          this.context.audioWorklet.addModule(LADDER_WORKLET_PATH)
+            .then(() => {
+              this._ladderRetrying = false;
+              if (this._params['filter.engine'] === 'analogue' && this._wiredEngine !== 'analogue') {
+                this._setEngine('analogue');
+              }
+            })
+            .catch((e) => {
+              this._ladderRetrying = false;
+              console.warn('Filter: analogue ladder unavailable, staying digital.', e);
+              this._params['filter.engine'] = 'digital';
+            });
+        }
+        return;   // stay digital until the retry re-wires (or gives up)
       }
     }
 
