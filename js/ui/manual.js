@@ -1291,19 +1291,20 @@ export const MACHINE_MANUAL = {
 
   clapp: {
     title: 'SYNTH (Clapp)',
-    blurb: 'An 808-style layered clap. Three short noise bursts are fired in ' +
-           'rapid succession through a bandpass filter, simulating the way ' +
-           'multiple hands clapping together create a flam-like texture.',
+    blurb: 'An 808-style clap. One continuous noise stream is shaped by a four-peak ' +
+           'attack envelope (the slaps) followed by a reverberant tail, through a ' +
+           'resonant lowpass filter. Driving the slaps from a single noise source ' +
+           'fuses them into one homogenous clap instead of separate noise ticks; ' +
+           'the lowpass keeps the body (vs a thin bandpass) while staying ' +
+           'white-noise crisp.',
     items: [
-      ['Tone', 'Bandpass filter centre frequency (800–6000 Hz). Sets the tonal ' +
-                 'colour of the clap body — lower values give a fatter, more ' +
-                 'resonant clap; higher values make it snappier.'],
-      ['Snap', 'Bandpass filter Q. Higher resonance makes the tonal character ' +
-                 'more pronounced and ringy.'],
-      ['Decay', 'Overall amplitude decay of the final burst layer (0.05–1s).'],
-      ['Spread', 'Time gap between the three burst layers in ms (0–30ms). Higher ' +
-                 'spread = a more audible flam/double-strike effect; lower = tight ' +
-                 'and snappy.'],
+      ['Tone', 'Lowpass cutoff (800–6000 Hz). Sets the brightness — lower rolls off ' +
+                 'the top for a darker, fatter clap; higher lets more fizz through.'],
+      ['Snap', 'Lowpass resonance (Q). Low = full and natural; higher emphasises ' +
+                 'the cutoff for a more pronounced, peaky character.'],
+      ['Decay', 'Decay time of the reverberant tail after the slaps (0.05–1s).'],
+      ['Spread', 'Time gap between the four attack slaps in ms (0–30ms). Tighter = ' +
+                 'one crisp clap; wider = a more audible flam/double-strike.'],
       ['Level', 'Master output level for this machine (0–100%).'],
     ],
   },
@@ -1535,14 +1536,17 @@ export const MACHINE_MANUAL = {
 
   'clapp.analogue': {
     title: 'SYNTH (Clapp Analog)',
-    blurb: 'The Patina analogue clap. Layered pink-noise bursts through a ' +
-           'bandpass filter, with a fixed per-instance inter-burst jitter for ' +
-           'that slightly-off mechanical feel.',
+    blurb: 'The Patina analogue clap. One continuous pink-noise stream shaped by a ' +
+           'four-peak attack (the slaps fuse into a single clap) plus a reverberant ' +
+           'tail, through a bandpass filter. A fixed per-instance jitter on the slap ' +
+           'spacing gives that slightly-off mechanical feel.',
     items: [
       ['Tone', 'Bandpass centre frequency (800–6000 Hz). Colour of the clap body.'],
-      ['Snap', 'Bandpass Q. Higher = more pronounced resonant ring on the clap.'],
-      ['Decay', 'Final layer decay time (0.05–1s).'],
-      ['Spread', 'Time between burst layers in ms (0–30ms). Higher = more flam-like.'],
+      ['Snap', 'Bandpass Q. Low = wide, noisy, homogenous clap; higher = a more ' +
+                 'pronounced resonant ring (less natural).'],
+      ['Decay', 'Tail decay time after the slaps (0.05–1s).'],
+      ['Spread', 'Time between the four attack slaps in ms (0–30ms). Tighter = one ' +
+                 'crisp clap; wider = a more audible flam.'],
       ['Level', 'Master output level for this machine (0–100%).'],
     ],
   },

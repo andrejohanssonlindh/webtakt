@@ -31,10 +31,10 @@ import { makePinkBuffer, rand } from './AnalogueParts.js';
 
 export class AnalogueClappMachine extends Machine {
   static SPEC = {
-    'tone':         { label: 'Tone', type: 'number', min: 800, max: 6000, default: 2400, group: 'TONE',
+    'tone':         { label: 'Tone', type: 'number', min: 800, max: 6000, default: 1800, group: 'TONE',
                       modulatable: true, lfoMin: 800, lfoMax: 6000,
                       target: m => m._bp.frequency, schedule: 'setTarget', tc: 0.01 },
-    'snap':         { label: 'Snap', type: 'number', min: 0.3, max: 4, default: 1.2, group: 'TONE',
+    'snap':         { label: 'Snap', type: 'number', min: 0.3, max: 4, default: 0.8, group: 'TONE',
                       modulatable: true, lfoMin: 0.3, lfoMax: 4,
                       target: m => m._bp.Q, schedule: 'setTarget', tc: 0.01 },
     'decay':        { label: 'Decay', type: 'number', min: 0.05, max: 1.0, default: 0.3, group: 'SHAPE', plockMode: 'js' },
@@ -79,34 +79,53 @@ export class AnalogueClappMachine extends Machine {
     const spreadSec = (this._params['spread'] / 1000) * this._tolSpread;
     const noiseBuf  = this._pinkBuf;
 
-    // Three burst layers at t, t+spread, t+spread*2.
-    const offsets = [0, spreadSec, spreadSec * 2];
+    // ONE continuous pink-noise stream shaped into the whole clap gesture, rather
+    // than three separate bursts. Separate sources read as discrete noise clicks;
+    // a single source ridden by a multi-peak attack envelope FUSES the slaps into
+    // one homogenous clap (the dips between slaps don't return to silence, so the
+    // noise never stops — it just swells in a row, the way real hands fuse into a
+    // single clap). After the slaps, one exponential tail is the reverberant body.
+    // Pink noise (not white) keeps the top rounded off — the analogue clap colour.
+    const src = this.context.createBufferSource();
+    src.buffer = noiseBuf;
 
-    offsets.forEach((offset, i) => {
-      const burstStart = t + offset;
-      // Burst duration: first two short, last one decays out.
-      const burstLen = i < 2 ? 0.012 : decay;
+    const amp = this.context.createGain();
+    const g   = amp.gain;
 
-      const src = this.context.createBufferSource();
-      src.buffer = noiseBuf;
+    // Four attack "slaps" spaced by `spread` (per-instance tolerance baked in via
+    // _tolSpread). Each rises fast to its peak then dips only partway (to
+    // FLOOR×peak) before the next — so the noise stays continuous and the slaps
+    // blur into one attack instead of separate ticks.
+    const SLAPS = 4;
+    const FLOOR = 0.55;            // dip between slaps (fraction of the slap peak)
+    const RISE  = 0.0008;          // 0.8ms rise — fast enough to feel snappy
+    const slapPeak = velScale * 0.9;
 
-      const amp = this.context.createGain();
-      const peakGain = i < 2 ? velScale * 0.7 : velScale;
-      amp.gain.setValueAtTime(peakGain, burstStart);
-      amp.gain.exponentialRampToValueAtTime(0.001, burstStart + burstLen);
+    g.setValueAtTime(0.0001, t);
+    let lastT = t;
+    for (let i = 0; i < SLAPS; i++) {
+      const peak = slapPeak * (1 - i * 0.12);   // gentle front-loaded taper
+      const onset = t + i * spreadSec;
+      if (i > 0) g.linearRampToValueAtTime(peak * FLOOR, onset);
+      g.linearRampToValueAtTime(peak, onset + RISE);
+      lastT = onset + RISE;
+    }
 
-      src.connect(this._bp);
-      this._bp.connect(amp);
-      amp.connect(this.outputGain);
+    // Reverberant tail: exponential decay from the last slap peak to silence.
+    g.exponentialRampToValueAtTime(0.001, lastT + decay);
 
-      src.start(burstStart);
-      src.stop(burstStart + burstLen + 0.01);
+    src.connect(this._bp);
+    this._bp.connect(amp);
+    amp.connect(this.outputGain);
 
-      scheduleCallback(this.context, burstStart + burstLen + 0.05, () => {
-        try { src.disconnect(); }  catch (_) {}
-        try { this._bp.disconnect(amp); } catch (_) {}
-        try { amp.disconnect(); }  catch (_) {}
-      });
+    const totalLen = (SLAPS - 1) * spreadSec + RISE + decay;
+    src.start(t);
+    src.stop(t + totalLen + 0.02);
+
+    scheduleCallback(this.context, t + totalLen + 0.05, () => {
+      try { src.disconnect(); }        catch (_) {}
+      try { this._bp.disconnect(amp); } catch (_) {}
+      try { amp.disconnect(); }        catch (_) {}
     });
   }
 

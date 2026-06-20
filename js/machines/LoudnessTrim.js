@@ -62,7 +62,7 @@ export const LOUDNESS_TRIM = {
   // Noise buffers are now seeded (deterministic) so these peaks are reproducible.
   // Five machines genuinely clipped at full velocity (peak > 0 dBFS) and were
   // pulled down with headroom; the others kept their calibrated values.
-  'clapp':        1.21,     // was 1.34; sat exactly at peak 1.000 (bench) — pulled to ~0.90 for headroom
+  'clapp':        0.60,     // was 1.21 (bandpass era); now a lowpass passes far more body+energy — START, re-run tests/loudness.html to calibrate to peak ≤0.90
   'snare':        1.42,     // was 1.70; peaks ~1.05 at full vel — scaled to peak ≤0.90
   'snare.analogue': 3.67,   // measured: pink snares quiet (RMS 0.054); capped to peak ≤0.90 (peak 0.78)
   'clapp.analogue': 4.14,   // measured: pink clap very quiet (RMS 0.017) but huge headroom (peak 0.29); capped to peak ≤0.90
