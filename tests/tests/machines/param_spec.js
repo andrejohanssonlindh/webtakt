@@ -296,6 +296,44 @@ const EXPECTED = {
     { path: 'osc.detune',    label: 'Detune',    type: 'number', min: -100, max: 100, default: 0,   modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
     { path: 'output.level',  label: 'Level',     type: 'number', min: 0,   max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'OUTPUT', plockMode: 'audioParam' },
   ],
+  juno: [
+    { path: 'pwm.width',     label: 'PW',        type: 'number', min: 0.05, max: 0.95, default: 0.5, modulatable: true, lfoMin: 0.05, lfoMax: 0.95, group: 'OSC', plockMode: 'js' },
+    { path: 'octave',        label: 'Octave',    type: 'number', min: -2,  max: 2,   default: 0,    group: 'OSC', plockMode: 'js' },
+    { path: 'detune',        label: 'Detune',    type: 'number', min: -50, max: 50,  default: 0,    modulatable: true, lfoMin: -50, lfoMax: 50, group: 'OSC', plockMode: 'audioParam' },
+    { path: 'sub.level',     label: 'Sub',       type: 'number', min: 0,   max: 1,   default: 0.3,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'TEXTURE', plockMode: 'audioParam' },
+    { path: 'sub.waveform',  label: 'Sub Wave',  type: 'enum',   options: ['square','triangle','sine'], group: 'TEXTURE', plockMode: 'js' },
+    { path: 'noise.level',   label: 'Noise',     type: 'number', min: 0,   max: 1,   default: 0.0,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'TEXTURE', plockMode: 'audioParam' },
+    { path: 'drift',         label: 'Drift',     type: 'number', min: 0,   max: 1,   default: 0.4,  group: 'TEXTURE', plockMode: 'js' },
+    { path: 'osc.detune',    label: 'Detune',    type: 'number', min: -100, max: 100, default: 0,   modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
+    { path: 'output.level',  label: 'Level',     type: 'number', min: 0,   max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'OUTPUT', plockMode: 'audioParam' },
+  ],
+  oberish: [
+    { path: 'osc1.waveform', label: 'O1 Wave',   type: 'enum',   options: ['saw','square','triangle','pulse','sine'], group: 'OSC 1', plockMode: 'js' },
+    { path: 'osc1.octave',   label: 'O1 Oct',    type: 'number', min: -2,  max: 2,   default: 0,    group: 'OSC 1', plockMode: 'js' },
+    { path: 'osc1.detune',   label: 'O1 Detune', type: 'number', min: -50, max: 50,  default: -8,   modulatable: true, lfoMin: -50, lfoMax: 50, group: 'OSC 1', plockMode: 'audioParam' },
+    { path: 'osc1.level',    label: 'O1 Level',  type: 'number', min: 0,   max: 1,   default: 0.5,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'OSC 1', plockMode: 'audioParam' },
+    { path: 'osc2.waveform', label: 'O2 Wave',   type: 'enum',   options: ['saw','square','triangle','pulse','sine'], group: 'OSC 2', plockMode: 'js' },
+    { path: 'osc2.octave',   label: 'O2 Oct',    type: 'number', min: -2,  max: 2,   default: 0,    group: 'OSC 2', plockMode: 'js' },
+    { path: 'osc2.detune',   label: 'O2 Detune', type: 'number', min: -50, max: 50,  default: 9,    modulatable: true, lfoMin: -50, lfoMax: 50, group: 'OSC 2', plockMode: 'audioParam' },
+    { path: 'osc2.level',    label: 'O2 Level',  type: 'number', min: 0,   max: 1,   default: 0.5,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'OSC 2', plockMode: 'audioParam' },
+    { path: 'spread',        label: 'Spread',    type: 'number', min: 0,   max: 50,  default: 12,   modulatable: true, lfoMin: 0,   lfoMax: 50, group: 'TEXTURE', plockMode: 'js' },
+    { path: 'noise.level',   label: 'Noise',     type: 'number', min: 0,   max: 1,   default: 0.0,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'TEXTURE', plockMode: 'audioParam' },
+    { path: 'drift',         label: 'Drift',     type: 'number', min: 0,   max: 1,   default: 0.6,  group: 'TEXTURE', plockMode: 'js' },
+    { path: 'osc.detune',    label: 'Detune',    type: 'number', min: -100, max: 100, default: 0,   modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
+    { path: 'output.level',  label: 'Level',     type: 'number', min: 0,   max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'OUTPUT', plockMode: 'audioParam' },
+  ],
+  fold: [
+    { path: 'wave',          label: 'Wave',      type: 'enum',   options: ['sine','triangle'], group: 'OSC', plockMode: 'js' },
+    { path: 'octave',        label: 'Octave',    type: 'number', min: -2,  max: 2,   default: 0,    group: 'OSC', plockMode: 'js' },
+    { path: 'detune',        label: 'Detune',    type: 'number', min: -50, max: 50,  default: 0,    modulatable: true, lfoMin: -50, lfoMax: 50, group: 'OSC', plockMode: 'audioParam' },
+    { path: 'fold',          label: 'Fold',      type: 'number', min: 0,   max: 1,   default: 0.3,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'FOLD', plockMode: 'js' },
+    { path: 'symmetry',      label: 'Sym',       type: 'number', min: -1,  max: 1,   default: 0,    modulatable: true, lfoMin: -1,  lfoMax: 1,  group: 'FOLD', plockMode: 'audioParam' },
+    { path: 'timbre',        label: 'Timbre',    type: 'number', min: 0,   max: 1,   default: 0.0,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'FM', plockMode: 'js' },
+    { path: 'ratio',         label: 'Ratio',     type: 'number', min: 0.5, max: 8,   default: 1.0,  group: 'FM', plockMode: 'js' },
+    { path: 'drift',         label: 'Drift',     type: 'number', min: 0,   max: 1,   default: 0.4,  group: 'TEXTURE', plockMode: 'js' },
+    { path: 'osc.detune',    label: 'Detune',    type: 'number', min: -100, max: 100, default: 0,   modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
+    { path: 'output.level',  label: 'Level',     type: 'number', min: 0,   max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'OUTPUT', plockMode: 'audioParam' },
+  ],
   sampler: [
     { path: 'sample.start',     label: 'Start',    type: 'number',  min: 0,   max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
     { path: 'sample.end',       label: 'End',      type: 'number',  min: 0,   max: 1,   default: 1,    modulatable: false, plockMode: 'js' },
@@ -339,6 +377,9 @@ const RESOLVES = {
   strings: ['osc.detune', 'tone', 'body', 'resonance', 'bow', 'vibrato', 'vibrato.rate', 'output.level'],
   moogish: ['osc1.detune', 'osc1.level', 'osc2.detune', 'osc2.level', 'osc3.detune', 'osc3.level',
             'sub.level', 'noise.level', 'pwm', 'ring', 'osc.detune', 'output.level'],
+  juno: ['detune', 'sub.level', 'noise.level', 'osc.detune', 'output.level'],
+  oberish: ['osc1.detune', 'osc1.level', 'osc2.detune', 'osc2.level', 'noise.level', 'osc.detune', 'output.level'],
+  fold: ['detune', 'symmetry', 'osc.detune', 'output.level'],
   sampler: ['output.level'],
 };
 
@@ -349,7 +390,7 @@ suite('Param spec (declarative machines)', () => {
     'kick.silk', 'kick.hard', 'kick.analogue', 'hihat', 'hihat.analogue',
     'clapp', 'clapp.analogue', 'cymbal', 'cymbal.analogue', 'tom.analogue', 'tom', 'tom.fm',
     'noise', 'karplus', 'comb', 'marimba', 'transient', 'wood',
-    'bass', 'swarm', 'strings', 'moogish', 'sampler',
+    'bass', 'swarm', 'strings', 'moogish', 'juno', 'oberish', 'fold', 'sampler',
   ]) {
 
     test(`${type}: getParamList matches original descriptors`, async () => {

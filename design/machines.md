@@ -233,10 +233,13 @@ rather than carrying private copies:
   (call `.stop()` in the machine's `disconnect()`).
 - `rand` / `clamp` helpers.
 
-The full analogue family — MoogishMachine plus the analogue drums (Kick, Snare, HiHat, Tom, Clapp,
-Cymbal) — all build on these helpers: imperfect spectra + drift on every pitched/metallic voice,
-plus pink noise wherever a noise layer exists (kick punch, snare snares, tom attack, clap bursts),
-rather than re-porting from PATINA. Any further analogue voices should follow the same pattern.
+The full analogue family — MoogishMachine, the analogue *synths* JunoMachine / OberishMachine /
+FoldMachine, plus the analogue drums (Kick, Snare, HiHat, Tom, Clapp, Cymbal) — all build on these
+helpers: imperfect spectra + drift on every pitched/metallic voice, plus pink noise wherever a noise
+layer exists (kick punch, snare snares, tom attack, clap bursts), rather than re-porting from PATINA.
+Every analogue-family `type` is in `Track.ANALOGUE_MACHINES`, so loading one defaults the track to
+the ladder filter + BBD chorus (the analogue flow). Any further analogue voices should follow the
+same pattern.
 
 The analogue *ladder* filter (PATINA's self-oscillating transistor ladder) is now available as
 the `filter.engine: analogue` option in the FILTER pane, app-wide (any track, not just Moogish) —
@@ -280,6 +283,55 @@ LFO/p-lock assignable:
   switches before the load resolves (re-issues `addModule`, retries), mirroring `Filter._setEngine`.
   Keeps the sync *intent* in `_params` if the worklet is unavailable (offline tests) so it restores
   when the module later loads. `sync.amt` is JS-LFO whitelisted. See `js/worklets/sync-osc-processor.js`.
+
+### JunoMachine (`type: 'juno'`)
+Juno-style analogue PWM string/pad voice — the lush, wide counterpart to Moogish's 3-osc growl. ONE
+pulse-width-modulated oscillator (the Phase-1 PWM primitive: `saw − saw_delayed(width/freq)` from a
+single saw split into a direct path and a delayed+inverted copy of itself, so the duty is
+continuously modulatable) + a square sub one octave below + pink hiss, drift-detuned with
+per-instance tolerance. Analogue-family, so it auto-pairs with the BBD ChorusFX for the Juno shimmer.
+Persistent-oscillator architecture (amplitude gated by the track Envelope; `noteOn` retunes).
+```
+pwmOsc ─┬───────────────→ _pwmGain ─┐
+        └→ delay → ×−1 ─────────────┘  (= variable-width pulse)
+subOsc (square) → _subGain ──────────┼→ _mixGain → outputGain → _trimGain → [Filter]
+pinkNoise       → _noiseGain ────────┘
+```
+Parameters: `pwm.width` (duty 5–95%, JS — JS-LFO whitelisted for the moving-PWM string), `octave`,
+`detune` (manualTarget), `sub.level`, `sub.waveform` (square/triangle/sine), `noise.level`, `drift`
+(JS), `osc.detune` (hidden master), `output.level`. **Loudness:** START 0.45 — verify on
+`tests/loudness.html`.
+
+### OberishMachine (`type: 'oberish'`)
+SEM/Oberheim-leaning analogue voice — fatter than Juno, less growl than Moogish. TWO detuned
+oscillators (saw + a pulse) with a WIDE drift spread (`drift × 4.5` vs Moogish's `× 3.5`), voiced for
+brass/pad stabs and tuned to lean on the ladder's drive + self-oscillation (push resonance in the
+analogue FILTER). `spread` is the Oberheim width — an extra symmetric detune pushing osc1 down /
+osc2 up, applied in both `_retune` and the drift base.
+```
+osc1 (saw)   → g1 ─┐
+osc2 (pulse) → g2 ─┼→ _mixGain → outputGain → _trimGain → [Filter (ladder)]
+pinkNoise    → gN ─┘
+```
+Parameters: per-osc `oscN.waveform`/`oscN.octave`/`oscN.detune` (manualTarget)/`oscN.level`, `spread`
+(0–50¢, JS — whitelisted), `noise.level`, `drift` (JS), `osc.detune` (hidden master), `output.level`.
+**Loudness:** START 0.40 — verify on `tests/loudness.html`.
+
+### FoldMachine (`type: 'fold'`)
+West-coast / Buchla-flavoured wavefolder voice — the most distinct of the family. ADDITIVE-by-folding
+rather than subtractive: a clean sine/triangle carrier whose harmonics are *generated* by a
+WaveShaper sine-fold (the Phase-1 fold primitive, deepened with a `symmetry` DC offset for even
+harmonics) rather than filtered down. A `timbre` FM path (a modulator at `ratio` summed into the
+carrier frequency, like the FM tom) brightens the core pre-fold. `_preGain` drives the signal into
+the fold (∝ `fold`), `_foldOut` level-compensates so deep folds don't clip.
+```
+modOsc → _fmGain (timbre) → carrier.frequency
+carrier (sine/tri) → _preGain → (+_symDC) → _foldShaper → _foldOut → outputGain → _trimGain → [Filter]
+```
+Parameters: `wave` (sine/triangle), `octave`, `detune` (manualTarget), `fold` (JS — whitelisted,
+rebuilds the curve), `symmetry` (−1..+1, the `_symDC` ConstantSource offset — an AudioParam),
+`timbre` (FM amount, JS — whitelisted), `ratio` (mod:car, JS — retunes), `drift` (JS), `osc.detune`
+(hidden master), `output.level`. **Loudness:** START 0.45 — verify on `tests/loudness.html`.
 
 ---
 

@@ -1111,6 +1111,74 @@ export const MACHINE_MANUAL = {
     ],
   },
 
+  juno: {
+    title: 'SYNTH (Juno)',
+    blurb: 'A Juno-style analogue PWM string/pad voice — one pulse-width-modulated ' +
+           'oscillator plus a square sub and a little hiss, drift-detuned. Pairs ' +
+           'with the analogue chorus (auto-on in the analogue flow) for that lush, ' +
+           'wide shimmer. Turn on the ANALOGUE switch in FILTER for the full sound.',
+    items: [
+      ['PW', 'Pulse width (duty cycle, 5–95%) of the main oscillator. 50% is a ' +
+                 'square. Assign a slow LFO to this for the signature moving-PWM ' +
+                 'string sound.'],
+      ['Octave', 'Octave offset of the main oscillator (±2).'],
+      ['Detune', 'Fine detune of the main oscillator in cents (±50).'],
+      ['Sub', 'Level of the sub oscillator one octave below.'],
+      ['Sub Wave', 'Sub waveform: square (classic Juno), triangle, or sine.'],
+      ['Noise', 'Level of pink-noise hiss mixed in. Adds breath/air.'],
+      ['Drift', 'Thermal pitch drift amount — slow random detuning of the ' +
+                 'oscillators, emulating warm analogue hardware.'],
+      ['Level', 'Master output level for this machine (0–100%).'],
+    ],
+  },
+
+  oberish: {
+    title: 'SYNTH (Oberish)',
+    blurb: 'An SEM/Oberheim-leaning analogue voice — two detuned oscillators ' +
+           '(saw + pulse) with a wide drift spread, voiced for fat brass and pad ' +
+           'stabs. Leans on the analogue ladder\'s drive and self-oscillation, so ' +
+           'switch on ANALOGUE in FILTER and push resonance for the honk.',
+    items: [
+      ['O1 Wave / O2 Wave', 'Waveform for each oscillator (saw/square/triangle/' +
+                 'pulse/sine). Defaults to saw + pulse for the reedy brass edge.'],
+      ['O1 Oct / O2 Oct', 'Octave offset per oscillator (±2).'],
+      ['O1 Detune / O2 Detune', 'Fine detune per oscillator in cents (±50).'],
+      ['O1 Level / O2 Level', 'Mix level of each oscillator.'],
+      ['Spread', 'Extra symmetric detune pushing osc1 down and osc2 up (0–50 ¢) ' +
+                 '— the Oberheim width. Bigger = lusher, more beating.'],
+      ['Noise', 'Level of pink-noise hiss mixed in.'],
+      ['Drift', 'Thermal pitch drift amount — wider than Moogish/Juno by default, ' +
+                 'so the two oscillators wander against each other.'],
+      ['Level', 'Master output level for this machine (0–100%).'],
+    ],
+  },
+
+  fold: {
+    title: 'SYNTH (Fold)',
+    blurb: 'A West-coast / Buchla-style wavefolder voice. Instead of filtering a ' +
+           'rich oscillator down, it GENERATES harmonics by folding a clean sine/' +
+           'triangle back on itself — bright and alive. A timbre (FM) knob adds ' +
+           'harmonic motion before the fold. The most distinct voice of the family.',
+    items: [
+      ['Wave', 'Core waveform fed into the folder: sine or triangle.'],
+      ['Octave', 'Octave offset of the core oscillator (±2).'],
+      ['Detune', 'Fine detune of the core oscillator in cents (±50).'],
+      ['Fold', 'Wavefolder amount. As you raise it the signal folds back on ' +
+                 'itself, blooming new harmonics. The main timbre control — ' +
+                 'modulate it with an LFO for evolving tones.'],
+      ['Sym', 'Fold symmetry (−1..+1): offsets the signal into the folder so the ' +
+                 'folding is asymmetric, bringing in even harmonics for a hollower ' +
+                 'or brassier colour.'],
+      ['Timbre', 'FM brightening from a modulator oscillator before the fold ' +
+                 '(0–100%). Adds harmonic energy and motion — the West-coast ' +
+                 '"timbre" gesture.'],
+      ['Ratio', 'Modulator:carrier frequency ratio for the Timbre FM (0.5–8). ' +
+                 'Integer ratios stay harmonic; non-integer ratios go metallic.'],
+      ['Drift', 'Thermal pitch drift amount on the core oscillator.'],
+      ['Level', 'Master output level for this machine (0–100%).'],
+    ],
+  },
+
   // ── DRUMS (digital) ────────────────────────────────────────────────────────
 
   'kick.silk': {

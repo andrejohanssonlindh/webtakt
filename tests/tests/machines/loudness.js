@@ -42,7 +42,7 @@ const RENDER_SEC = HITS * STEP_SEC + 1.0;
 // percussion set (held only to a peak ceiling, below).
 const TONAL = [
   'synth', 'fm', 'wavetable', 'bass', 'marimba', 'comb', 'chord',
-  'strings', 'moogish', 'swarm', 'karplus', 'kick.silk',
+  'strings', 'moogish', 'juno', 'oberish', 'fold', 'swarm', 'karplus', 'kick.silk',
 ];
 
 // Percussion: intentionally sit below median RMS (trim capped for peak headroom).

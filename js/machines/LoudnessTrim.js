@@ -40,6 +40,9 @@ export const LOUDNESS_TRIM = {
   'wavetable':    0.44,
   'bass':         0.46,
   'moogish':      0.42,   // PATINA-derived dual imperfect saws ≈ synth/wavetable level (verify via tests/loudness.html)
+  'juno':         0.45,   // 1 PWM osc + square sub ≈ moogish level — START; verify via tests/loudness.html
+  'oberish':      0.40,   // 2 detuned oscs (saw+pulse), a touch hotter than moogish — START; verify via tests/loudness.html
+  'fold':         0.45,   // wavefolder output level-compensated (_foldOut) ≈ moogish — START; verify via tests/loudness.html
   'marimba':      0.50,
   'fm':           0.57,
   'comb':         0.61,

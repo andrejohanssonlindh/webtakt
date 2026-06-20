@@ -70,6 +70,9 @@ import { SampleSwarmMachine }     from '../machines/SampleSwarmMachine.js';
 import { MarimbaMachine }         from '../machines/MarimbaMachine.js';
 import { StringsMachine }         from '../machines/StringsMachine.js';
 import { MoogishMachine }         from '../machines/MoogishMachine.js';
+import { JunoMachine }            from '../machines/JunoMachine.js';
+import { OberishMachine }         from '../machines/OberishMachine.js';
+import { FoldMachine }            from '../machines/FoldMachine.js';
 import { MidiMachine }           from '../machines/MidiMachine.js';
 import { InputMachine }          from '../machines/InputMachine.js';
 import { GranularMachine }       from '../machines/GranularMachine.js';
@@ -138,6 +141,9 @@ const MACHINES = {
   chord:      ChordMachine,
   strings:    StringsMachine,
   moogish:    MoogishMachine,
+  juno:       JunoMachine,
+  oberish:    OberishMachine,
+  fold:       FoldMachine,
   'wt-sampler':     WavetableSamplerMachine,
   'sample-swarm':   SampleSwarmMachine,
   granular:         GranularMachine,
@@ -157,7 +163,7 @@ const MACHINES = {
  * it later in fromJSON, and the user can flip the engine knob afterward.
  */
 const ANALOGUE_MACHINES = new Set([
-  'moogish',
+  'moogish', 'juno', 'oberish', 'fold',
   'kick.analogue', 'snare.analogue', 'hihat.analogue', 'tom.analogue',
   'clapp.analogue', 'cymbal.analogue',
 ]);
@@ -285,10 +291,11 @@ const TRACK_JS_LFO_PARAMS = new Set([
   'noise.color',   // Swarm drift rate
   'noise.amount',  // Swarm drift depth (cents)
   'hum',           // Moogish mains-hum amount
-  'pwm.width',     // Moogish PWM duty cycle (delay-based pulse width)
-  'fold',          // Moogish wavefolder amount (WaveShaper curve)
+  'pwm.width',     // Moogish + Juno PWM duty cycle (delay-based pulse width)
+  'fold',          // Moogish + Fold wavefolder amount (WaveShaper curve)
   'osc2.sync.amt', // Moogish hard-sync slave sweep (worklet slaveFreq)
-  'spread',        // Chord voice detune spread
+  'timbre',        // Fold (West-coast) FM-brightening amount
+  'spread',        // Chord + Oberish voice detune spread
   'ensemble',      // Strings ensemble detune spread
 ]);
 

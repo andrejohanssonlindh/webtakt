@@ -56,6 +56,9 @@ export const MACHINE_GROUPS = [
     label: 'Analogue',
     defs: [
       { type: 'moogish', label: 'Moogish', desc: 'Analogue osc + drift (Patina)' },
+      { type: 'juno',    label: 'Juno',    desc: 'PWM string/pad + sub + chorus' },
+      { type: 'oberish', label: 'Oberish', desc: '2-osc brass/pad + wide drift' },
+      { type: 'fold',    label: 'Fold',    desc: 'West-coast wavefolder + FM' },
     ],
   },
   {

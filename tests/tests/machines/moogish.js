@@ -9,7 +9,7 @@
  * OfflineAudioContext) so it is tested as a state/contract round-trip only.
  */
 
-import { suite, test, assert, makeOfflineTrack, renderSteps, rms, bandpassRms, spectralCentroid } from '../../runner.js';
+import { suite, test, assert, makeOfflineTrack, renderSteps, rms, bandpassRms } from '../../runner.js';
 
 const STEP_SEC = 0.4;
 const STEP_LEN = 3;
@@ -46,17 +46,21 @@ suite('MoogishMachine (osc features)', () => {
   });
 
   test('wavefolder brightens the spectrum', async () => {
-    // A single sine osc folded should gain upper harmonics → higher centroid.
+    // A single sine osc (≈130.8 Hz at note 48) folded gains upper harmonics. Use
+    // bandpassRms (amplitude-based) at the ~650 Hz harmonic region where a clean
+    // sine has ~nothing but folded harmonics land — spectralCentroid is unreliable
+    // for a near-pure tone (the broadband numerical-noise FLOOR dominates the
+    // energy-weighted mean and swamps the few real harmonics).
     const base = await renderMoog({
       'osc1.waveform': 'sine', 'osc2.level': 0, 'osc3.level': 0, 'fold': 0,
     });
     const fold = await renderMoog({
       'osc1.waveform': 'sine', 'osc2.level': 0, 'osc3.level': 0, 'fold': 1,
     });
-    const cBase = spectralCentroid(base.w, base.sampleRate);
-    const cFold = spectralCentroid(fold.w, fold.sampleRate);
-    assert.gt(cFold, cBase * 1.2,
-      `fold=1 should brighten vs fold=0 (centroid ${cFold.toFixed(0)} vs ${cBase.toFixed(0)})`);
+    const bBase = bandpassRms(base.w, base.sampleRate, 650, 0.5);
+    const bFold = bandpassRms(fold.w, fold.sampleRate, 650, 0.5);
+    assert.gt(bFold, bBase * 1.5,
+      `fold=1 should add upper harmonics (~650 Hz) vs fold=0 (${bFold.toFixed(6)} vs ${bBase.toFixed(6)})`);
   });
 
   test('ring mod adds inharmonic content not present without it', async () => {
