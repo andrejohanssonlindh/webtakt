@@ -1076,8 +1076,26 @@ export const MACHINE_MANUAL = {
                  'the characteristic Moog chorus feel.'],
       ['O1 Level / O2 Level / O3 Level', 'Mix level of each oscillator into the ' +
                  'output bus. Set any to 0 to disable it.'],
+      ['O2 Sync', 'Hard-sync osc2 to osc1: osc2\'s phase is reset every time osc1 ' +
+                 'completes a cycle. The pitch you hear stays osc1\'s; osc2\'s ' +
+                 'tuning becomes a timbre control. Sweep O2 SyncAmt (or an LFO on ' +
+                 'it) for the classic metallic sync sweep.'],
+      ['O2 SyncAmt', 'How far osc2\'s slave frequency is pushed above its base ' +
+                 'pitch (up to +4 octaves) when O2 Sync is on. This is the sync ' +
+                 'formant — modulate it for the screaming sync lead sound.'],
       ['Sub', 'Level of the sub oscillator (slightly imperfect sine, one octave ' +
                  'below osc1). Adds sub-bass weight.'],
+      ['PWM', 'Mix level of a pulse-width layer at osc1\'s pitch. Built from two ' +
+                 'saws subtracted, so the width is fully modulatable (unlike a ' +
+                 'fixed pulse wave). Adds a hollow, reedy body.'],
+      ['PW', 'Pulse width (duty cycle, 5–95%) of the PWM layer. 50% is a square; ' +
+                 'modulate it with an LFO for the lush moving-PWM string sound.'],
+      ['Ring', 'Ring modulation level — osc1 × osc2. Produces clangorous, ' +
+                 'inharmonic sum/difference tones. Detune osc2 for bell/metallic ' +
+                 'timbres that aren\'t in the normal scale.'],
+      ['Fold', 'Wavefolder amount on the oscillator mix. As you raise it the signal ' +
+                 'folds back on itself, blooming new harmonics — the bright, alive, ' +
+                 'West-coast timbre. Pairs well with an LFO for evolving tones.'],
       ['Noise', 'Level of white noise mixed in. Adds breathiness or is useful for ' +
                  'percussion-like transients when combined with the envelope.'],
       ['Drift', 'Thermal pitch drift amount — a slow random detuning of all ' +

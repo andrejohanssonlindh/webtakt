@@ -263,6 +263,24 @@ Parameters: per-osc `oscN.waveform` (enum: saw/square/triangle/pulse/sine, JS), 
 LFO/p-lock assignable; waveforms, octaves and drift are JS-only. Presets are recreated as saved
 SoundLibrary snapshots (machine + Filter + Envelope together), not a machine-level dropdown.
 
+**Oscillator tricks (Phase-1 analogue expansion).** Four additional texture sources, all
+LFO/p-lock assignable:
+- **PWM** (`pwm` mix + `pwm.width` duty) — a variable-width pulse at osc1's pitch, built by
+  subtracting a delayed copy of ONE saw from itself (`saw − saw_delayed(width/freq)`), so the duty
+  is *continuously* modulatable (a static `pulse` `PeriodicWave` can't be). The delay tracks pitch
+  in `_retune`/`_applyPwmWidth`. `pwm.width` is JS (on the `TRACK_JS_LFO_PARAMS` whitelist for
+  continuous LFO); `pwm` mix is an AudioParam.
+- **Ring / cross-mod** (`ring`) — osc1 × osc2 via a GainNode (osc2 = signal, osc1 → `.gain`), the
+  product mixed in by `_ringMix.gain` (the `ring` AudioParam). Clangorous, inharmonic.
+- **Wavefolder** (`fold`) — a WaveShaper sine-fold curve on the mix bus (`_foldShaper`), rebuilt by
+  `_applyFold` from the amount (0 = linear passthrough). West-coast timbre; JS-LFO whitelisted.
+- **Hard sync** (`osc2.sync` bool + `osc2.sync.amt`) — osc2's native oscillator is detached and the
+  `sync-osc` AudioWorklet drives osc2's mix gain instead: master = osc1 pitch, slave = osc2 pitch ×
+  up to +4 octaves by `sync.amt`. The worklet is preloaded at boot; `_setSync` self-heals if it
+  switches before the load resolves (re-issues `addModule`, retries), mirroring `Filter._setEngine`.
+  Keeps the sync *intent* in `_params` if the worklet is unavailable (offline tests) so it restores
+  when the module later loads. `sync.amt` is JS-LFO whitelisted. See `js/worklets/sync-osc-processor.js`.
+
 ---
 
 ## Sampler Machines

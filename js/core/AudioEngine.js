@@ -29,6 +29,10 @@ const LADDER_WORKLET_PATH   = 'js/worklets/patina-ladder-processor.js';
 const FX_WORKLET_PATHS = [
   'js/worklets/bitcrush-processor.js',
   'js/worklets/stutter-processor.js',
+  // Hard-sync oscillator (MoogishMachine osc2.sync). Registered here so the node
+  // is synchronous once a track uses sync; the machine self-heals if it switches
+  // before this resolves (mirrors the analogue-ladder pattern).
+  'js/worklets/sync-osc-processor.js',
 ];
 
 export class AudioEngine {

@@ -50,6 +50,7 @@ const _CONSOLE_ALLOW = [
   /worklet load failed/i,
   /worklet unavailable, passing dry/i,
   /analogue ladder unavailable, staying digital/i,
+  /sync-osc worklet unavailable, staying native/i,
 ];
 
 function _isAllowed(msg) {

@@ -285,6 +285,9 @@ const TRACK_JS_LFO_PARAMS = new Set([
   'noise.color',   // Swarm drift rate
   'noise.amount',  // Swarm drift depth (cents)
   'hum',           // Moogish mains-hum amount
+  'pwm.width',     // Moogish PWM duty cycle (delay-based pulse width)
+  'fold',          // Moogish wavefolder amount (WaveShaper curve)
+  'osc2.sync.amt', // Moogish hard-sync slave sweep (worklet slaveFreq)
   'spread',        // Chord voice detune spread
   'ensemble',      // Strings ensemble detune spread
 ]);
