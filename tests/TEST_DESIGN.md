@@ -121,6 +121,14 @@ Creates the full production stack — `Track`, `VoicePool`, `Filter`, `Envelope`
 ```
 The shim exposes `clock.audio.context.currentTime` which `Sequencer._fireStep` reads for the trig-glow animation. Without this the shim throws on every step fire. The `register/unregister` no-ops mean the sequencer never starts its tick loop — tests drive timing manually.
 
+**Automatic per-test teardown.** Every `{track, ctx}` from `makeOfflineTrack` is registered and released after the test (`await _releaseTracks()` in the runner's per-test `finally`). This is **required**, not just tidy — two leaks otherwise accumulate across the suite and exhaust the audio backend (Chrome then throws *"Failed to initialize oscillator due to insufficient memory"* and the tab hard-crashes, the "error code 5" hang):
+1. **Drift `setInterval` timers** — every analogue voice + Swarm owns one, and a track has one machine instance *per voice slot* (8), so an analogue test spins up 8 timers. `track._pool.dispose()` tears down all slots → each machine's `disconnect()` calls `_drift.stop()`.
+2. **The `OfflineAudioContext` itself** — Chrome caps concurrent contexts and GC is lazy, so `_releaseTracks()` also `await ctx.close()`s each one (after its `startRendering()` has resolved) to free the backend immediately.
+
+Tests don't need to call anything; just don't rely on a track/context surviving past the test body.
+
+**Verbose mode.** `runAll({ verbose: true })` — or the `Verbose` checkbox / `?verbose` URL param in `index.html` — logs each suite/test start (`▶`, printed *before* the test) and finish (`✓/✗`, after) to the console. Because the console survives a tab crash but the in-DOM results don't, the last un-paired `▶` line names a test that hard-crashed the renderer. Use it to localise a crash, then run that one suite/test in isolation.
+
 ### `renderSteps(track, ctx, sampleRate, n, stepSec, stepBuilder)`
 
 Calls `track.sequencer._fireStep(step, t)` directly for `n` steps spaced `stepSec` apart, then calls `ctx.startRendering()`. Returns `n` `Float32Array` windows sliced to `[stepSec * sampleRate]` samples each. This bypasses the Clock's `setTimeout` loop entirely and gives sample-accurate control over scheduled times.

@@ -81,12 +81,16 @@
   <h1>Webtakt Audio Tests</h1>
   <p>Runs against OfflineAudioContext — no speakers required. Results are saved to localStorage.<br>
      Filter box matches test names; check suites below to run a subset. Deep-link with
-     <code>?suite=fx</code>, <code>?test=reverb</code>, add <code>&amp;run</code> to auto-run.</p>
+     <code>?suite=fx</code>, <code>?test=reverb</code>, add <code>&amp;run</code> to auto-run,
+     <code>&amp;verbose</code> to log each test start/finish to the console (find a tab-crashing test).</p>
   <div class="toolbar">
     <button id="run">Run All</button>
     <button id="runSel">Run Selected</button>
     <input id="filter" type="text" placeholder="filter test names… (e.g. reverb)">
     <button id="pickToggle">Suites ▾</button>
+    <label id="verboseLabel" title="Log each suite/test start + finish to the browser console (survives a tab crash, so the last un-paired ▶ names the culprit)">
+      <input id="verbose" type="checkbox"> Verbose
+    </label>
     <button id="copy" style="display:none">Copy Results</button>
     <button id="save" style="display:none">Save to File</button>
   </div>
@@ -133,6 +137,9 @@
     import './tests/machines/chord.js';
     import './tests/machines/strings.js';
     import './tests/machines/moogish.js';
+    import './tests/machines/juno.js';
+    import './tests/machines/oberish.js';
+    import './tests/machines/fold.js';
     import './tests/machines/swarm.js';
     import './tests/machines/sample_swarm.js';
     import './tests/machines/granular.js';
@@ -156,6 +163,7 @@
     const save      = document.getElementById('save');
     const status    = document.getElementById('status');
     const pre       = document.getElementById('results');
+    const verboseBox= document.getElementById('verbose');
 
     const allButtons = [btn, runSel, pickToggle];
 
@@ -202,6 +210,8 @@
 
     // ── Run driver ───────────────────────────────────────────────────────────
     async function run(filter = {}) {
+      // The VERBOSE checkbox applies to every run path (caller may also pass it).
+      if (verboseBox.checked) filter = { ...filter, verbose: true };
       allButtons.forEach(b => b.disabled = true);
       copy.style.display = 'none';
       save.style.display = 'none';
@@ -244,14 +254,17 @@
       if (e.key === 'Enter') runSel.click();
     });
 
-    // ── URL-param driving: ?suite=…&test=…&run ───────────────────────────────
+    // ── URL-param driving: ?suite=…&test=…&verbose&run ───────────────────────
     const params = new URLSearchParams(location.search);
+    if (params.has('verbose')) verboseBox.checked = true;   // pre-check so run() picks it up
     const urlFilter = {};
     if (params.has('suite')) urlFilter.suite = params.get('suite');
     if (params.has('test'))  { urlFilter.test = params.get('test'); filterBox.value = params.get('test'); }
-    if (urlFilter.suite || urlFilter.test) {
-      if (params.has('run')) run(urlFilter);
-      else status.textContent = `Ready — press Run Selected for ${
+    // ?run (optionally with ?verbose alone) auto-runs everything.
+    if (params.has('run')) {
+      run(urlFilter);
+    } else if (urlFilter.suite || urlFilter.test) {
+      status.textContent = `Ready — press Run Selected for ${
         urlFilter.suite ? `suite~"${urlFilter.suite}"` : ''}${
         urlFilter.test ? ` test~"${urlFilter.test}"` : ''} (or add &run to the URL).`;
     }

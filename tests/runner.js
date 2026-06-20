@@ -223,9 +223,42 @@ function makeClockShim(bpm = 120) {
   };
 }
 
+// Tracks built during the CURRENT test, so the runner can release them after it
+// finishes. Many machines own a forever-firing `setInterval` drift timer (every
+// analogue voice + Swarm) — left running, those timers accumulate across the
+// whole suite and pin their OfflineAudioContexts alive, eventually crashing the
+// renderer tab (the "error code 5" hang). `disconnect()` stops the timers + oscs.
+let _liveTracks = [];   // [{ track, ctx }]
+
+/**
+ * Dispose + forget every track built since the last reset (called per test).
+ * Two leaks accumulate across the suite and exhaust the audio backend (the
+ * "insufficient memory" / error-code-5 crash):
+ *   1. drift `setInterval` timers — `VoicePool.dispose()` tears down all 8 voice
+ *      slots (each owns a machine instance, so an analogue track has 8 timers),
+ *      and each machine's `disconnect()` calls `_drift.stop()`.
+ *   2. the OfflineAudioContext itself — Chrome caps live contexts and GC is lazy,
+ *      so we `close()` each one explicitly to free its backend resources now.
+ */
+export async function _releaseTracks() {
+  for (const { track, ctx } of _liveTracks) {
+    try { track._pool?.dispose?.(); } catch (_) {}
+    // close() frees the backend context (Chrome limits concurrent contexts).
+    // Safe after startRendering() resolves; harmless if never rendered. Some
+    // engines reject if already closed — swallow.
+    try { if (ctx && ctx.state !== 'closed' && ctx.close) await ctx.close(); } catch (_) {}
+  }
+  _liveTracks = [];
+}
+
 /**
  * Build a full Track against an OfflineAudioContext.
  * Returns { track, ctx, clock, audioShim }.
+ *
+ * The track is registered for automatic teardown after the test (the runner calls
+ * `_releaseTracks()`), which stops the machine's drift `setInterval` + oscillators
+ * so timers don't leak across the suite. A test that needs a track to OUTLIVE it
+ * is the exception — none currently do.
  *
  * @param {string}  machineType  — e.g. 'synth', 'kick.silk', 'fm'
  * @param {number}  durationSec  — length of the offline context
@@ -252,6 +285,7 @@ export async function makeOfflineTrack(machineType, durationSec, opts = {}) {
   // LFOs are already started by Track.addLFO(); call start() only if somehow not running
   track.lfos.forEach(lfo => { if (!lfo._running) lfo.start(); });
 
+  _liveTracks.push({ track, ctx });
   return { track, ctx, clock, audioShim, sampleRate };
 }
 
@@ -350,6 +384,12 @@ export function listSuites() {
  * @param {string}  [filter.test]  — only run tests whose name contains this
  *                                   substring (case-insensitive)
  * @param {Set<string>} [filter.suites] — exact suite names to run (from the picker)
+ * @param {boolean} [filter.verbose] — log each suite/test start + finish to the
+ *   console. Use this to find which test HARD-crashes the tab (e.g. error code 5,
+ *   an OOM / renderer crash): the DOM results never render on a crash, but the
+ *   console keeps its last flush, so the final "▶ … (running)" line with no
+ *   matching "✓/✗ … done" names the culprit. Toggle via ?verbose=1 or the
+ *   VERBOSE checkbox in index.html.
  */
 export async function runAll(filter = {}) {
   // Deterministic noise for the whole suite: swap Math.random for a seeded PRNG in
@@ -370,14 +410,26 @@ export async function runAll(filter = {}) {
 
   const results = { timestamp: new Date().toISOString(), suites: [], filtered: !!(suiteQ || testQ || exact) };
 
+  // Verbose tracing: log each suite/test start + finish straight to the console
+  // (never captured — only error/warn are). The "▶ running" line is printed
+  // BEFORE the test runs and the "done" line AFTER, so if the tab hard-crashes
+  // mid-test the last un-paired "▶ running" names the offending test.
+  const verbose = !!filter.verbose;
+  const _log = console.log.bind(console);   // bind the original, capture-proof
+  if (verbose) _log(`%c[verbose] running ${_suites.length} suite(s)`, 'color:#4af;font-weight:bold');
+
   for (const s of _suites) {
     if (!matchSuite(s.name)) continue;
     const tests = s.tests.filter(t => matchTest(t.name));
     if (tests.length === 0) continue;
     const suiteResult = { name: s.name, tests: [] };
+    if (verbose) _log(`%c┌─ suite: ${s.name} (${tests.length})`, 'color:#4af;font-weight:bold');
     for (const t of tests) {
       const start = performance.now();
       let status = 'pass', error = null;
+
+      // Print BEFORE running so a hard tab crash leaves this line un-paired.
+      if (verbose) _log(`│  ▶ ${s.name} › ${t.name}`);
 
       // Capture unexpected console.error/warn for the duration of this test.
       const _origErr = console.error, _origWarn = console.warn;
@@ -404,12 +456,23 @@ export async function runAll(filter = {}) {
       } finally {
         console.error = _origErr;
         console.warn  = _origWarn;
+        // Release any OfflineAudioContext tracks this test built — stops their
+        // drift setInterval timers + oscillators AND closes the contexts so they
+        // don't accumulate across the suite and exhaust the audio backend (the
+        // "insufficient memory" / error-code-5 crash).
+        await _releaseTracks();
+      }
+      const ms = Math.round(performance.now() - start);
+      if (verbose) {
+        const ok = status === 'pass';
+        _log(`│  %c${ok ? '✓' : '✗'} ${t.name} (${ms}ms)${ok ? '' : ' — ' + error}`,
+             `color:${ok ? '#6c6' : '#f66'}`);
       }
       suiteResult.tests.push({
         name:   t.name,
         status,
         error,
-        ms: Math.round(performance.now() - start),
+        ms,
       });
     }
     results.suites.push(suiteResult);
