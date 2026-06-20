@@ -324,7 +324,12 @@ export const MANUAL_CONTENT = {
                  'are more than one).'],
       ['Destination', 'Searchable dropdown of every modulatable parameter on the ' +
                  'track (filter cutoff, resonance, envelope stages, machine params, ' +
-                 'FX wet amounts, pan, and more). Select "— none —" to disconnect.'],
+                 'FX wet amounts, pan, and more). Select "— none —" to disconnect. ' +
+                 'A handful of expressive "shaping" params that aren\'t plain audio ' +
+                 'knobs are also drivable here — Comb Pitch, Gate Depth/Smooth, Tape ' +
+                 'Wow/Spread, AutoPan Pan↔Trem, FM operator Ratios, and Noise/Swarm/' +
+                 'Chord/Strings character — so the LFO can sweep them during held ' +
+                 'notes. (On polyphonic patches those machine params follow one voice.)'],
       ['Simple / Advanced', 'Simple mode: a single waveform + rate + depth. ' +
                  'Advanced mode reveals a 2×2 ADSR grid where each ADSR phase has ' +
                  'its own depth and rate, enabling complex evolving modulations.'],
@@ -755,7 +760,9 @@ export const MANUAL_CONTENT = {
            'per step and it becomes a little melodic voice riding your sequence.',
     items: [
       ['Pitch', 'The resonant note (40–2000 Hz). This is the pitch the comb rings at; ' +
-                'p-lock it per step for melodies.'],
+                'p-lock it per step for melodies. Assignable as an LFO target — sweep ' +
+                'it during held/ringing notes for vibrato and metallic wobble (the ' +
+                'mod wheel / MIDI CC can sweep it too).'],
       ['Sustain', 'Feedback amount (0–99%) — how long the ring lasts. High = long, ' +
                 'singing tails.'],
       ['Damp', 'Lowpass in the feedback path — brighter (high) vs softer/duller (low) ' +

@@ -87,11 +87,36 @@ All params with `modulatable: true` and a non-null `resolveAudioParam` result fa
 
 ### JS-only destinations
 
-`trig.tone` has no AudioParam — it is a semitone offset read at step-fire time by the sequencer. `_resolveAudioParam` returns `{ audioParam: null, depthScale: 24, jsOnly: true }`. The LFO is not connected to any AudioParam; instead `lfo.getCurrentValue()` is called in `Sequencer._fireStep()` and summed into the note's semitone offset.
+There are **two kinds** of JS-only LFO destination — both read the JS waveform via `getCurrentValue()`, but differ in *when* they are sampled:
 
-`getCurrentValue()` re-implements the waveform math in JS (sine/square/sawtooth/triangle) using `AudioContext.currentTime` to approximate the oscillator's phase. It matches the oscillator output closely but is not sample-accurate.
+**1. Sampled JS-only** (`trig.tone`, `trig.velocity`, `arp.rate/gate/variance`). No AudioParam — read at a discrete moment, not continuously. `trig.tone` is a semitone offset read at step-fire time by the sequencer; `_resolveAudioParam` returns `{ audioParam: null, depthScale: 24, jsOnly: true }`, the LFO is not connected to anything, and `lfo.getCurrentValue()` is summed into the note's semitone offset in `Sequencer._fireStep()`. Arp params are sampled per build by `LiveArp`/`Sequencer`. Because they're sampled per-trig, they do **not** sweep a held note.
 
-No other JS-only destinations exist. `osc.detune` routes to a real AudioParam.
+**2. Continuous JS-only** — params whose value is in a unit the node param isn't (comb.freq is Hz; the node param is `delayTime = 1/freq`) or that apply through a custom JS `apply`/`setParam` rather than one AudioParam, so there is no AudioParam an LFO can ride — yet the modulation must be **continuous** to wobble a held/ringing note. `_resolveAudioParam` returns `{ audioParam: null, depthScale, jsContinuous: true, target }`, where `target` is a normalised `{ get, set, min, max }` accessor derived from `resolveModWheelParam`. `Track._jsLfoTick` (a single per-track rAF loop, started lazily when the first such binding exists and stopped when the last is removed) writes `setParam(path, base + lfo.getCurrentValue())` clamped to range, every frame. The **base** is the user's knob value: each tick adopts the current value as the new base if it changed since our last write (so turning the knob live re-centres the wobble), otherwise keeps the stored base so the LFO offset doesn't compound. Bindings are keyed by LFO index on `track._jsLfoBindings`, reindexed on `removeLFO`, and torn down on reset/dispose/load.
+
+The whitelist is `TRACK_JS_LFO_PARAMS` in `Track.js`. Current members:
+
+| Owner | Paths | Notes |
+|---|---|---|
+| Comb FX | `comb.freq` | pitch (Hz → delayTime) |
+| Gate FX | `gate.depth`, `gate.smooth` | duck depth / edge ramp (read by GateFX's own rAF tick) |
+| Tape FX | `tape.wow`, `tape.spread` | wow depth / ping-pong width (apply to live nodes) |
+| AutoPan FX | `pan.shape` | pan↔tremolo blend |
+| FM machine | `op1.ratio`…`op4.ratio` | live operator retune (`opNOsc.frequency`) |
+| Noise machine | `color` | bandpass Q sweep |
+| Swarm machine | `noise.color`, `noise.amount` | drift rate / depth |
+| Moogish machine | `hum` | mains-hum amount |
+| Chord machine | `spread` | voice detune spread |
+| Strings machine | `ensemble` | ensemble detune spread |
+
+**Inclusion rule:** a param qualifies only if it is (a) `modulatable` with `lfoMin`/`lfoMax` and reachable via `resolveModWheelParam`, AND (b) **continuous** — its `setParam` takes audible effect *between* note triggers. Params merely read at note-on (e.g. CombMachine `decay`/`mix`, Transient `pitch`) are excluded; driving them every frame does nothing mid-note (they belong to the sampled-JS family). Adding a qualifying path to the Set is the only step to LFO-enable it.
+
+**Machine-param caveat (slot-0 only):** machine targets resolve through `resolveModWheelParam`, which writes the canonical slot-0 machine — *not* every voice slot (identical to mod-wheel behaviour). On polyphonic patches the LFO modulates the slot-0 voice only. These JS params can't use the multi-slot AudioParam path (`connectLFOToAll`), so this is accepted. FX targets are single shared blocks and have no such limitation.
+
+`getCurrentValue()` re-implements the waveform math in JS (sine/square/sawtooth/triangle) using `AudioContext.currentTime` to approximate the oscillator's phase. It matches the oscillator output closely but is not sample-accurate. `osc.detune` routes to a real AudioParam (not JS-only).
+
+> **Note on continuous-JS modulation rate:** the rAF tick runs at frame rate (~60 Hz), so it is suitable for slow, expressive sweeps on FX/timbre params — not audio-rate modulation. It also does not run under `OfflineAudioContext` (no rAF; the offline tests verify binding/clamp logic by calling `_jsLfoTick` directly).
+
+> **Linear vs octave swing:** continuous-JS params currently modulate **linearly** in their own unit (`depthScale = (max−min)/2`), unlike AudioParam frequency params which use `lfoUnit: 'cents'` for symmetric octave swing. For `comb.freq` (40–2000 Hz) a linear swing feels one-sided (more motion upward than downward in pitch). If that proves unmusical, give the descriptor `lfoUnit: 'cents'` and have the tick apply the offset exponentially — deferred until the feel is evaluated.
 
 ---
 
@@ -111,7 +136,7 @@ No other JS-only destinations exist. `osc.detune` routes to a real AudioParam.
 
 `amp.pan` is resolved directly in `_resolveAudioParam` (not via machine). All other paths delegate to `machine.resolveAudioParam` → `filter.resolveAudioParam` → FX chain in order.
 
-**LFO dropdown uses `getLFOAssignableParams()`**, not the raw `getAssignableParams()`. It is the same list filtered to destinations the LFO can actually drive: an AudioParam-backed param, or a recognised JS-only target (`trig.tone`/`trig.velocity`/`arp.*`). Composite FX params that are `modulatable` but have no `resolveAudioParam` — e.g. `comb.freq` (value is a frequency, node param is a delay time), `pan.shape`, `tape.wow`/`spread`, `gate.depth`/`smooth` — are **dropped from the LFO dropdown** (they'd be dead targets) but **stay in the mod-wheel / MIDI-CC dropdowns** (`getAssignableParams`), which apply via `setParam` and so support them.
+**LFO dropdown uses `getLFOAssignableParams()`**, not the raw `getAssignableParams()`. It is the same list filtered to destinations the LFO can actually drive: an AudioParam-backed param, a sampled JS-only target (`trig.tone`/`trig.velocity`/`arp.*`), or a **continuous JS-only target** whitelisted in `TRACK_JS_LFO_PARAMS` (e.g. `comb.freq` — driven by the rAF tick via `setParam`; see "Continuous JS-only" above). Composite FX params that are `modulatable`, have no `resolveAudioParam`, and are **not** whitelisted — e.g. `pan.shape`, `tape.wow`/`spread`, `gate.depth`/`smooth` — are still **dropped from the LFO dropdown** (they'd be dead targets) but **stay in the mod-wheel / MIDI-CC dropdowns** (`getAssignableParams`), which apply via `setParam`. Whitelisting such a param is what moves it from "mod/CC only" into the LFO dropdown.
 
 ---
 
@@ -129,7 +154,8 @@ No other JS-only destinations exist. `osc.detune` routes to a real AudioParam.
 1. Add `modulatable: true`, `lfoMin`, `lfoMax` to the param descriptor in the owning class's `getParamList()`.
 2. Make sure `resolveAudioParam(path)` in that class returns the live AudioParam.
 3. If the AudioParam is in a non-obvious unit space (like FM mod depth), use the split level/scale gain pattern described above.
-4. If there is no AudioParam at all, return `null` from `resolveAudioParam` and add a `jsOnly: true` case in `Track._resolveAudioParam`, then read `lfo.getCurrentValue()` at the point where the param is consumed.
+4. If there is no AudioParam at all but the value is **sampled at a discrete moment** (per-step / per-trig): return `null` from `resolveAudioParam`, add a `jsOnly: true` case in `Track._resolveAudioParam`, then read `lfo.getCurrentValue()` at the point where the param is consumed (e.g. `Sequencer._fireStep`).
+5. If there is no AudioParam and the value must be modulated **continuously** (to sweep a held note) — typically because the value is in a different unit than the node param (comb.freq → delayTime): just add the path to `TRACK_JS_LFO_PARAMS` in `Track.js`. The continuous-JS branch of `_resolveAudioParam` + the `_jsLfoTick` rAF driver handle the rest via `setParam`. No per-class wiring needed (it goes through `resolveModWheelParam`). Consider `lfoUnit: 'cents'` for pitch-like params if linear swing feels one-sided.
 
 ---
 

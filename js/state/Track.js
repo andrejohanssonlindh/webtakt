@@ -226,6 +226,52 @@ function lfoDepthScale(descriptor) {
   return (descriptor.lfoMax - descriptor.lfoMin) / 2;
 }
 
+/**
+ * Whitelist of "continuous JS-only" params an LFO may drive via the rAF tick
+ * (_jsLfoTick). These are modulatable but have no AudioParam an LFO can ride —
+ * their value is in a unit the node param isn't (e.g. comb.freq is Hz, the node
+ * is a delayTime = 1/freq), or they apply through a custom JS `apply`/`setParam`
+ * rather than a single AudioParam. The driver writes them with setParam each frame.
+ *
+ * Inclusion rule — a param qualifies ONLY if it is BOTH:
+ *   (a) modulatable with lfoMin/lfoMax and reachable via resolveModWheelParam, AND
+ *   (b) CONTINUOUS — its setParam takes audible effect *between* note triggers
+ *       (writes a live node / runs an ongoing apply). Params merely read at note-on
+ *       (e.g. CombMachine decay/mix, Transient pitch) are EXCLUDED: driving them
+ *       every frame does nothing mid-note — those belong to the sampled-JS family
+ *       (trig.tone/arp.*), not here.
+ *
+ * Caveat for MACHINE params (op*.ratio, color, ensemble, spread, hum, noise.*):
+ * resolveModWheelParam writes the canonical slot-0 machine only (same as the mod
+ * wheel). On polyphonic patches the LFO modulates the slot-0 voice, not every held
+ * voice. Acceptable: it matches existing mod-wheel behaviour, and these JS params
+ * can't use the multi-slot AudioParam path (connectLFOToAll). See js/signal/LFO.md.
+ *
+ * Paths are matched after stripping any `fxN.` instance prefix, so both base and
+ * added-FX instances of a block qualify.
+ */
+const TRACK_JS_LFO_PARAMS = new Set([
+  // FX (single block — modulates the whole track signal)
+  'comb.freq',     // Comb resonator pitch (Hz → delayTime)
+  'gate.depth',    // Trance-gate duck depth
+  'gate.smooth',   // Trance-gate edge ramp
+  'tape.wow',      // Tape wow/flutter depth
+  'tape.spread',   // Tape ping-pong stereo width
+  'pan.shape',     // AutoPan pan↔tremolo blend
+
+  // Machine params (slot-0 only — see caveat above)
+  'op1.ratio',     // FM operator ratios — live retune of carriers/modulators
+  'op2.ratio',
+  'op3.ratio',
+  'op4.ratio',
+  'color',         // Noise machine bandpass Q sweep
+  'noise.color',   // Swarm drift rate
+  'noise.amount',  // Swarm drift depth (cents)
+  'hum',           // Moogish mains-hum amount
+  'spread',        // Chord voice detune spread
+  'ensemble',      // Strings ensemble detune spread
+]);
+
 export class Track {
   /**
    * @param {number} index
@@ -337,6 +383,15 @@ export class Track {
 
     // LFO destination paths (parallel to this.lfos) — must be before addLFO()
     this._lfoDestPaths = [];
+
+    // JS-driven LFO bindings: params whose value is a frequency/ratio/etc. but
+    // whose node param is in a different unit (e.g. comb.freq → delayTime = 1/freq),
+    // so they have no AudioParam an LFO can ride. The driver ticks each binding on
+    // rAF and pushes `setParam(path, base + lfo.getCurrentValue())`. See _jsLfoTick.
+    // Each entry: { lfoIndex, path, target } where target is a resolveModWheelParam
+    // result (obj/setParam/getParam/min/max). Keyed by lfoIndex.
+    this._jsLfoBindings = new Map();
+    this._jsLfoRaf = null;
 
     // LFOs — start with one
     this.lfos = [];
@@ -1058,6 +1113,8 @@ export class Track {
     this.silence(this.audio.context.currentTime);
     this.liveArp?.releaseAll?.();
     this.lfos?.forEach(lfo => { try { lfo.stop?.(); } catch (_) {} });
+    this._stopJsLfoDriver();
+    this._jsLfoBindings?.clear();
     // Disconnect the chain tail from the (per-deck) output bus so the deck's
     // bus can be GC'd and the nodes stop pulling on the graph. The last block in
     // _fxOrder feeds the bus; disconnect every block (order-independent) plus
@@ -1117,8 +1174,72 @@ export class Track {
     if (!lfo) return;
     lfo.stop();
     lfo.clearDestination();
+    this._clearJsLfoBinding(lfoIndex);
     this.lfos.splice(lfoIndex, 1);
     this._lfoDestPaths.splice(lfoIndex, 1);
+    // Splicing shifts every later LFO down one index — reindex the JS bindings
+    // (keyed by lfoIndex) to match, or they'd drive the wrong/now-stale LFO.
+    if (this._jsLfoBindings.size) {
+      const shifted = new Map();
+      for (const [idx, b] of this._jsLfoBindings) {
+        shifted.set(idx > lfoIndex ? idx - 1 : idx, b);
+      }
+      this._jsLfoBindings = shifted;
+    }
+    if (!this._jsLfoBindings.size) this._stopJsLfoDriver();
+  }
+
+  // ── JS-driven LFO driver ──────────────────────────────────────────────────
+  // Drives "continuous JS-only" LFO targets (TRACK_JS_LFO_PARAMS) that have no
+  // AudioParam: each rAF frame, write setParam(path, base + lfo.getCurrentValue()),
+  // clamped to range. base is the user's knob value — tracked by detecting external
+  // changes vs. what we last wrote, so turning the knob live re-centres the wobble
+  // (live base value, per design) without the LFO's own writes drifting it.
+
+  /** Remove a JS binding for one LFO index (if any) and stop the driver if idle. */
+  _clearJsLfoBinding(lfoIndex) {
+    if (this._jsLfoBindings.delete(lfoIndex) && !this._jsLfoBindings.size) {
+      this._stopJsLfoDriver();
+    }
+  }
+
+  _startJsLfoDriver() {
+    if (this._jsLfoRaf != null) return;
+    if (!this._jsLfoTickBound) this._jsLfoTickBound = () => this._jsLfoTick();
+    const hasRaf = typeof requestAnimationFrame === 'function';
+    this._jsLfoRaf = hasRaf ? requestAnimationFrame(this._jsLfoTickBound)
+                            : setInterval(this._jsLfoTickBound, 25);
+  }
+
+  _stopJsLfoDriver() {
+    if (this._jsLfoRaf == null) return;
+    if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this._jsLfoRaf);
+    else clearInterval(this._jsLfoRaf);
+    this._jsLfoRaf = null;
+  }
+
+  _jsLfoTick() {
+    for (const [lfoIndex, b] of this._jsLfoBindings) {
+      const lfo = this.lfos[lfoIndex];
+      if (!lfo) continue;
+      const { target } = b;
+      const cur = target.get();
+      // If the param changed since our last write, the user (or a p-lock/preset)
+      // moved it — adopt that as the new base. Otherwise keep the stored base so
+      // the LFO offset doesn't compound frame over frame.
+      if (b.lastWritten === undefined || Math.abs(cur - b.lastWritten) > 1e-6) {
+        b.base = cur;
+      }
+      const v = b.base + lfo.getCurrentValue();
+      const clamped = Math.max(target.min, Math.min(target.max, v));
+      target.set(clamped);
+      b.lastWritten = clamped;
+    }
+    if (!this._jsLfoBindings.size) { this._stopJsLfoDriver(); return; }
+    if (typeof requestAnimationFrame === 'function') {
+      this._jsLfoRaf = requestAnimationFrame(this._jsLfoTickBound);
+    }
+    // setInterval path re-fires itself; nothing to reschedule.
   }
 
   /**
@@ -1184,6 +1305,7 @@ export class Track {
 
     // Disconnect from previous destination(s) before reassigning
     lfo.clearDestination();
+    this._clearJsLfoBinding(lfoIndex);
     this._lfoDestPaths[lfoIndex] = '';
 
     if (!paramPath) return;
@@ -1198,6 +1320,17 @@ export class Track {
   _rewireLFOToPool(lfo, lfoIndex, paramPath) {
     const resolved = this._resolveAudioParam(paramPath);
     if (!resolved) return;
+
+    if (resolved.jsContinuous) {
+      // No AudioParam: the LFO is sampled on rAF and pushed via setParam. Keep the
+      // audio-graph destination clear and register a driver binding instead.
+      lfo.clearDestination();
+      lfo.setJSDepthScale(resolved.depthScale);
+      this._jsLfoBindings.set(lfoIndex, { path: paramPath, target: resolved.target });
+      this._startJsLfoDriver();
+      this._lfoDestPaths[lfoIndex] = paramPath;
+      return;
+    }
 
     if (resolved.jsOnly) {
       lfo.clearDestination();
@@ -1254,6 +1387,29 @@ export class Track {
       const d = this.arp.modParamDescriptors().find(p => p.path === path);
       const depthScale = d ? lfoDepthScale(d) : 1;
       return { audioParam: null, depthScale, jsOnly: true };
+    }
+
+    // Continuous JS-only params: modulatable, but the value is in a unit the node
+    // param isn't (e.g. comb.freq's value is Hz, the node param is delayTime=1/freq),
+    // so no AudioParam exists for an LFO to ride. These are driven on rAF by
+    // _jsLfoTick, which writes `setParam(path, base + lfo.getCurrentValue())`.
+    // Unlike trig.tone/arp.* (sampled at step-fire), these sweep continuously, so
+    // they wobble a held/ringing note. Gated to a whitelist while we expand the
+    // backbone param-by-param (see TRACK_JS_LFO_PARAMS). Added FX carry an `fxN.`
+    // prefix (e.g. fx5.comb.freq) — match on the bare suffix so both base and
+    // instance paths qualify.
+    if (TRACK_JS_LFO_PARAMS.has(path.replace(/^fx\d+\./, ''))) {
+      const mw = this.resolveModWheelParam(path);
+      if (mw && !mw.audioParam) {
+        const depthScale = (mw.max - mw.min) / 2;
+        // Normalise the mod-wheel target into a uniform accessor: trig.* carry
+        // their own setParam/getParam closures; FX/machine targets expose obj +
+        // the path. Both are reduced to plain get/set here for the tick.
+        const get = mw.getParam ? mw.getParam : () => mw.obj.getParam(path);
+        const set = mw.setParam ? mw.setParam : (v) => mw.obj.setParam(path, v);
+        const target = { get, set, min: mw.min, max: mw.max };
+        return { audioParam: null, depthScale, jsContinuous: true, target };
+      }
     }
 
     const allParams = [
@@ -1360,6 +1516,8 @@ export class Track {
 
     // Tear down all LFOs and start fresh with one
     this.lfos.forEach(l => { l.clearDestination(); l.stop(); });
+    this._stopJsLfoDriver();
+    this._jsLfoBindings.clear();
     this.lfos = [];
     this._lfoDestPaths = [];
     this.addLFO();
@@ -1427,12 +1585,13 @@ export class Track {
   }
 
   /**
-   * Like getAssignableParams() but restricted to LFO-valid destinations. The LFO
-   * connects to an AudioParam (or a recognised JS-only target like trig.tone/
-   * arp.rate); a composite FX param with no AudioParam (e.g. comb.freq, pan.shape,
-   * tape.wow) can't be LFO-driven, so it is dropped here — while staying available
-   * to the mod-wheel / MIDI-CC dropdowns (those apply via setParam and DO support
-   * such params). Empty groups are removed.
+   * Like getAssignableParams() but restricted to LFO-valid destinations. Kept
+   * items are those _resolveAudioParam recognises: an AudioParam-backed param, a
+   * sampled JS-only target (trig.tone/arp.*), or a continuous JS-only target driven
+   * by the rAF tick (TRACK_JS_LFO_PARAMS, e.g. comb.freq). Composite params with no
+   * AudioParam and not whitelisted (e.g. pan.shape, tape.wow) still resolve to null
+   * and are dropped here, while staying available to the mod-wheel / MIDI-CC
+   * dropdowns (those apply via setParam). Empty groups are removed.
    */
   getLFOAssignableParams() {
     return this.getAssignableParams()
@@ -1603,6 +1762,8 @@ export class Track {
 
     // Restore LFOs
     this.lfos.forEach(l => l.stop());
+    this._stopJsLfoDriver();
+    this._jsLfoBindings.clear();
     this.lfos = [];
     this._lfoDestPaths = [];
     (obj.lfos ?? []).forEach(lfoObj => {

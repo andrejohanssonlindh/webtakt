@@ -144,9 +144,11 @@ export class CombFX {
   resolveAudioParam(path) {
     switch (path) {
       // comb.freq is JS-driven: its VALUE is a frequency but the node param is a
-      // delay TIME (= 1/freq). Returning the raw delayTime here would let an LFO
-      // ride it as if it were the frequency (inverted, nonsensical) AND wrongly
-      // list it as an LFO target. Mapping lives in setParam; this stays null.
+      // delay TIME (= 1/freq). Returning the raw delayTime would let an LFO ride it
+      // as if it were the frequency (inverted, nonsensical), so this stays null and
+      // the freq→delay mapping lives in setParam. It IS still LFO-able, but via the
+      // continuous-JS driver (Track._jsLfoTick), not an AudioParam connection —
+      // comb.freq is whitelisted in TRACK_JS_LFO_PARAMS. See js/signal/LFO.md.
       case 'comb.freq':     return null;
       case 'comb.feedback': return this._fb.gain;
       case 'comb.damp':     return this._damp.frequency;

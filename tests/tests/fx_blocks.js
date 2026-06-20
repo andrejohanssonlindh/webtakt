@@ -193,23 +193,91 @@ suite('FX blocks (second wave)', () => {
     }
   });
 
-  test('LFO targets exclude js-driven FX params; mod/CC targets keep them', async () => {
+  test('LFO targets: whitelisted js-driven FX params included; non-whitelisted excluded', async () => {
     const { track } = await makeOfflineTrack('synth', 0.1);
-    // Comb exposes comb.freq as modulatable BUT js-driven (no AudioParam): it must
-    // NOT be an LFO destination (the LFO connects to AudioParams), while
-    // comb.feedback (AudioParam-backed) must be. The mod-wheel/CC dropdown
-    // (getAssignableParams) keeps BOTH — those apply via setParam.
+    // Whitelisted continuous-JS FX params (TRACK_JS_LFO_PARAMS) become LFO targets:
+    // comb.freq (Hz→delayTime), gate.depth/smooth, tape.wow/spread, pan.shape. The
+    // rAF tick drives them via setParam. AudioParam-backed siblings (comb.feedback)
+    // remain targets too. All stay mod/CC targets.
+    const combId = track.addFX('comb');
+    const gateId = track.addFX('gate');
+    const tapeId = track.addFX('tape');
+    const panId  = track.addFX('autopan');
+
+    const lfoPaths = track.getLFOAssignableParams().flatMap(g => g.items.map(it => it.path));
+    assert.ok(lfoPaths.includes(`${combId}.comb.freq`),  'comb.freq should be an LFO target');
+    assert.ok(lfoPaths.includes(`${combId}.comb.feedback`), 'comb.feedback (AudioParam) missing from LFO targets');
+    assert.ok(lfoPaths.includes(`${gateId}.gate.depth`),  'gate.depth should be an LFO target');
+    assert.ok(lfoPaths.includes(`${gateId}.gate.smooth`), 'gate.smooth should be an LFO target');
+    assert.ok(lfoPaths.includes(`${tapeId}.tape.wow`),    'tape.wow should be an LFO target');
+    assert.ok(lfoPaths.includes(`${tapeId}.tape.spread`), 'tape.spread should be an LFO target');
+    assert.ok(lfoPaths.includes(`${panId}.pan.shape`),    'pan.shape should be an LFO target');
+
+    // The hidden 'Division' (bpmCount32) params are modulatable+js but NOT
+    // whitelisted (and carry no lfoMin/lfoMax) — they must STAY out of LFO targets,
+    // proving the backbone is gated, not blanket-enabling every js param.
+    assert.ok(!lfoPaths.includes(`${tapeId}.tape.bpmCount32`),
+      'tape.bpmCount32 (not whitelisted) wrongly offered as LFO target');
+
+    // All whitelisted params remain mod/CC targets.
+    const ccPaths = track.getAssignableParams().flatMap(g => g.items.map(it => it.path));
+    assert.ok(ccPaths.includes(`${combId}.comb.freq`), 'comb.freq should remain a mod/CC target');
+    assert.ok(ccPaths.includes(`${panId}.pan.shape`),  'pan.shape should remain a mod/CC target');
+  });
+
+  test('LFO targets: whitelisted MACHINE js params included (FM op ratios)', async () => {
+    // Machine continuous-JS params (op*.ratio, color, ensemble, spread, hum,
+    // noise.*) are whitelisted and resolve via slot-0 resolveModWheelParam.
+    const { track } = await makeOfflineTrack('fm', 0.1);
+    const lfoPaths = track.getLFOAssignableParams().flatMap(g => g.items.map(it => it.path));
+    assert.ok(lfoPaths.includes('op1.ratio'), 'op1.ratio should be an LFO target on FM');
+    assert.ok(lfoPaths.includes('op2.ratio'), 'op2.ratio should be an LFO target on FM');
+
+    // Drive a tick and confirm it retunes (op1.ratio writes _op1Osc.frequency via
+    // setParam, a continuous live change).
+    track.setLFODestination(0, 'op1.ratio');
+    assert.ok(track._jsLfoBindings.has(0), 'op1.ratio did not register a JS binding');
+    const base = track.machine.getParam('op1.ratio');
+    track.lfos[0].setParam('lfo.depth', 100);
+    const realGCV = track.lfos[0].getCurrentValue.bind(track.lfos[0]);
+    track.lfos[0].getCurrentValue = () => 2;
+    track._jsLfoTick();
+    track.lfos[0].getCurrentValue = realGCV;
+    const after = track.machine.getParam('op1.ratio');
+    assert.ok(Math.abs(after - base) > 0.01, 'tick did not move op1.ratio off its base');
+    assert.ok(after >= 0.25 && after <= 8, 'tick wrote op1.ratio out of range');
+    track.setLFODestination(0, '');
+  });
+
+  test('JS-LFO driver: binding registers on comb.freq assignment and tick wobbles base', async () => {
+    const { track } = await makeOfflineTrack('synth', 0.1);
     const id = track.addFX('comb');
+    const path = `${id}.comb.freq`;
 
-    const lfoPaths = track.getLFOAssignableParams()
-      .filter(g => g.group && g.group.startsWith('Comb'))
-      .flatMap(g => g.items.map(it => it.path));
-    assert.ok(lfoPaths.includes(`${id}.comb.feedback`), 'comb.feedback missing from LFO targets');
-    assert.ok(!lfoPaths.includes(`${id}.comb.freq`), 'comb.freq (js) wrongly offered as LFO target');
+    // Assign LFO 0 to comb.freq → a JS-continuous binding should register.
+    track.setLFODestination(0, path);
+    assert.ok(track._jsLfoBindings.has(0), 'comb.freq LFO assignment did not register a JS binding');
 
-    const ccPaths = track.getAssignableParams()
-      .filter(g => g.group && g.group.startsWith('Comb'))
-      .flatMap(g => g.items.map(it => it.path));
-    assert.ok(ccPaths.includes(`${id}.comb.freq`), 'comb.freq should remain a mod/CC target');
+    // Drive one tick manually (rAF doesn't run under OfflineAudioContext). With a
+    // non-zero LFO output the written value should differ from the base and stay
+    // within range.
+    const combObj = track.fxObjForPath(path);
+    const base = combObj.getParam(path);          // default 220
+    track.lfos[0].setParam('lfo.depth', 100);
+    // getCurrentValue() is phase-dependent; force a known non-zero output by
+    // stubbing it for this assertion.
+    const realGCV = track.lfos[0].getCurrentValue.bind(track.lfos[0]);
+    track.lfos[0].getCurrentValue = () => 500;
+    track._jsLfoTick();
+    track.lfos[0].getCurrentValue = realGCV;
+
+    const after = combObj.getParam(path);
+    assert.ok(Math.abs(after - base) > 1, 'tick did not move comb.freq off its base');
+    assert.ok(after >= 40 && after <= 2000, 'tick wrote comb.freq out of range');
+
+    // Clearing the assignment removes the binding and stops the driver.
+    track.setLFODestination(0, '');
+    assert.ok(!track._jsLfoBindings.has(0), 'binding not cleared on unassign');
+    assert.ok(track._jsLfoRaf == null, 'driver not stopped when no bindings remain');
   });
 });
