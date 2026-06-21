@@ -28,7 +28,13 @@
  *   { type: 'buffer', pcm: Float32Array[], length, channels }
  *   { type: 'trigger', gain, grainSizeMs, density, sprayFrac, pitchRate,
  *                       spread, jitterFrac, scanFrac, reverse }
- *   { type: 'release' }
+ *   { type: 'release', releaseTailFrames? }  // note-off: keep spawning for a
+ *                       tail so the downstream amp envelope has signal to fade
+ *   { type: 'stop' }    // hard kill (sample cleared)
+ *
+ * The cloud's amplitude SHAPE (attack/release) is the downstream Envelope's
+ * ampGain, identical to oscillator machines — this worklet only opens/holds the
+ * cloud, it does not shape the amp tail.
  *
  * AudioParams (k-rate):
  *   position — 0–1 normalised playhead into the buffer (LFO/p-lock target)
@@ -36,6 +42,11 @@
  */
 
 const TWO_PI = Math.PI * 2;
+
+// How long the grain cloud keeps spawning after note-off so the downstream amp
+// envelope (which owns the actual release shape) has signal to fade. Sized to
+// cover the longest amp release (env.release max is 8 s) with headroom.
+const RELEASE_TAIL_SEC = 8.5;
 
 class GranularProcessor extends AudioWorkletProcessor {
   static get parameterDescriptors() {
@@ -68,8 +79,9 @@ class GranularProcessor extends AudioWorkletProcessor {
     this._startFrac    = 0;     // trim region start (0–1 of buffer)
     this._endFrac      = 1;     // trim region end   (0–1 of buffer)
 
-    this._scanOffset = 0;       // accumulated auto-scan (normalised, region-relative)
-    this._envGain    = 0;       // smoothed output gate (de-click)
+    this._scanOffset   = 0;     // accumulated auto-scan (normalised, region-relative)
+    this._envGain      = 0;     // smoothed output gate (de-click)
+    this._releaseLeft  = 0;     // frames of post-noteOff tail still spawning grains
 
     this._rngState = 0x2545f491;
 
@@ -104,9 +116,24 @@ class GranularProcessor extends AudioWorkletProcessor {
       this._scanOffset   = 0;
       this._spawnAcc     = this._spawnEvery;  // launch one immediately
       this._active       = true;
+      this._releaseLeft  = 0;
     } else if (msg.type === 'release') {
-      // Stop spawning; existing grains ring out, then we idle.
-      this._active = false;
+      // Note-off. We do NOT shape the fade here — the audible release is the
+      // downstream amp envelope (Envelope.ampGain) that the whole signal chain
+      // runs through, exactly like an oscillator machine whose oscillators keep
+      // running while ampGain fades. To give that envelope signal to fade, we
+      // keep spawning grains for a release TAIL rather than stopping at once
+      // (the old behaviour killed the cloud in ~one grain length, so the amp
+      // release had nothing left to act on). The tail is sized to cover the
+      // longest amp release (env.release max is 8 s); residual grains past the
+      // envelope's zero-crossing are multiplied by ~0 and inaudible, then we
+      // idle. `releaseTailFrames` overrides the default when the caller knows
+      // the exact release length.
+      this._releaseLeft = msg.releaseTailFrames ?? Math.round(RELEASE_TAIL_SEC * sampleRate);
+    } else if (msg.type === 'stop') {
+      // Hard stop (sample cleared) — kill the cloud immediately.
+      this._active      = false;
+      this._releaseLeft = 0;
     }
   }
 
@@ -184,11 +211,16 @@ class GranularProcessor extends AudioWorkletProcessor {
       const position   = posParam[posParam.length > 1 ? i : 0];
       const targetGain = gainParam[gainParam.length > 1 ? i : 0] || 0;
 
-      // De-click the gate.
-      const target = this._active ? targetGain : 0;
+      // De-click gate only. The gain AudioParam stays at the held velocity
+      // level through the release tail — the audible fade is the DOWNSTREAM amp
+      // envelope, not this gate. We just hold the cloud open so that envelope
+      // has signal to fade, then de-click to 0 once the tail ends.
+      const target = (this._active || this._releaseLeft > 0) ? targetGain : 0;
       this._envGain += (target - this._envGain) * 0.003;
 
-      if (this._active) {
+      // Keep launching grains while held and through the release tail so the
+      // downstream envelope's release acts on a live cloud, not silence.
+      if (this._active || this._releaseLeft > 0) {
         if (++this._spawnAcc >= this._spawnEvery) {
           this._spawnAcc = 0;
           this._spawnGrain(position + this._scanOffset);
@@ -196,6 +228,11 @@ class GranularProcessor extends AudioWorkletProcessor {
         this._scanOffset += this._scanPerFrame;
         if (this._scanOffset > 1) this._scanOffset -= 1;
         else if (this._scanOffset < 0) this._scanOffset += 1;
+
+        if (this._releaseLeft > 0 && --this._releaseLeft <= 0) {
+          this._active      = false;
+          this._releaseLeft = 0;
+        }
       }
 
       let sL = 0, sR = 0;

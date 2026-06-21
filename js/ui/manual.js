@@ -1656,7 +1656,9 @@ export const MACHINE_MANUAL = {
            'the playhead and still play melodies, or sweep it slowly for an ' +
            'evolving pad. Drag the waveform (or the Position knob) to move the ' +
            'playhead; the purple band shows the Spray range. Hold a trig long ' +
-           'for a drone, short for a textured stab.',
+           'for a drone, short for a textured stab. The grain cloud is shaped ' +
+           'by the AMP page envelope like any other machine — raise the amp ' +
+           'RELEASE for a soft fade-out tail instead of an abrupt stop.',
     items: [
       ['Position', 'Where in the sample grains are taken from (0–100%). This is ' +
                  'an AudioParam — assign an LFO or p-lock it per step to scan the ' +

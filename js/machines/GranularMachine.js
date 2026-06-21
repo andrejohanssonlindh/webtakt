@@ -8,10 +8,13 @@
  * decoupled, so you can freeze the playhead and still play melodies, or sweep
  * the playhead at any speed without changing pitch.
  *
- * Runs an AudioWorkletNode (granular-processor.js). Self-enveloping: amplitude
- * is the worklet's `gain` AudioParam, gated open on noteOn and released on
- * noteOff (so it behaves like a held pad — hold the trig long for a drone,
- * short for a textured stab).
+ * Runs an AudioWorkletNode (granular-processor.js). The worklet's `gain`
+ * AudioParam only gates the cloud open (held velocity level) — the audible amp
+ * SHAPE (attack/release) is the downstream track Envelope (ampGain) that the
+ * whole signal chain runs through, exactly like an oscillator machine. On
+ * noteOff the cloud keeps spawning grains for a short release tail so that
+ * envelope's release has signal to fade (raise the AMP-page RELEASE for a soft
+ * tail). Hold the trig long for a drone, short for a textured stab.
  *
  * `position` is a worklet AudioParam → it is an LFO / p-lock / mod-wheel
  * target. Assign an LFO to `position` for an evolving pad; p-lock it per step
@@ -124,7 +127,7 @@ export class GranularMachine extends Machine {
     this.sampleUrl  = null;  // remote source URL, persisted for re-fetch
     this._duration  = 0;
     if (this._workletReady) {
-      this._workletNode.port.postMessage({ type: 'release' });
+      this._workletNode.port.postMessage({ type: 'stop' });
     }
     this._gated = false;
   }
@@ -164,6 +167,12 @@ export class GranularMachine extends Machine {
 
   noteOff(time) {
     if (!this._workletReady) return;
+    // Note-off. The AMP-page release is NOT shaped here — the audible fade is
+    // the downstream amp envelope (ampGain) the whole chain runs through, just
+    // like an oscillator machine. The worklet keeps the cloud spawning for a
+    // release tail (see granular-processor's RELEASE_TAIL_SEC) so that envelope
+    // has live signal to fade instead of silence; grains past the envelope's
+    // zero point are multiplied by ~0 and inaudible.
     this._workletNode.port.postMessage({ type: 'release' });
     this._gated = false;
   }
