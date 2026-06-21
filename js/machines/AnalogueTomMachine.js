@@ -129,8 +129,10 @@ export class AnalogueTomMachine extends Machine {
     }
 
     // ── Pitch sweep on the body oscillator ──
-    const startFreq = Math.max(tune * sweep, 30);
-    const endFreq   = Math.max(tune, 30);
+    // Note-tracked base freq: C4 (60) plays at `tune`, ±1:1 semitones either side.
+    const f         = tune * Machine.noteRatio(midiNote);
+    const startFreq = Math.max(f * sweep, 30);
+    const endFreq   = Math.max(f, 30);
     this._tuneOsc.frequency.setValueAtTime(startFreq, t);
     this._tuneOsc.frequency.exponentialRampToValueAtTime(endFreq, t + decay * 0.3);
 

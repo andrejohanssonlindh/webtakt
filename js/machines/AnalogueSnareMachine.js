@@ -134,10 +134,11 @@ export class AnalogueSnareMachine extends Machine {
       try { this._noiseAmp.disconnect(); } catch (_) {}
     }
 
-    // Pitch drop on persistent osc
-    this._tuneOsc.frequency.setValueAtTime(tune, t);
+    // Pitch drop on persistent osc — note-tracked body (C4 = `tune`, noise stays fixed)
+    const f = tune * Machine.noteRatio(midiNote);
+    this._tuneOsc.frequency.setValueAtTime(f, t);
     this._tuneOsc.frequency.exponentialRampToValueAtTime(
-      Math.max(tune * 0.5, 40), t + decay * 0.3
+      Math.max(f * 0.5, 40), t + decay * 0.3
     );
 
     // Per-note body amp

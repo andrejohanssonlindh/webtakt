@@ -76,6 +76,7 @@ export class NoiseMachine extends Machine {
     'body.level':   { label: 'Body', type: 'number', min: 0, max: 1, default: 0.5, group: 'BODY',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m._bodyGain.gain, schedule: 'setTarget', tc: 0.01 },
+    'note.track':   { label: 'Note Track', type: 'boolean', default: false, group: 'BODY', plockMode: 'js' },
     'crush':        { label: 'Crush', type: 'number', min: 0, max: 1, default: 0.0, group: 'SHAPE', plockMode: 'js',
                       apply: (v, t, m) => { m._crusher.curve = _buildCrusherCurve(v); } },
     'decay':        { label: 'Decay', type: 'number', min: 0.01, max: 4.0, default: 0.25, group: 'SHAPE', plockMode: 'js' },
@@ -156,6 +157,19 @@ export class NoiseMachine extends Machine {
     if (this._ampGain) {
       try { this._mixGain.disconnect(this._ampGain); } catch (_) {}
       try { this._ampGain.disconnect();               } catch (_) {}
+    }
+
+    // Opt-in note tracking: shift both bandpass centers by the note ratio
+    // (C4 = the resting body/color freqs). Off → fixed timbre as before.
+    // cancelScheduledValues kills the setTargetAtTime tail that syncParamsAt
+    // scheduled for body/color.freq just before this — otherwise it drags the
+    // frequency back toward the untracked value over its ~10ms time-constant.
+    if (this._params['note.track']) {
+      const r = Machine.noteRatio(midiNote);
+      this._bodyBP.frequency.cancelScheduledValues(t);
+      this._bodyBP.frequency.setValueAtTime(this._params['body.freq'] * r, t);
+      this._colorBP.frequency.cancelScheduledValues(t);
+      this._colorBP.frequency.setValueAtTime(this._params['color.freq'] * r, t);
     }
 
     // Per-note amp: gates and shapes the decay

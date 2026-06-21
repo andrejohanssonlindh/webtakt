@@ -243,4 +243,15 @@ export class Machine {
   static midiToFreq(note) {
     return 440 * Math.pow(2, (note - 69) / 12);
   }
+
+  /**
+   * Pitch ratio for note-tracking percussion. C4 (MIDI 60) = 1.0 (neutral), so a
+   * machine that multiplies its `tune` (or primary freq) by this plays identically
+   * on the default step note and shifts by 1:1 semitones either side. A missing
+   * note (undefined/null) also maps to neutral.
+   * @param {number} midiNote @returns {number}
+   */
+  static noteRatio(midiNote) {
+    return Math.pow(2, ((midiNote ?? 60) - 60) / 12);
+  }
 }

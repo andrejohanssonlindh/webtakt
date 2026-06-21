@@ -34,6 +34,7 @@ export class ClappMachine extends Machine {
     'snap':         { label: 'Snap', type: 'number', min: 0.3, max: 4, default: 0.8, group: 'TONE',
                       modulatable: true, lfoMin: 0.3, lfoMax: 4,
                       target: m => m._bp.Q, schedule: 'setTarget', tc: 0.01 },
+    'note.track':   { label: 'Note Track', type: 'boolean', default: false, group: 'TONE', plockMode: 'js' },
     'decay':        { label: 'Decay', type: 'number', min: 0.05, max: 1.0, default: 0.3, group: 'SHAPE', plockMode: 'js' },
     'spread':       { label: 'Spread', type: 'number', min: 0, max: 30, default: 8, group: 'SHAPE', plockMode: 'js' },
     'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85, group: 'OUTPUT',
@@ -74,6 +75,15 @@ export class ClappMachine extends Machine {
     const decay     = this._params['decay'];
     const spreadSec = this._params['spread'] / 1000;
     const noiseBuf  = _getNoiseBuffer(this.context);
+
+    // Opt-in note tracking: shift the filter cutoff (the clap's only "pitch") by
+    // the note ratio (C4 = the resting `tone`). Off → fixed tone as before.
+    // cancelScheduledValues kills the setTargetAtTime tail syncParamsAt scheduled
+    // for `tone`, which would otherwise drag the cutoff back over ~10ms.
+    if (this._params['note.track']) {
+      this._bp.frequency.cancelScheduledValues(t);
+      this._bp.frequency.setValueAtTime(this._params['tone'] * Machine.noteRatio(midiNote), t);
+    }
 
     // ONE continuous noise stream shaped into the whole clap gesture, rather than
     // three separate noise bursts. Separate sources read as discrete noise clicks;

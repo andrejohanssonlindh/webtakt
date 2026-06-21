@@ -37,6 +37,7 @@ export class HiHatMachine extends Machine {
     'decay':        { label: 'Decay', type: 'number', min: 0.01, max: 0.25, default: 0.06, group: 'DECAY', plockMode: 'js' },
     'open.decay':   { label: 'Open Decay', type: 'number', min: 0.1, max: 2.0, default: 0.5, group: 'DECAY', plockMode: 'js' },
     'open':         { label: 'Open', type: 'boolean', default: false, group: 'DECAY', plockMode: 'js' },
+    'note.track':   { label: 'Note Track', type: 'boolean', default: false, group: 'TONE', plockMode: 'js' },
     'cutoff':       { label: 'Cutoff', type: 'number', min: 500, max: 12000, default: 3000, group: 'TONE',
                       modulatable: true, lfoMin: 500, lfoMax: 12000,
                       target: m => m._hp.frequency, schedule: 'setTarget', tc: 0.01 },
@@ -97,6 +98,13 @@ export class HiHatMachine extends Machine {
     if (this._ampGain) {
       try { this._hp.disconnect(this._ampGain); } catch (_) {}
       try { this._ampGain.disconnect();          } catch (_) {}
+    }
+
+    // Opt-in note tracking: shift the metallic cluster by the note ratio
+    // (C4 = the constructor's BASE_FREQ × ratio). Off → fixed pitch as before.
+    if (this._params['note.track']) {
+      const r = Machine.noteRatio(midiNote);
+      this._oscs.forEach((osc, i) => osc.frequency.setValueAtTime(BASE_FREQ * RATIOS[i] * r, t));
     }
 
     // Per-note amp decay

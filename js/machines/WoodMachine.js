@@ -55,6 +55,7 @@ export class WoodMachine extends Machine {
                         m._ring2.Q.setTargetAtTime(v, t, 0.005);
                       } },
     'mix':          { label: 'Mix', type: 'number', min: 0, max: 1, default: 0.35, group: 'RESONATOR', plockMode: 'js' },
+    'note.track':   { label: 'Note Track', type: 'boolean', default: false, group: 'RESONATOR', plockMode: 'js' },
     'decay':        { label: 'Decay', type: 'number', min: 0.001, max: 0.4, default: 0.08, group: 'STRIKE', plockMode: 'js' },
     'click':        { label: 'Click', type: 'number', min: 0, max: 1, default: 0.6, group: 'STRIKE', plockMode: 'js' },
     'click.freq':   { label: 'Click Freq', type: 'number', min: 500, max: 12000, default: 3000, group: 'STRIKE',
@@ -118,6 +119,20 @@ export class WoodMachine extends Machine {
     const decay    = this._params['decay'];
     const mix      = this._params['mix'];
     const clickAmt = this._params['click'];
+
+    // Opt-in note tracking: shift both resonators + the click by the note ratio
+    // (C4 = the resting freqs). Off → fixed pitch as before.
+    // cancelScheduledValues kills the setTargetAtTime tails syncParamsAt scheduled
+    // for freq1/freq2/click.freq, which would otherwise drag them back over ~10ms.
+    if (this._params['note.track']) {
+      const r = Machine.noteRatio(midiNote);
+      this._ring1.frequency.cancelScheduledValues(t);
+      this._ring1.frequency.setValueAtTime(this._params['freq1'] * r, t);
+      this._ring2.frequency.cancelScheduledValues(t);
+      this._ring2.frequency.setValueAtTime(this._params['freq2'] * r, t);
+      this._clickOsc.frequency.cancelScheduledValues(t);
+      this._clickOsc.frequency.setValueAtTime(this._params['click.freq'] * r, t);
+    }
 
     // Detach old per-note nodes
     if (this._ring1Gain) {

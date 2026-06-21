@@ -113,8 +113,10 @@ export class TomMachine extends Machine {
     }
 
     // ── Fast pitch drop on the body (both oscillators share the sweep) ──
-    const startFreq = Math.max(tune * sweep, 30);
-    const endFreq   = Math.max(tune, 30);
+    // Note-tracked base freq: C4 (60) plays at `tune`, ±1:1 semitones either side.
+    const f         = tune * Machine.noteRatio(midiNote);
+    const startFreq = Math.max(f * sweep, 30);
+    const endFreq   = Math.max(f, 30);
     for (const osc of [this._sineOsc, this._triOsc]) {
       osc.frequency.cancelScheduledValues(t);
       osc.frequency.setValueAtTime(startFreq, t);

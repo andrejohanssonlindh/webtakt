@@ -1218,7 +1218,8 @@ export const MACHINE_MANUAL = {
            'The sweep and punch shape the transient character.',
     items: [
       ['Tune', 'Body oscillator frequency in Hz (20–200). Sets the pitch of the ' +
-                 'fundamental; lower values = deeper kick.'],
+                 'fundamental; lower values = deeper kick. The step note tracks ' +
+                 'this 1:1 in semitones (C4 = the Tune value) so you can play it melodically.'],
       ['Decay', 'Amplitude decay time after the hit (0.05–2s). Shorter = punchy ' +
                  'and tight; longer = boomy with a long tail.'],
       ['Sweep', 'How far the pitch sweeps down at the start of the hit (1×–8× ' +
@@ -1238,7 +1239,8 @@ export const MACHINE_MANUAL = {
            'Combines the sine body of Kick Silk with a waveshaper and a sub, ' +
            'producing a harder, more saturated hit suited for techno and hard dance.',
     items: [
-      ['Tune', 'Body oscillator frequency in Hz (20–200).'],
+      ['Tune', 'Body oscillator frequency in Hz (20–200). The step note tracks this ' +
+                 '1:1 in semitones (C4 = the Tune value) so you can play it melodically.'],
       ['Decay', 'Amplitude decay time (0.05–2s).'],
       ['Sweep', 'Pitch sweep multiplier at the start of the hit (1×–8×).'],
       ['Sub', 'Level of a sub oscillator one octave below the body. Adds low-end ' +
@@ -1257,7 +1259,9 @@ export const MACHINE_MANUAL = {
            'high-passed noise, shaped by independent level controls for each ' +
            'component.',
     items: [
-      ['Tune', 'Body oscillator frequency in Hz (100–400). Sets the tonal pitch ' +
+      ['Tune', 'Body oscillator frequency in Hz (100–400). The step note tracks ' +
+                 'the body 1:1 in semitones (C4 = the Tune value); the noise layer ' +
+                 'stays fixed. Sets the tonal pitch ' +
                  'of the snare body.'],
       ['Decay', 'Overall amplitude decay time (0.05–1s).'],
       ['Tone', 'Level of the body oscillator relative to the noise (0–1). High ' +
@@ -1285,6 +1289,9 @@ export const MACHINE_MANUAL = {
                  'hat, higher values keep it thin and airy.'],
       ['Tone', 'Resonance of the high-pass filter (Q). Higher values emphasise ' +
                  'frequencies near the cutoff for a more metallic, ringy quality.'],
+      ['Note Track', 'When on, the step note shifts the whole oscillator cluster ' +
+                 'up/down by semitones (C4 = the default pitch), so you can play ' +
+                 'the hat melodically. Off (default) = fixed pitch on every note.'],
       ['Level', 'Master output level for this machine (0–100%).'],
     ],
   },
@@ -1302,6 +1309,9 @@ export const MACHINE_MANUAL = {
                  'the top for a darker, fatter clap; higher lets more fizz through.'],
       ['Snap', 'Lowpass resonance (Q). Low = full and natural; higher emphasises ' +
                  'the cutoff for a more pronounced, peaky character.'],
+      ['Note Track', 'When on, the step note shifts the filter cutoff (the clap\'s ' +
+                 'only pitch) up/down by semitones (C4 = the default Tone). Off ' +
+                 '(default) = fixed tone on every note.'],
       ['Decay', 'Decay time of the reverberant tail after the slaps (0.05–1s).'],
       ['Spread', 'Time gap between the four attack slaps in ms (0–30ms). Tighter = ' +
                  'one crisp clap; wider = a more audible flam/double-strike.'],
@@ -1318,7 +1328,8 @@ export const MACHINE_MANUAL = {
     items: [
       ['Tune', 'Base frequency of the oscillator bank (100–800 Hz). All six ' +
                  'oscillators are at fixed ratios above this; raising Tune shifts ' +
-                 'the whole cymbal up in pitch.'],
+                 'the whole cymbal up in pitch. The step note tracks this 1:1 in ' +
+                 'semitones (C4 = the Tune value) so you can play it melodically.'],
       ['Tone', 'High-pass cutoff (200–8000 Hz). Removes low body and controls ' +
                  'brightness.'],
       ['Body', 'Bandpass emphasis centre frequency (500–16000 Hz). Adds a ' +
@@ -1348,6 +1359,9 @@ export const MACHINE_MANUAL = {
       ['Ring', 'Q of both resonators. Higher values make the resonators ring ' +
                  'longer and more narrowly — from a dry thud to a ringing clave tone.'],
       ['Mix', 'Balance between the two resonators (0 = only Freq 1; 1 = only Freq 2).'],
+      ['Note Track', 'When on, the step note shifts both resonators and the click ' +
+                 'up/down by semitones (C4 = the default Freq 1/Freq 2), so you can ' +
+                 'play the wood block melodically. Off (default) = fixed pitch.'],
       ['Decay', 'Overall amplitude decay time (0.001–0.4s).'],
       ['Click', 'Level of the click oscillator — a sine burst at Click Freq that ' +
                  'adds a sharp initial transient on top of the resonator noise.'],
@@ -1397,6 +1411,9 @@ export const MACHINE_MANUAL = {
                  'second, lower-frequency resonance layer that adds body weight.'],
       ['Body', 'Level of the body bandpass layer relative to the colour ' +
                  'bandpass. Balances the two spectral regions.'],
+      ['Note Track', 'When on, the step note shifts both bandpass centres ' +
+                 'up/down by semitones (C4 = the default Body/Color Freq), turning ' +
+                 'the noise tonal. Off (default) = fixed timbre on every note.'],
       ['Crush', 'Internal bitcrush on the noise signal (0–1). Adds digital ' +
                  'grit and quantisation noise on top of the analogue-style ' +
                  'bandpass shaping.'],
@@ -1413,7 +1430,8 @@ export const MACHINE_MANUAL = {
            'a drive waveshaper model the character of a vintage drum machine kick ' +
            'that is slightly different every hit.',
     items: [
-      ['Tune', 'Body oscillator frequency (20–200 Hz).'],
+      ['Tune', 'Body oscillator frequency (20–200 Hz). The step note tracks this ' +
+                 '1:1 in semitones (C4 = the Tune value) so you can play it melodically.'],
       ['Decay', 'Amplitude decay time (0.05–2s).'],
       ['Sweep', 'Pitch sweep multiplier at hit start (1×–8×).'],
       ['Sub', 'Level of the sub oscillator (one octave below, imperfect sine).'],
@@ -1434,7 +1452,8 @@ export const MACHINE_MANUAL = {
            'pink noise, modelling the vintage snare character of analogue ' +
            'drum machines.',
     items: [
-      ['Tune', 'Body oscillator frequency (100–400 Hz).'],
+      ['Tune', 'Body oscillator frequency (100–400 Hz). The step note tracks the ' +
+                 'body 1:1 in semitones (C4 = the Tune value); the noise layer stays fixed.'],
       ['Decay', 'Amplitude decay time (0.05–1s).'],
       ['Tone', 'Level of the body oscillator (0–1).'],
       ['Snap', 'Level of the transient snap layer (0–1).'],
@@ -1457,6 +1476,9 @@ export const MACHINE_MANUAL = {
       ['Tone', 'High-pass filter Q. Higher values add metallic resonance.'],
       ['Drift', 'Thermal pitch drift of the oscillator bank. Adds organic ' +
                  'variation between hits.'],
+      ['Note Track', 'When on, the step note shifts the whole oscillator cluster ' +
+                 'up/down by semitones (C4 = the default pitch). Off (default) = ' +
+                 'fixed pitch on every note.'],
       ['Level', 'Master output level for this machine (0–100%).'],
     ],
   },
@@ -1467,7 +1489,8 @@ export const MACHINE_MANUAL = {
            'tolerance-skewed inharmonic ratios, with a high-pass and bandpass ' +
            'filter pair and thermal drift.',
     items: [
-      ['Tune', 'Base frequency of the oscillator bank (100–800 Hz).'],
+      ['Tune', 'Base frequency of the oscillator bank (100–800 Hz). The step note ' +
+                 'tracks this 1:1 in semitones (C4 = the Tune value) so you can play it melodically.'],
       ['Tone', 'High-pass cutoff (200–8000 Hz).'],
       ['Body', 'Bandpass centre frequency (500–16000 Hz).'],
       ['Resonance', 'Bandpass Q. Higher = more pronounced metallic ring.'],
@@ -1485,7 +1508,8 @@ export const MACHINE_MANUAL = {
     blurb: 'The Patina analogue tom. A tunable imperfect-sine oscillator with ' +
            'a pitch sweep, drive, and thermal drift.',
     items: [
-      ['Tune', 'Body frequency (60–400 Hz). Sets the pitch of the tom.'],
+      ['Tune', 'Body frequency (60–400 Hz). Sets the pitch of the tom. The step ' +
+                 'note tracks this 1:1 in semitones (C4 = the Tune value).'],
       ['Decay', 'Amplitude decay (0.1–1.5s).'],
       ['Sweep', 'Pitch sweep multiplier at hit start (1×–4×).'],
       ['Drive', 'Waveshaper saturation (1–4). Adds harmonics and makes the ' +
@@ -1503,7 +1527,8 @@ export const MACHINE_MANUAL = {
            'fast pitch drop, plus a short noise click — DX/PCM-style electronic ' +
            'tom, no analogue drift.',
     items: [
-      ['Tune', 'Body frequency (60–400 Hz). Sets the pitch of the tom.'],
+      ['Tune', 'Body frequency (60–400 Hz). Sets the pitch of the tom. The step ' +
+                 'note tracks this 1:1 in semitones (C4 = the Tune value).'],
       ['Decay', 'Amplitude decay (0.1–1.5s).'],
       ['Sweep', 'Pitch sweep multiplier at hit start (1×–4×).'],
       ['Swp Time', 'How much of the decay the pitch drop spans (5–60%). ' +
@@ -1522,7 +1547,8 @@ export const MACHINE_MANUAL = {
            'sidebands turn inharmonic for a bell/metal edge that blooms on the ' +
            'attack then settles.',
     items: [
-      ['Tune', 'Carrier frequency (60–400 Hz). Sets the pitch of the tom.'],
+      ['Tune', 'Carrier frequency (60–400 Hz). Sets the pitch of the tom. The step ' +
+                 'note tracks this 1:1 in semitones (C4 = the Tune value).'],
       ['Decay', 'Amplitude decay (0.1–1.5s).'],
       ['Sweep', 'Carrier pitch sweep multiplier at hit start (1×–4×).'],
       ['Ratio', 'Modulator:carrier frequency ratio (0.5–12). Higher = more ' +
@@ -1544,6 +1570,9 @@ export const MACHINE_MANUAL = {
       ['Tone', 'Bandpass centre frequency (800–6000 Hz). Colour of the clap body.'],
       ['Snap', 'Bandpass Q. Low = wide, noisy, homogenous clap; higher = a more ' +
                  'pronounced resonant ring (less natural).'],
+      ['Note Track', 'When on, the step note shifts the bandpass centre (the clap\'s ' +
+                 'only pitch) up/down by semitones (C4 = the default Tone). Off ' +
+                 '(default) = fixed tone on every note.'],
       ['Decay', 'Tail decay time after the slaps (0.05–1s).'],
       ['Spread', 'Time between the four attack slaps in ms (0–30ms). Tighter = one ' +
                  'crisp clap; wider = a more audible flam.'],

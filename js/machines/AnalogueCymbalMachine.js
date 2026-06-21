@@ -142,6 +142,19 @@ export class AnalogueCymbalMachine extends Machine {
       try { this._ampGain.disconnect();          } catch (_) {}
     }
 
+    // Note-track the inharmonic cluster: shift all 6 oscs by the note ratio
+    // (C4 = the resting `tune`). Mirrors `tune.apply` (RATIO × per-osc tolerance);
+    // writes .frequency, so the .detune drift wander coexists. Holds until the
+    // next note or a `tune`/LFO write.
+    const ratio = Machine.noteRatio(midiNote);
+    if (ratio !== 1) {
+      const tune = this._params['tune'];
+      this._oscs.forEach((osc, i) => {
+        osc.frequency.cancelScheduledValues(t);   // kill syncParamsAt's setTarget tail
+        osc.frequency.setValueAtTime(tune * RATIOS[i] * this._tolRatio[i] * ratio, t);
+      });
+    }
+
     this._ampGain = this.context.createGain();
     this._ampGain.gain.setValueAtTime(velScale, t);
     this._ampGain.gain.exponentialRampToValueAtTime(0.001, t + decay);

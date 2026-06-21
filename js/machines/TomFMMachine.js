@@ -110,8 +110,11 @@ export class TomFMMachine extends Machine {
     }
 
     // ── Carrier pitch sweep ──
-    const startFreq = Math.max(tune * sweep, 30);
-    const endFreq   = Math.max(tune, 30);
+    // Note-tracked base freq: C4 (60) plays at `tune`, ±1:1 semitones either side.
+    // FM depth (_fmPeakHz) also scales by `f` so the timbre tracks across the range.
+    const f         = tune * Machine.noteRatio(midiNote);
+    const startFreq = Math.max(f * sweep, 30);
+    const endFreq   = Math.max(f, 30);
     this._carOsc.frequency.cancelScheduledValues(t);
     this._carOsc.frequency.setValueAtTime(startFreq, t);
     this._carOsc.frequency.exponentialRampToValueAtTime(endFreq, t + decay * 0.3);
@@ -124,7 +127,7 @@ export class TomFMMachine extends Machine {
     // ── FM depth envelope: blooms on attack, decays faster than the amp so the
     // metallic content settles to a purer tone (the FM-percussion gesture). ──
     this._modGain = this.context.createGain();
-    const peak = this._fmPeakHz(fm, tune);
+    const peak = this._fmPeakHz(fm, f);
     if (peak > 0) {
       // Exponential decay of the FM depth. Both endpoints must be > 0 (an
       // exponential ramp from/to 0 is invalid and misbehaves in Chrome).

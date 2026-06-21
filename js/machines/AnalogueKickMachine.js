@@ -160,8 +160,10 @@ export class AnalogueKickMachine extends Machine {
     }
 
     // ── Pitch sweep on both oscillators ──
-    const startFreq = Math.max(tune * sweep, 20);
-    const endFreq   = Math.max(tune, 20);
+    // Note-tracked base freq: C4 (60) plays at `tune`, ±1:1 semitones either side.
+    const f         = tune * Machine.noteRatio(midiNote);
+    const startFreq = Math.max(f * sweep, 20);
+    const endFreq   = Math.max(f, 20);
     this._tuneOsc.frequency.setValueAtTime(startFreq, t);
     this._tuneOsc.frequency.exponentialRampToValueAtTime(endFreq, t + decay * 0.25);
     this._subOsc.frequency.setValueAtTime(startFreq / 2, t);

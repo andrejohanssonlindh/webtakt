@@ -43,6 +43,24 @@ of white noise at module scope (not per-instance). The buffer is generated once 
 and reused across all `noteOn` calls via `AudioBufferSourceNode` (which is one-shot by spec,
 so a new source node is created each hit pointing at the shared buffer).
 
+**Note tracking (playable percussion):** every step already carries a MIDI note (default 60 =
+C4) which the sequencer passes as `noteOn(midiNote, …)`. Drum machines respect it via
+`Machine.noteRatio(midiNote)` = `2^((note−60)/12)` — **C4 is the neutral reference**, so an
+unchanged pattern (all notes = 60) sounds identical, and notes either side shift pitch 1:1 in
+semitones. Two tiers:
+
+- **Pitched voices track always** — the kicks, snares, toms, and cymbals multiply their `tune`
+  (and the cymbal's inharmonic osc cluster) by `noteRatio` inside `noteOn`. The body/oscillator
+  pitch follows the note; noise layers stay fixed. TransientMachine already followed the note
+  via its `pitch` param (`pitch > 0` overrides the note).
+- **Non-pitched voices are opt-in** — HiHat, Clapp, Noise, and Wood have no single musical pitch,
+  so each adds a `note.track` boolean param (default **false**). When on, `noteOn` scales the
+  relevant frequencies by `noteRatio` (hat/cymbal osc cluster; clap filter cutoff; noise body +
+  colour bandpass; wood resonators + click). When off, pitch is fixed as before.
+
+Per-note frequency writes use `setValueAtTime` at note time and coexist with the resting
+`tune`/LFO value and with `DriftClock` (which writes `.detune`, not `.frequency`).
+
 ---
 
 ## Drum Machines

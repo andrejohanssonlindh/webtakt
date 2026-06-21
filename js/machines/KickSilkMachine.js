@@ -84,9 +84,11 @@ export class KickSilkMachine extends Machine {
     }
 
     // ── Pitch sweep on the persistent oscillator ──
-    const startFreq = Math.max(tune * sweep, 20);
+    // Note-tracked base freq: C4 (60) plays at `tune`, ±1:1 semitones either side.
+    const f         = tune * Machine.noteRatio(midiNote);
+    const startFreq = Math.max(f * sweep, 20);
     this._tuneOsc.frequency.setValueAtTime(startFreq, t);
-    this._tuneOsc.frequency.exponentialRampToValueAtTime(Math.max(tune, 20), t + decay * 0.25);
+    this._tuneOsc.frequency.exponentialRampToValueAtTime(Math.max(f, 20), t + decay * 0.25);
 
     // ── Per-note body gain (amp envelope) ──
     this._bodyGain = this.context.createGain();
