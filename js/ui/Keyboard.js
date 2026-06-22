@@ -1019,11 +1019,15 @@ export class Keyboard {
    * @param {number} audioTime — AudioContext.currentTime + lookahead
    */
   _fireFollowers(sourceTrack, note, velocity, audioTime) {
-    const allTracks = this.state.project.tracks;
+    // Include the global FX track so a live-played source (drum-mode / MIDI kick)
+    // can duck it too, mirroring the sequencer follower loop.
+    const allTracks = this.state.project.fxTrack
+      ? [...this.state.project.tracks, this.state.project.fxTrack]
+      : this.state.project.tracks;
     allTracks.forEach(follower => {
       if (follower.followSource !== sourceTrack.index) return;
-      const release = follower.envelope?.getParam('env.release') ?? 0.3;
       const offTime = audioTime + 0.5;  // hold gate 0.5s for live notes
+      follower.triggerDuck?.(audioTime);
       follower.fireFollowNote(note, velocity, audioTime, offTime);
     });
   }

@@ -105,6 +105,7 @@ import { CombFX }        from '../signal/CombFX.js';
 import { ShimmerFX }     from '../signal/ShimmerFX.js';
 import { Crush2FX }      from '../signal/Crush2FX.js';
 import { StutterFX }     from '../signal/StutterFX.js';
+import { DuckFX }        from '../signal/DuckFX.js';
 import { FXInstance }    from '../signal/FXInstance.js';
 import { Arpeggiator }   from '../signal/Arpeggiator.js';
 import { LiveArp }       from '../signal/LiveArp.js';
@@ -194,6 +195,7 @@ const FX_TYPES = {
   shimmer:  ShimmerFX,
   crush2:   Crush2FX,
   stutter:  StutterFX,
+  duck:     DuckFX,
 };
 
 /** Human labels for the Add-FX menu (order = menu order). */
@@ -218,6 +220,7 @@ export const FX_TYPE_LABELS = {
   compressor: 'Compressor',
   limiter:    'Limiter',
   normalizer: 'Normalizer',
+  duck:       'Duck',
 };
 
 /**
@@ -281,6 +284,7 @@ const TRACK_JS_LFO_PARAMS = new Set([
   'tape.wow',      // Tape wow/flutter depth
   'tape.spread',   // Tape ping-pong stereo width
   'pan.shape',     // AutoPan pan↔tremolo blend
+  'duck.depth',    // Sidechain duck depth
 
   // Machine params (slot-0 only — see caveat above)
   'op1.ratio',     // FM operator ratios — live retune of carriers/modulators
@@ -318,10 +322,28 @@ export class Track {
     this._latchedVoices = new Map();
     this.followSource = null;
 
+    // Global FX-track flag. Set true by Project for the dedicated FX track. An FX
+    // track sums the per-track SENDS (other tracks routed into it) ALONGSIDE its
+    // own panner output before its FX chain — see _rewireFXChain + fxSendInput.
+    this.isFXTrack = false;
+
     // The node this track's FX chain feeds into. Defaults to the shared master
     // FX bus, but a Project may pass its own per-deck bus (DeckManager) so the
     // whole deck can be crossfaded/silenced as a unit. See design/audio-signal-chain.md.
     this._outputBus = outputBus ?? audio.fxBus;
+
+    // Where this track's FX-chain TAIL actually feeds. Defaults to the output
+    // bus; when SEND is on (setFXSend) it is swapped to the FX track's input so
+    // the track is processed by the FX track instead of going straight to the
+    // bus (insert semantics — never double audio). See design/audio-signal-chain.md.
+    this._fxChainDest = this._outputBus;
+    this.fxSend = false;        // → FX track routing on/off (serialised)
+
+    // FX-track-only input: other tracks' SENDS sum here, upstream of the FX
+    // chain, so they get processed exactly like the FX track's own signal. Built
+    // lazily / always present but only wired into the chain when isFXTrack.
+    this.fxSendInput = audio.context.createGain();
+    this.fxSendInput.gain.value = 1.0;
 
     // Output gain — mute implemented here
     this.outputGain = audio.context.createGain();
@@ -698,6 +720,35 @@ export class Track {
   /** @param {number|null} trackIndex */
   setFollow(trackIndex) {
     this.followSource = trackIndex;
+  }
+
+  /**
+   * Route this track's output INTO the global FX track (SEND on) or back to the
+   * normal output bus (off). Insert semantics: when on, the track's FX-chain
+   * tail feeds the FX track's input instead of the bus, so it is processed by
+   * the FX track before output (never both — no double audio). When off, the
+   * tail goes back to the output bus. Reuses _rewireFXChain via the swappable
+   * _fxChainDest. No-op on the FX track itself (no send-to-self).
+   * @param {boolean} on
+   * @param {Track|null} fxTrack — the destination FX track (project.fxTrack)
+   */
+  setFXSend(on, fxTrack) {
+    if (this.isFXTrack) return;
+    this.fxSend = !!on && !!fxTrack;
+    this._fxChainDest = this.fxSend ? fxTrack.fxSendInput : this._outputBus;
+    this._rewireFXChain();
+  }
+
+  /**
+   * Pulse every trigger-driven FX block on this track (currently DuckFX) at the
+   * given time. Called by the Sequencer follower loop when this track follows
+   * the firing track — so e.g. the FX track ducks on every kick step.
+   * @param {number} time — AudioContext time
+   */
+  triggerDuck(time) {
+    for (const id of this.getFXBlockIds()) {
+      try { this._fxBlocks[id]?.trigger?.(time); } catch (_) {}
+    }
   }
 
   /**
@@ -1083,13 +1134,21 @@ export class Track {
    * wheel routing all target AudioParams by path and are unaffected by order.
    */
   _rewireFXChain() {
-    // Tear down existing connections from the panner and all blocks.
+    // Tear down existing connections from the panner, the send input, and all blocks.
     try { this.pannerNode.disconnect(); } catch (_) {}
+    try { this.fxSendInput.disconnect(); } catch (_) {}
     for (const id of this.getFXBlockIds()) {
       try { this._fxBlocks[id].disconnect(); } catch (_) {}
     }
 
-    // Reconnect in order: panner → first block, block → next block, last → bus.
+    // Determine the chain HEAD: the first FX block (or, with no blocks, the
+    // chain dest). The panner feeds it; an FX track ALSO feeds the per-track
+    // sends in here so they're processed by the chain. Both fan into the same
+    // head node, summing naturally.
+    const headInput = (id => id && this._fxBlocks[id] ? this._fxBlocks[id].inputNode : null)
+      (this._fxOrder.find(id => this._fxBlocks[id]));
+
+    // Reconnect in order: head → first block, block → next block, last → dest.
     let prev = this.pannerNode;
     for (const id of this._fxOrder) {
       const fx = this._fxBlocks[id];
@@ -1097,7 +1156,13 @@ export class Track {
       prev.connect(fx.inputNode);
       prev = fx;            // FX expose .connect(dest) via their outputNode
     }
-    prev.connect(this._outputBus);
+    prev.connect(this._fxChainDest);
+
+    // FX track: sum the incoming sends at the chain head (before the first
+    // block, or straight to the dest if the chain is empty).
+    if (this.isFXTrack) {
+      this.fxSendInput.connect(headInput ?? this._fxChainDest);
+    }
   }
 
   /** Called by Project when BPM changes — propagates to synced FX and arpeggiator. */
@@ -1160,6 +1225,7 @@ export class Track {
       try { (blk?.destroy ?? blk?.disconnect)?.call(blk); } catch (_) {}
     }
     try { this.pannerNode?.disconnect?.(); } catch (_) {}
+    try { this.fxSendInput?.disconnect?.(); } catch (_) {}
     try { this.outputGain?.disconnect?.(); } catch (_) {}
     try { this.tremGain?.disconnect?.(); } catch (_) {}
   }
@@ -1543,6 +1609,10 @@ export class Track {
     if (this.held)  this.setHold(false);
     this.followSource = null;
     this.followDelay  = 0;
+    // Drop the SEND back to the normal bus (no fxTrack ref needed for "off").
+    this.fxSend       = false;
+    this._fxChainDest = this._outputBus;
+    this._rewireFXChain();
     this.modWheelTargets = [null, null];
 
     // Reset MIDI In
@@ -1642,6 +1712,7 @@ export class Track {
       muted:        this.muted,
       followSource: this.followSource,
       followDelay:  this.followDelay,
+      fxSend:       this.fxSend,
       pan:          this.pannerNode.pan.value,
       trigTone:      this.trigTone,
       trigVelocity:  this.trigVelocity,
@@ -1698,6 +1769,9 @@ export class Track {
     this.muted        = obj.muted        ?? false;
     this.followSource = obj.followSource ?? null;
     this.followDelay  = obj.followDelay  ?? 0;
+    // SEND state: store the flag now; Project re-applies the actual routing
+    // (needs the fxTrack ref) after all tracks load, via applyFXSends().
+    this.fxSend       = obj.fxSend       ?? false;
     this.pannerNode.pan.value = obj.pan ?? 0;
     this.trigTone      = obj.trigTone      ?? 0;
     this.trigVelocity  = obj.trigVelocity  ?? 127;

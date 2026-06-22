@@ -45,6 +45,10 @@ export class AppState {
     this.decks              = decks;
     this._project           = project;
     this.selectedTrackIndex = 0;
+    // When true, the global FX track is selected instead of tracks[selectedTrackIndex].
+    // Kept as a separate flag so all existing code that treats selectedTrackIndex as a
+    // raw tracks[] index stays correct — that path only runs for normal tracks.
+    this.fxTrackSelected    = false;
     this.activeTab          = 'synth';
     this.activeLFOIndex     = 0;
     this.fxSelectedBlockId  = null;   // FX pipeline pane: block being edited inline
@@ -94,6 +98,7 @@ export class AppState {
   }
 
   get selectedTrack() {
+    if (this.fxTrackSelected && this.project.fxTrack) return this.project.fxTrack;
     const tracks = this.project.tracks;
     if (!tracks.length) return null;
     const i = Math.max(0, Math.min(this.selectedTrackIndex, tracks.length - 1));
@@ -108,9 +113,23 @@ export class AppState {
   /** @param {number} index */
   selectTrack(index) {
     const prevTrack = this.selectedTrack;
+    this.fxTrackSelected    = false;
     this.selectedTrackIndex = index;
     this.selectedStepIndex  = -1;  // clear step selection on track change
     this.emit('trackSelected', { index, track: this.selectedTrack, prevTrack });
+    this.emit('stepSelected',  { index: -1, step: null });
+  }
+
+  /**
+   * Select the global FX track (pinned first in the track row). Leaves
+   * selectedTrackIndex untouched so returning to a normal track restores it.
+   */
+  selectFXTrack() {
+    if (!this.project.fxTrack) return;
+    const prevTrack = this.selectedTrack;
+    this.fxTrackSelected   = true;
+    this.selectedStepIndex = -1;
+    this.emit('trackSelected', { index: -1, track: this.selectedTrack, prevTrack, fxTrack: true });
     this.emit('stepSelected',  { index: -1, step: null });
   }
 

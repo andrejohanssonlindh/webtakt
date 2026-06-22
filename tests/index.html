@@ -85,6 +85,8 @@
      <code>&amp;verbose</code> to log each test start/finish to the console (find a tab-crashing test).</p>
   <div class="toolbar">
     <button id="run">Run All</button>
+    <button id="runBatch1" title="First ~300 tests (run separately to stay under the audio-context limit)">Batch 1</button>
+    <button id="runBatch2" title="Remaining tests">Batch 2</button>
     <button id="runSel">Run Selected</button>
     <input id="filter" type="text" placeholder="filter test names… (e.g. reverb)">
     <button id="pickToggle">Suites ▾</button>
@@ -153,8 +155,14 @@
     import './tests/filter_engine.js';
     import './tests/analogue_flow.js';
     import './tests/moogish_tail.js';
+    // fx_track builds full Projects (heavier OfflineAudioContexts than the single-
+    // track machine tests). Run it LAST so its contexts never add pressure to the
+    // analogue-heavy Loudness suite — the harness sits near the context cap.
+    import './tests/fx_track.js';
 
     const btn       = document.getElementById('run');
+    const batch1Btn = document.getElementById('runBatch1');
+    const batch2Btn = document.getElementById('runBatch2');
     const runSel    = document.getElementById('runSel');
     const filterBox = document.getElementById('filter');
     const pickToggle= document.getElementById('pickToggle');
@@ -165,10 +173,40 @@
     const pre       = document.getElementById('results');
     const verboseBox= document.getElementById('verbose');
 
-    const allButtons = [btn, runSel, pickToggle];
+    const allButtons = [btn, batch1Btn, batch2Btn, runSel, pickToggle];
 
     // ── Suite picker ─────────────────────────────────────────────────────────
     const suites = listSuites();   // [{ name, tests:[…] }]
+
+    // ── Batches ──────────────────────────────────────────────────────────────
+    // The audio backend caps concurrent OfflineAudioContexts; the full run sits
+    // near it and crashes (error code 5) when too many accumulate — the
+    // ANALOGUE-heavy suites (drift timers + heavy renders) are the worst. Split
+    // the suites (kept whole) into two batches the user runs SEPARATELY:
+    //   • batch 2 = the analogue-heavy tail (forced here by name), which is what
+    //     pushes a single run over the cap.
+    //   • batch 1 = everything else, capped at ~BATCH1_TARGET tests so it stays
+    //     comfortably under the limit on its own.
+    // Computed at runtime from the REAL registered test counts (data-driven
+    // suites included), so it auto-rebalances as tests are added.
+    const BATCH1_TARGET = 300;
+    const FORCE_BATCH2 = new Set([
+      'Loudness normalisation', 'Filter engine', 'Analogue flow',
+      'Persistent-osc gate drone', 'Global FX track (send + duck)',
+    ]);
+    function computeBatches() {
+      const b1 = new Set(), b2 = new Set();
+      let n = 0;
+      for (const s of suites) {
+        const heavy = [...FORCE_BATCH2].some(name => s.name.includes(name));
+        if (heavy || n >= BATCH1_TARGET) { b2.add(s.name); }
+        else                             { b1.add(s.name); n += s.tests.length; }
+      }
+      return { b1, b2, b1Count: n };
+    }
+    const batches = computeBatches();
+    batch1Btn.title = `~${batches.b1Count} tests, ${batches.b1.size} suites (the lighter half) — run this first`;
+    batch2Btn.title = `${batches.b2.size} suites incl. the analogue-heavy/Loudness set — run separately to stay under the audio-context limit`;
 
     function selectedSuites() {
       return new Set(
@@ -244,6 +282,8 @@
     }
 
     btn.addEventListener('click', () => run());
+    batch1Btn.addEventListener('click', () => run({ suites: batches.b1 }));
+    batch2Btn.addEventListener('click', () => run({ suites: batches.b2 }));
     runSel.addEventListener('click', () => {
       const sel = selectedSuites();
       const filter = { test: filterBox.value.trim() || undefined };

@@ -431,6 +431,11 @@ export const MANUAL_CONTENT = {
                  'amount / depth, depending on the effect), and an ON/OFF toggle. ' +
                  'Assign or change binds in the FX pipeline pane; the mixer just ' +
                  'reflects them. The ON/OFF here is the same bypass as in the FX pane.'],
+      ['→ FX', 'Sends this track into the global FX track (the § / FX track, pinned ' +
+                 'first). When ON, the track runs through its OWN FX first and is then ' +
+                 'routed through the FX track before output — so any FX (or ducking) on ' +
+                 'the FX track also shapes this track. Toggle per track; the FX track ' +
+                 'has no → FX of its own.'],
       ['DJ FILT', 'A per-track DJ-style filter. Bipolar: centre is flat. Turn ' +
                  'left to close a low-pass (cuts highs); turn right to open a ' +
                  'high-pass (cuts lows). Useful for build-ups and breakdowns.'],
@@ -850,6 +855,25 @@ export const MANUAL_CONTENT = {
       ['Slice', 'Length of the captured/looped slice as a tempo division (e.g. 1/16).'],
       ['Latch', 'ON immediately grabs and loops the current slice; OFF releases. The ' +
                 'manual, play-it-live grab.'],
+    ],
+  },
+  duck: {
+    title: 'DUCK (SIDECHAIN)',
+    blurb: 'An added FX block (+ ADD FX), made for the global FX track (§). It ' +
+           'pumps the volume DOWN on a trigger and lets it swell back — the classic ' +
+           'kick-ducking / sidechain pump. It has no rhythm of its own: it fires when ' +
+           'the track it sits on FOLLOWS another track. Put it on the FX track, set ' +
+           'that track to follow your kick (TRIG tab → follow), and everything sent ' +
+           'into the FX track will breathe with the kick.',
+    items: [
+      ['Depth', 'How far the level dips on each trigger (0–100%). 100% = momentary ' +
+                'silence; ~60–80% is the usual pump. P-lockable + LFO-able.'],
+      ['Attack', 'How fast it ducks DOWN. A sync knob: click the centre to switch ' +
+                 'MS↔BPM. Short = a snappy click; longer = a softer dip.'],
+      ['Hold', 'How long it stays down at the bottom before recovering. MS↔BPM sync knob.'],
+      ['Release', 'How long it takes to swell back to full — the length of the pump ' +
+                  'tail. MS↔BPM sync knob; lock it to a beat division (e.g. 1/8) for a ' +
+                  'tempo-synced pump.'],
     ],
   },
 };

@@ -551,6 +551,19 @@ body {
   opacity: 0.45;
 }
 
+/* Global FX track button — pinned first, teal accent (matches the FX pipeline
+   button) so it reads as the dedicated processor track, not a normal voice. */
+.track-btn-fx {
+  border-color: #3c5a5a;
+}
+.track-btn-fx .track-num {
+  color: #7ec8c8;
+}
+.track-btn-fx.selected {
+  border-color: #7ec8c8;
+  color: #7ec8c8;
+}
+
 /* Drum mode: track buttons become finger-drum pads (tap = play, see TrackRow).
    Blue cue matches the DRUM toggle; touch-action:none stops the tap from being
    eaten by scroll/zoom so the pad fires reliably on phones. */
@@ -645,6 +658,31 @@ body {
   position: absolute;
   bottom: 3px;
   right: 4px;
+}
+
+/* Stable "sent to FX track" indicator (top-left, teal § — distinct from the
+   transient trig glow). Shown on every track whose SEND is on. */
+.fx-send-dot {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  font-size: 0.818rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #7ec8c8;
+  pointer-events: none;
+}
+
+/* The FX track button's list of incoming sends (e.g. "⇠ 4 5 6"). */
+.fx-sent-list {
+  position: absolute;
+  bottom: 3px;
+  left: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #7ec8c8;
+  letter-spacing: 0.04em;
+  pointer-events: none;
 }
 
 /* ─── SYNTH PANEL ────────────────────────────────────────── */
@@ -4366,6 +4404,56 @@ body {
   color: #7ec8c8;
 }
 
+/* → FX send toggle (routes the track through the global FX track). Teal-on
+   matches the FX track button + FX pipeline accent. */
+.mixer-send-toggle {
+  width: 100%;
+  margin: 3px 0;
+  padding: 2px 0;
+  font-family: var(--font-ui);
+  font-size: 0.636rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.mixer-send-toggle.on {
+  background: #0e2e2e;
+  border-color: #7ec8c8;
+  color: #7ec8c8;
+}
+
+/* AMP-tab → FX TRACK send button (more discoverable than the mixer toggle). */
+.amp-send-wrap {
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: 8px;
+}
+.amp-send-btn {
+  padding: 6px 12px;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.amp-send-btn.on {
+  background: #0e2e2e;
+  border-color: #7ec8c8;
+  color: #7ec8c8;
+}
+
 /* ── LIGHT mode (≤1024px: tablet/iPad AND phone) ─────────────────────────────
    Pick-list chips to curate which tracks show, then LEVEL + DJ-only strips in a
    grid. iPad uses the same UX as phone (per design); the only phone-specific
@@ -4778,14 +4866,20 @@ body {
 .trig-follow-row {
   display: flex;
   align-items: center;
+  justify-content: flex-start;   /* pack left — no large gap before the select */
   gap: 8px;
   width: 100%;
   margin-top: 4px;
 }
 
 .trig-follow-row .param-label {
-  min-width: 90px;
+  flex: 0 0 auto;                /* natural width, don't reserve a wide column */
   font-size: 0.818rem;
+}
+
+.trig-follow-row .param-select {
+  flex: 0 1 auto;               /* sit right after the label, don't stretch wide */
+  min-width: 120px;
 }
 
 /* ── ARPEGGIATOR TAB ─────────────────────────────────────── */

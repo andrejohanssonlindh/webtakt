@@ -40,6 +40,7 @@ export class TrackRow {
     state.on('trackSelected',   () => this.render());
     state.on('holdModeChanged', () => this.render());
     state.on('drumModeChanged', () => this.render());
+    state.on('fxSendChanged',   () => this.render());   // refresh send dots + FX-button list
     this._startGlowLoop();
   }
 
@@ -83,6 +84,29 @@ export class TrackRow {
 
   _build() {
     this.container.innerHTML = '';
+
+    // Global FX track — pinned FIRST, its own button (kept out of _buttons so the
+    // glow loop's tracks[i] indexing stays aligned with the normal tracks).
+    this._fxButton = null;
+    if (this.state.project.fxTrack) {
+      const fxBtn = document.createElement('button');
+      fxBtn.className = 'track-btn btn track-btn-fx';
+      fxBtn.addEventListener('click', (e) => {
+        if (this.state.drumMode) return;
+        if (e.target.classList.contains('mute-dot')) return;
+        this.state.selectFXTrack();
+      });
+      fxBtn.addEventListener('pointerdown', (e) => {
+        if (e.target.classList.contains('mute-dot')) {
+          const fx = this.state.project.fxTrack;
+          fx.muted ? fx.unmute() : fx.mute();
+          this.render();
+        }
+      });
+      this.container.appendChild(fxBtn);
+      this._fxButton = fxBtn;
+    }
+
     this._buttons = this.state.project.tracks.map((track, i) => {
       const btn = document.createElement('button');
       btn.className = 'track-btn btn';
@@ -142,9 +166,35 @@ export class TrackRow {
     // so flag the container for the pad styling / hover cue.
     this.container.classList.toggle('drum-mode', this.state.drumMode);
 
+    // FX track button (pinned first). Shows § + its FX chain length + follow source.
+    const fxTrack = this.state.project.fxTrack;
+    if (this._fxButton && fxTrack) {
+      const fxSelected = this.state.fxTrackSelected;
+      this._fxButton.classList.toggle('selected', fxSelected);
+      this._fxButton.classList.toggle('muted', fxTrack.muted);
+      // Count blocks IN the chain (getFXOrder), not the registry — the four base
+      // blocks are always registered even when detached, so getFXBlockIds overcounts.
+      const blockCount = fxTrack.getFXOrder?.().length ?? 0;
+      // List the SENT tracks feeding the FX track (e.g. "4 5 6") so the routing is
+      // visible at a glance from the FX button.
+      const sentNums = this.state.project.tracks
+        .map((t, ti) => (t.fxSend ? ti + 1 : null))
+        .filter(n => n !== null);
+      const sentLine = sentNums.length
+        ? `<span class="fx-sent-list">⇠ ${sentNums.join(' ')}</span>`
+        : '';
+      this._fxButton.innerHTML = `
+        <span class="track-num">§</span>
+        <span class="track-type">FX${blockCount ? ` · ${blockCount}` : ''}</span>
+        ${sentLine}
+        <span class="mute-dot ${fxTrack.muted ? 'active' : ''}">M</span>
+        ${fxTrack.followSource !== null ? `<span class="follow-ind">→${fxTrack.followSource + 1}</span>` : ''}
+      `;
+    }
+
     this.state.project.tracks.forEach((track, i) => {
       const btn = this._buttons[i];
-      const selected = i === this.state.selectedTrackIndex;
+      const selected = i === this.state.selectedTrackIndex && !this.state.fxTrackSelected;
 
       btn.classList.toggle('selected', selected);
       btn.classList.toggle('muted', track.muted);
@@ -158,6 +208,7 @@ export class TrackRow {
         ${soundLine}
         <span class="mute-dot ${track.muted ? 'active' : ''}">M</span>
         <span class="hold-dot ${track.held ? 'active' : ''}">H</span>
+        ${track.fxSend ? `<span class="fx-send-dot active" title="sent to FX track">§</span>` : ''}
         ${track.followSource !== null ? `<span class="follow-ind">→${track.followSource + 1}</span>` : ''}
       `;
     });

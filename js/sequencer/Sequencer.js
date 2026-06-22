@@ -602,6 +602,12 @@ getVisibleSteps() {
     if (this._projectTracks) {
       this._projectTracks.forEach(follower => {
         if (follower.followSource !== this.track.index) return;
+        // Pulse any trigger-driven FX (DuckFX) once per step at the step's start
+        // — this is what makes the FX track duck on the kick (sidechain pump).
+        const duckNudge = step.voices[0]?.nudge ?? 0;
+        const duckTime  = scheduledTime +
+          (duckNudge * (1 - (this.track.nudgeQuantize ?? 0)) * this.clock._secondsPerTick);
+        follower.triggerDuck?.(duckTime);
         step.voices.forEach(sv => {
           const effectiveNudge = sv.nudge * (1 - (this.track.nudgeQuantize ?? 0));
           const time      = scheduledTime + (effectiveNudge * this.clock._secondsPerTick);

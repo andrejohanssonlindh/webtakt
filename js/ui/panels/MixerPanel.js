@@ -90,6 +90,11 @@ export class MixerPanel {
 
     strip.appendChild(this._levelKnob(track, i).el);
 
+    // → FX send toggle: routes this track through the global FX track before the
+    // bus (insert). Hidden if there's no FX track (older/edge projects).
+    const sendBtn = this._sendToggle(track);
+    if (sendBtn) strip.appendChild(sendBtn);
+
     // Bound-FX cells (desktop only), laid 2-per-row so all 4 binds fit in two
     // rows without the strip growing tall enough to scroll. One cell per
     // assigned bind 1–4.
@@ -118,6 +123,31 @@ export class MixerPanel {
     });
 
     return strip;
+  }
+
+  /**
+   * "→ FX" send toggle for a track: routes its output through the global FX
+   * track (insert) when on. Returns null if the project has no FX track.
+   */
+  _sendToggle(track) {
+    const { state } = this._ctx;
+    const fxTrack = state.project.fxTrack;
+    if (!fxTrack || track === fxTrack) return null;
+
+    const btn = document.createElement('button');
+    btn.className = 'mixer-send-toggle';
+    const sync = () => {
+      btn.textContent = track.fxSend ? '→ FX' : '→ FX';
+      btn.classList.toggle('on', !!track.fxSend);
+    };
+    sync();
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      track.setFXSend(!track.fxSend, fxTrack);
+      sync();
+      state.emit('fxSendChanged', { track });
+    });
+    return btn;
   }
 
   // ── Knob builders (shared across tiers) ────────────────────

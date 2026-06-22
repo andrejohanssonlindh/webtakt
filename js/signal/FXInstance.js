@@ -55,6 +55,8 @@ export class FXInstance {
   setEnabled(on)       { return this.fx.setEnabled?.(on); }
   setBpm(bpm)          { return this.fx.setBpm?.(bpm); }
   flush()              { return this.fx.flush?.(); }
+  // Trigger-driven blocks (DuckFX): pulsed by the follow loop via Track.triggerDuck.
+  trigger(time)        { return this.fx.trigger?.(time); }
 
   // ── Path namespacing ───────────────────────────────────────
 

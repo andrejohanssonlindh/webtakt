@@ -112,6 +112,29 @@ export class AmpPanel {
     activeWidgets.push(velKnob);
     knobByPath.set('env.velSens', velKnob);
 
+    // ── → FX TRACK send ────────────────────────────────────────
+    // Route this track through the global FX track (insert) before output. Shown
+    // on every normal track; the FX track itself has no send-to-self.
+    const fxTrack = state.project.fxTrack;
+    if (fxTrack && track !== fxTrack) {
+      const sendWrap = document.createElement('div');
+      sendWrap.className = 'amp-send-wrap';
+      const sendBtn = document.createElement('button');
+      sendBtn.className = 'amp-send-btn';
+      const syncSend = () => {
+        sendBtn.textContent = track.fxSend ? '→ FX TRACK: ON' : '→ FX TRACK';
+        sendBtn.classList.toggle('on', !!track.fxSend);
+      };
+      syncSend();
+      sendBtn.addEventListener('click', () => {
+        track.setFXSend(!track.fxSend, fxTrack);
+        syncSend();
+        state.emit('fxSendChanged', { track });
+      });
+      sendWrap.appendChild(sendBtn);
+      panBody.appendChild(sendWrap);
+    }
+
     // ── ENVELOPE section (amp ADSR) ────────────────────────────
     const adsrSec = document.createElement('div');
     adsrSec.className = 'param-group amp-adsr-group';

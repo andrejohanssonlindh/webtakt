@@ -414,7 +414,10 @@ export class TrigPanel {
 
       const allTracks = state.project.tracks;
       allTracks.forEach((t, ti) => {
-        if (ti === state.selectedTrackIndex) return;
+        // A track can't follow itself. Compare by identity, not by index — when
+        // the FX track (not in tracks[]) is selected, selectedTrackIndex still
+        // holds a normal-track index, which would wrongly skip that track.
+        if (t === track) return;
         const opt = document.createElement('option');
         opt.value = String(ti);
         opt.textContent = `T${ti + 1} (${t.machine?.type ?? '?'})`;

@@ -112,7 +112,7 @@ A track can mirror notes from another track via `track.followSource` (an integer
 
 | Source | Mechanism |
 |---|---|
-| Sequencer step | After `_fireStep()` completes, `Sequencer` iterates `_projectTracks` and calls `follower.fireFollowNote(note, vel, time, offTime)` for each track whose `followSource === this.track.index`. |
+| Sequencer step | After `_fireStep()` completes, `Sequencer` iterates `_projectTracks` and, for each track whose `followSource === this.track.index`, calls `follower.triggerDuck(time)` (once per step — pulses any trigger-driven FX, e.g. DuckFX on the global FX track, see below) **then** `follower.fireFollowNote(note, vel, time, offTime)` per voice. The follower list (`Project._followerTracks()`) is `[...tracks, fxTrack]`, so the global FX track can follow the kick to duck. |
 | Live keyboard (chromatic / folded) | `Keyboard._noteOn` calls `_fireFollowers(sourceTrack, note, vel, audioTime)` after playing the selected track's note. |
 | Drum-mode finger drumming | Same `_fireFollowers` call after the drum note fires. |
 | MIDI In note-on | `index.html` MIDI init loop: after routing a note to the mapped track, iterates `project.tracks` and fires `fireFollowNote` on followers. |
@@ -126,6 +126,13 @@ startTime = audioTime + delaySec
 stopTime  = offTime + delaySec
 ```
 Uses the follower's own machine, envelope, and LFOs — same voice pool mechanism as a normal note.
+
+### Track.triggerDuck(time)
+
+Pulses every trigger-driven FX block on the follower (currently `DuckFX`) at `time` —
+`getFXBlockIds().forEach(id => block.trigger?.(time))`. This is how the global FX track
+sidechain-ducks on the kick: set the FX track's `followSource` to the kick and put a
+DuckFX on it. See `design/fx.md` → Duck and `design/audio-signal-chain.md` → Global FX Track.
 
 ### Follow properties (Track)
 

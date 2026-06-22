@@ -47,6 +47,12 @@ const TRACK_COUNT_MIN     = 1;
 const TRACK_COUNT_MAX     = 12;
 const STORAGE_KEY         = 'webtakt_project';
 
+// Reserved index for the global FX track. It lives in its own `fxTrack` field
+// (NOT in `tracks[]`), so normal track indices 0..N-1 are untouched — follow
+// sources, default machines, and saved-song layout all stay stable. The
+// negative index keeps it from ever colliding with a real track index.
+const FX_TRACK_INDEX = -1;
+
 export class Project {
   /**
    * @param {import('../core/AudioEngine.js').AudioEngine} audio
@@ -78,6 +84,13 @@ export class Project {
       { length: count },
       (_, i) => this._makeTrack(i)
     );
+
+    // Global FX track — a dedicated processor track other tracks can SEND into,
+    // with its own sequencer (p-lockable FX) and follow source (kick → duck).
+    // Held separately so it never shifts normal track indices. See
+    // design/audio-signal-chain.md → Global FX Track.
+    this.fxTrack = this._makeFXTrack();
+
     this._wireFollowTracks();
   }
 
@@ -94,11 +107,47 @@ export class Project {
     return t;
   }
 
-  /** Give every sequencer a live reference to the project's tracks array. */
+  /**
+   * Build the global FX track: a silent processor track (machine 'midi' outputs
+   * silence) flagged isFXTrack so it sums per-track sends at its FX-chain head.
+   * It feeds the same deck bus as every other track.
+   */
+  _makeFXTrack() {
+    const t = new Track(FX_TRACK_INDEX, this.audio, this.clock, this.busGain);
+    t.sampleStore = this.sampleStore;
+    if (this._midiEngine) t.setMidiEngine(this._midiEngine);
+    t.isFXTrack = true;
+    t.setMachine('midi');     // silent placeholder voice — it's a processor
+    // Start with an EMPTY FX chain (the base four are detached, still registered
+    // for back-compat / re-add): a fresh FX track is a clean processor the user
+    // fills via + ADD FX, not pre-loaded with delay/crush/chorus/reverb.
+    t.setFXOrder([]);
+    t._rewireFXChain();       // re-run so fxSendInput is summed into the chain head
+    return t;
+  }
+
+  /**
+   * Every track that can FOLLOW another (fire-on-follow + duck) needs to see the
+   * full follower set. The kick's _fireStep iterates this list looking for tracks
+   * whose followSource matches — the FX track must be IN it so it can follow the
+   * kick. The normal tracks AND the FX track are valid followers.
+   */
+  _followerTracks() {
+    return this.fxTrack ? [...this.tracks, this.fxTrack] : [...this.tracks];
+  }
+
+  /** Give every sequencer a live reference to the follower set (tracks + FX track). */
   _wireFollowTracks() {
-    this.tracks.forEach(t => {
-      t.sequencer._projectTracks = this.tracks;
-    });
+    const followers = this._followerTracks();
+    followers.forEach(t => { t.sequencer._projectTracks = followers; });
+  }
+
+  /**
+   * Re-apply persisted per-track SEND routing after a load (Track.fromJSON only
+   * stores the flag — the actual wiring needs the fxTrack reference).
+   */
+  applyFXSends() {
+    this.tracks.forEach(t => { if (t.fxSend) t.setFXSend(true, this.fxTrack); });
   }
 
   get trackCount() {
@@ -113,6 +162,7 @@ export class Project {
   setMidiEngine(engine) {
     this._midiEngine = engine;
     this.tracks.forEach(t => t.setMidiEngine(engine));
+    this.fxTrack?.setMidiEngine(engine);
   }
 
   setTrackCount(n) {
@@ -147,16 +197,19 @@ export class Project {
   setBPM(bpm) {
     this.clock.setBPM(bpm);
     this.tracks.forEach(t => t.onBpmChanged(this.clock.bpm));
+    this.fxTrack?.onBpmChanged(this.clock.bpm);
   }
 
   start() {
     this.tracks.forEach(t => t.sequencer.start());
+    this.fxTrack?.sequencer.start();
     this.clock.start();
   }
 
   stop() {
     this.clock.stop();
     this.tracks.forEach(t => t.sequencer.stop());
+    this.fxTrack?.sequencer.stop();
   }
 
   /**
@@ -167,6 +220,7 @@ export class Project {
     this.stop();
     const t = this.audio.context.currentTime;
     this.tracks.forEach(track => track.silence(t));
+    this.fxTrack?.silence(t);
   }
 
   toJSON() {
@@ -175,6 +229,9 @@ export class Project {
       bpm:        this.clock.bpm,
       trackCount: this.tracks.length,
       tracks:     this.tracks.map(t => t.toJSON()),
+      // Global FX track under its own key (not in `tracks`) so old saves load
+      // unchanged and new saves round-trip its sequencer/FX/follow.
+      fxTrack:    this.fxTrack?.toJSON() ?? null,
     };
   }
 
@@ -188,6 +245,16 @@ export class Project {
     (obj.tracks ?? []).forEach((trackObj, i) => {
       if (this.tracks[i]) this.tracks[i].fromJSON(trackObj);
     });
+    // Restore the FX track (older saves have no fxTrack key → keep the default
+    // empty one). isFXTrack + the silent machine are re-asserted afterwards.
+    if (obj.fxTrack && this.fxTrack) {
+      this.fxTrack.fromJSON(obj.fxTrack);
+      this.fxTrack.isFXTrack = true;
+      this.fxTrack._rewireFXChain();
+      this.fxTrack.onBpmChanged(this.clock.bpm);
+    }
+    // Per-track SEND routing needs the fxTrack ref → apply now that it exists.
+    this.applyFXSends();
   }
 
   /**
@@ -203,9 +270,17 @@ export class Project {
     (obj.tracks ?? []).forEach((trackObj, i) => {
       if (this.tracks[i]) this.tracks[i].fromJSON(trackObj);
     });
+    if (obj.fxTrack && this.fxTrack) {
+      this.fxTrack.fromJSON(obj.fxTrack);
+      this.fxTrack.isFXTrack = true;
+      this.fxTrack._rewireFXChain();
+    }
+    this.applyFXSends();
     this.tracks.forEach(t => t.onBpmChanged(this.clock.bpm));
+    this.fxTrack?.onBpmChanged(this.clock.bpm);
     if (this.clock.isPlaying) {
       this.tracks.forEach(t => t.sequencer.start());
+      this.fxTrack?.sequencer.start();
     }
   }
 
@@ -224,6 +299,9 @@ export class Project {
   reset() {
     this.tracks.forEach(t => t.dispose());
     this.tracks = [];
+    // Rebuild a clean FX track so the deck is instantly reusable (its bus stays).
+    this.fxTrack?.dispose();
+    this.fxTrack = this._makeFXTrack();
     this._wireFollowTracks();
   }
 

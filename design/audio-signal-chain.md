@@ -429,6 +429,51 @@ deck is instantly reusable. Deck B boots empty. See `ui.md` → Deck Tab.
 
 ---
 
+## Global FX Track
+
+A dedicated **FX track** (Syntakt-style) lives in `Project.fxTrack` — a real `Track`
+held **outside** `tracks[]` (reserved index `FX_TRACK_INDEX = -1`), so the normal
+track indices, follow-source references, default machines, and saved-song layout are
+untouched. Its machine is the silent `'midi'` placeholder (`outputGain.gain = 0`): it
+is a processor, not a voice. It has its own sequencer (FX params p-lock per step), its
+own reorderable FX chain, and its own follow source — fully bindable like any track.
+
+### Send routing (insert)
+
+Each normal track has a **SEND** (`Track.fxSend`, toggled in the MIXER strip via
+`setFXSend(on, fxTrack)`). The FX track exposes a public **`fxSendInput`** GainNode
+that sums into its FX-chain head (`_rewireFXChain` connects `fxSendInput` to the first
+block, or straight to the chain dest if the chain is empty, **in addition to** the
+panner — both fan into the same node and sum naturally).
+
+A track's FX-chain tail feeds a swappable **`_fxChainDest`** (default `_outputBus`).
+`setFXSend(true)` points it at `fxTrack.fxSendInput` instead and re-runs
+`_rewireFXChain()`; `setFXSend(false)` points it back at the bus. This is an **insert**
+— a sent track reaches the bus *through* the FX track (after its own FX pipe), never
+both, so there is no double audio:
+
+```
+track (SEND off) → its own FX chain ──────────────────────────────► busGain
+track (SEND on)  → its own FX chain → fxTrack.fxSendInput ─┐
+                                                           ├→ FX track's FX chain → busGain
+FX track's own (silent) voice + panner ────────────────────┘
+```
+
+`fxSend` serialises on the Track; the actual wiring needs the `fxTrack` ref, so
+`Track.fromJSON` only stores the flag and `Project.applyFXSends()` (called at the end
+of `fromJSON`/`loadDeckJSON`) re-applies the routing once `fxTrack` exists.
+
+### Ducking (DuckFX + follow)
+
+`DuckFX` (`js/signal/DuckFX.js`) is a **trigger-driven** envelope VCA FX block: on each
+`trigger(time)` its output gain dips to `1 − duck.depth` over `duck.attack`, holds
+`duck.hold`, then recovers over `duck.release` — the Syntakt "negative-ADH amp" pump as
+a reusable block. The trigger reuses the existing **follow** mechanism: set the FX
+track's `followSource` to the kick, and the kick's `Sequencer._fireStep` follower loop
+calls `follower.triggerDuck(time)` (once per step), which pulses every `trigger`-capable
+FX block on the FX track. `duck.depth` is a continuous JS-LFO target
+(`TRACK_JS_LFO_PARAMS`); attack/hold/release are read at trigger time. See `design/fx.md`.
+
 ## Known Audio Constraints
 
 - **Shared ampGain node:** All oscillators on a track share one `ampGain` GainNode. A new
