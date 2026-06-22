@@ -53,7 +53,7 @@ export class SwarmMachine extends Machine {
     'noise.color':  { label: 'Noise Rate', type: 'number', min: 0, max: 1, default: 0.15, group: 'NOISE',
                       modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'js',
                       apply: (v, t, m) => { m._driftInterval = m._colorToMs(v); m._startDriftTimer(); } },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8, group: 'OUTPUT',
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8, group: 'OUTPUT', ampMaster: true,
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

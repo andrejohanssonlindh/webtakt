@@ -104,6 +104,11 @@ export class SynthPanel {
       else if (state.activeTab === 'roll') this._roll?.refresh();
       else if (state.activeTab === 'all') this._allTracks?.refresh();
     });
+    // muteChanged: a track was muted/unmuted (from TrackRow or the ALL panel) —
+    // re-sync the ALL overview's dimmed rows + mute dots when it's the active tab.
+    state.on('muteChanged',   () => {
+      if (state.activeTab === 'all') this._allTracks?.refresh();
+    });
     // paramChanged: mod wheel (or any external source) changed a param — update knob + viz
     state.on('paramChanged',  ({ path, value }) => {
       const knob = this._knobByPath.get(path);

@@ -36,7 +36,7 @@ export class KickSilkMachine extends Machine {
     'sweep':        { label: 'Sweep', type: 'number', min: 1, max: 8, default: 4.0, group: 'TONE', plockMode: 'js' },
     'punch':        { label: 'Punch', type: 'number', min: 0, max: 1, default: 0.7, group: 'PUNCH', plockMode: 'js' },
     'punch.decay':  { label: 'Punch Decay', type: 'number', min: 0.005, max: 0.08, default: 0.025, group: 'PUNCH', plockMode: 'js' },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.9, group: 'OUTPUT',
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.9, group: 'OUTPUT', ampMaster: true,
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

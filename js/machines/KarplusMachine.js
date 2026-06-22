@@ -41,7 +41,7 @@ export class KarplusMachine extends Machine {
     'excite':       { label: 'Excite', type: 'number', min: 1, max: 50, default: 8, group: 'EXCITE', plockMode: 'js' },
     'excite.tone':  { label: 'Excite Tone', type: 'number', min: 200, max: 20000, default: 8000, group: 'EXCITE', plockMode: 'js' },
     'stretch':      { label: 'Stretch', type: 'number', min: -12, max: 12, default: 0, group: 'STRING', plockMode: 'js' },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8, group: 'OUTPUT',
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8, group: 'OUTPUT', ampMaster: true,
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

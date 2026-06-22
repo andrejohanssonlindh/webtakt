@@ -104,7 +104,7 @@ export class WavetableSamplerPanel {
     const morphG = makeGroup('MORPH');
     addKnob(morphG, 'morph',        'MORPH',  0,     1, v => Math.round(v * 100) + '%', 64);
     addKnob(morphG, 'sample.speed', 'SPEED',  0.125, 4, v => v.toFixed(2) + 'x');
-    addKnob(morphG, 'output.level', 'LEVEL',  0,     1, v => Math.round(v * 100) + '%');
+    // Master output level lives on the AMP page (LEVEL knob), not here.
     morphG.appendChild(this._makeToggle('PITCH', 'sample.pitch'));
     morphG.appendChild(this._makeToggle('LOOP',  'sample.loop'));
     morphG.appendChild(this._makeToggle('REV',   'sample.reverse'));

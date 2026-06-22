@@ -5806,13 +5806,37 @@ body {
   border-color: var(--accent);
   background: var(--surface-2);
 }
+/* Muted: dim the whole row (label + step strip) so a muted track reads at a
+   glance, while still clickable/selectable. */
+.alltracks-row.muted { opacity: 0.45; }
+.alltracks-row.muted:hover { opacity: 0.6; }
 .alltracks-label {
-  flex: 0 0 64px;
+  flex: 0 0 72px;
   font-size: 0.7rem;
   color: var(--text-bright);
   display: flex;
   flex-direction: column;
   line-height: 1.2;
+}
+.alltracks-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.alltracks-mute {
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 0 3px;
+  border-radius: 2px;
+  transition: color 0.1s, background 0.1s;
+}
+.alltracks-mute:hover { color: var(--danger); }
+.alltracks-mute.active {
+  color: var(--danger);
+  background: rgba(192, 57, 43, 0.15);
 }
 .alltracks-type {
   font-size: 0.5rem;

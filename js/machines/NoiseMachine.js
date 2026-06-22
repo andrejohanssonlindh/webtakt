@@ -80,7 +80,7 @@ export class NoiseMachine extends Machine {
     'crush':        { label: 'Crush', type: 'number', min: 0, max: 1, default: 0.0, group: 'SHAPE', plockMode: 'js',
                       apply: (v, t, m) => { m._crusher.curve = _buildCrusherCurve(v); } },
     'decay':        { label: 'Decay', type: 'number', min: 0.01, max: 4.0, default: 0.25, group: 'SHAPE', plockMode: 'js' },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8, group: 'OUTPUT',
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8, group: 'OUTPUT', ampMaster: true,
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

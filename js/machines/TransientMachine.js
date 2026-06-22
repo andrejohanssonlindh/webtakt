@@ -60,7 +60,7 @@ export class TransientMachine extends Machine {
     'noise.click':  { label: 'Crack', type: 'number', min: 0, max: 1, default: 0.3, group: 'CLICK',
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m._noiseClickGain.gain, schedule: 'setTarget', tc: 0.01 },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85, group: 'OUTPUT',
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85, group: 'OUTPUT', ampMaster: true,
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

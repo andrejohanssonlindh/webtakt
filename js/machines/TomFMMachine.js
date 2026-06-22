@@ -44,7 +44,7 @@ export class TomFMMachine extends Machine {
                       apply: (v, t, m) => m._modOsc.frequency.setTargetAtTime(m._params['tune'] * v, t, 0.01) },
     'fm':           { label: 'FM', type: 'number', min: 0, max: 1, default: 0.5, group: 'FM', plockMode: 'js' },
     'fm.decay':     { label: 'FM Decay', type: 'number', min: 0.05, max: 1, default: 0.35, group: 'FM', plockMode: 'js' },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85, group: 'OUTPUT',
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85, group: 'OUTPUT', ampMaster: true,
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

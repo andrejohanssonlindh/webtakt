@@ -157,8 +157,8 @@ export class TimeStretchPanel {
     playG.appendChild(this._makeToggle('LOOP', 'sample.loop'));
     playG.appendChild(this._makeToggle('REV',  'sample.reverse'));
 
-    const outG = makeGroup('OUTPUT');
-    addKnob(outG, 'output.level', 'LEVEL', 0, 1, v => Math.round(v * 100) + '%');
+    // Master output level lives on the AMP page (LEVEL knob); this group keeps the readout.
+    const outG = makeGroup('INFO');
     this._readoutEl = document.createElement('div');
     this._readoutEl.className = 'sampler-name';
     outG.appendChild(this._readoutEl);

@@ -184,8 +184,8 @@ export class SamplerPanel {
     playG.appendChild(this._makeToggle('REV',   'sample.reverse'));
     playG.appendChild(this._makeToggle('LOOP',  'sample.loop'));
 
+    // Master output level lives on the AMP page (LEVEL knob), not here.
     const outG = makeGroup('OUTPUT');
-    addKnob(outG, 'output.level', 'LEVEL', 0, 1, v => Math.round(v * 100) + '%');
     // SAMPLE LEN button — sets trig length to match the trimmed sample duration
     this._sampleLenBtn = this._makeSampleLenBtn();
     outG.appendChild(this._sampleLenBtn);

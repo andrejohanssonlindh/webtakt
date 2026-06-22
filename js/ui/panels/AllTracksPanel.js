@@ -41,12 +41,37 @@ export class AllTracksPanel {
     const row = document.createElement('div');
     row.className = 'alltracks-row';
     row.classList.toggle('selected', i === state.selectedTrackIndex);
+    row.classList.toggle('muted', !!track.muted);
     // Clicking the row (label or empty space) selects the track.
     row.addEventListener('click', () => state.selectTrack(i));
 
     const label = document.createElement('div');
     label.className = 'alltracks-label';
-    label.textContent = `T${i + 1}`;
+
+    // Top line: track number + mute toggle. The M dot mirrors TrackRow's mute dot
+    // — clicking it toggles mute (and the row's dimmed `muted` state) without
+    // selecting the track. We update this row inline and emit `muteChanged` so the
+    // TrackRow dots (and any other listener) re-sync.
+    const top = document.createElement('div');
+    top.className = 'alltracks-top';
+    const num = document.createElement('span');
+    num.textContent = `T${i + 1}`;
+    const mute = document.createElement('span');
+    mute.className = 'alltracks-mute';
+    mute.classList.toggle('active', !!track.muted);
+    mute.textContent = 'M';
+    mute.title = 'Mute / unmute';
+    mute.addEventListener('click', (e) => {
+      e.stopPropagation();              // don't also select the track
+      track.muted ? track.unmute() : track.mute();
+      mute.classList.toggle('active', !!track.muted);
+      row.classList.toggle('muted', !!track.muted);
+      this.state.emit('muteChanged', { track });   // keep TrackRow's dot in sync
+    });
+    top.appendChild(num);
+    top.appendChild(mute);
+    label.appendChild(top);
+
     const type = document.createElement('span');
     type.className = 'alltracks-type';
     type.textContent = track.machine?.type?.toUpperCase().replace('.', ' ') ?? '';
@@ -65,10 +90,18 @@ export class AllTracksPanel {
     }
     row.appendChild(strip);
 
-    const rowState = { cells, seq, lastHi: -1 };
+    const rowState = { cells, seq, lastHi: -1, row, mute, track };
     this._paintRow(rowState);
     this._rows.push(rowState);
     return row;
+  }
+
+  /** Re-sync a row's muted visuals from the track (mute can be toggled from the
+   *  TrackRow dot too; SynthPanel routes muteChanged → refresh). */
+  _paintMute(rowState) {
+    const muted = !!rowState.track.muted;
+    rowState.row.classList.toggle('muted', muted);
+    rowState.mute.classList.toggle('active', muted);
   }
 
   /** Paint every cell's static state (note / data / beat). Cheap; called once
@@ -90,10 +123,10 @@ export class AllTracksPanel {
     }
   }
 
-  /** Re-paint all rows (e.g. after a stepChanged from elsewhere). */
+  /** Re-paint all rows (e.g. after a stepChanged or muteChanged from elsewhere). */
   refresh() {
     if (!this._wrap || !this._wrap.isConnected) return;
-    this._rows.forEach(r => this._paintRow(r));
+    this._rows.forEach(r => { this._paintRow(r); this._paintMute(r); });
   }
 
   // ── Per-row playhead (self-contained rAF) ──────────────────

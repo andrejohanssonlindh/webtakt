@@ -44,7 +44,7 @@ export class HiHatMachine extends Machine {
     'tone':         { label: 'Tone', type: 'number', min: 0, max: 8, default: 2.0, group: 'TONE',
                       modulatable: true, lfoMin: 0, lfoMax: 8,
                       target: m => m._hp.Q, schedule: 'setTarget', tc: 0.01 },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.75, group: 'OUTPUT',
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.75, group: 'OUTPUT', ampMaster: true,
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

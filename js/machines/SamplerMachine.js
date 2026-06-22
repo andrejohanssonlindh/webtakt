@@ -40,7 +40,7 @@ export class SamplerMachine extends Machine {
     'sample.reverse':   { label: 'Reverse',  type: 'boolean', default: false,                    plockMode: 'js' },
     'sample.loop':      { label: 'Loop',     type: 'boolean', default: false,                    plockMode: 'js' },
     'sample.pitch':     { label: 'Pitch',    type: 'boolean', default: true,                     plockMode: 'js' },
-    'output.level':     { label: 'Level',    type: 'number',  min: 0,   max: 1,   default: 0.85,
+    'output.level':     { label: 'Level',    type: 'number',  min: 0,   max: 1,   default: 0.85, ampMaster: true,
                           modulatable: true, lfoMin: 0, lfoMax: 1,
                           target: m => m.outputGain.gain, manualTarget: true },
   };

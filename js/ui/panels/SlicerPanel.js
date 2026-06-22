@@ -157,8 +157,7 @@ export class SlicerPanel {
     playG.appendChild(this._makeToggle('REV',  'sample.reverse'));
     playG.appendChild(this._makeToggle('LOOP', 'sample.loop'));
 
-    const outG = makeGroup('OUTPUT');
-    addKnob(outG, 'output.level', 'LEVEL', 0, 1, v => Math.round(v * 100) + '%');
+    // Master output level lives on the AMP page (LEVEL knob), not here.
 
     this.container.appendChild(wrap);
     addBrowseButton(this);

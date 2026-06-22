@@ -158,7 +158,7 @@ js/
       TrigPanel.js            — TRIG tab: length/chance/detune/tone/nudge/condition knobs, voice cards, shift, note follow
       ScalesPanel.js          — SCALES tab: searchable scale dropdown, root strip, degree preview, keyboard fold
       FilterPanel.js          — FILTER tab: ANALOGUE switch (digital/analogue, drives Track.setAnalogue) + type/cutoff/res/gain/env/slope + base LPF/HPF + analogue-only drive/drift/keytrack + FilterViz + filter-env ADSR
-      AmpPanel.js             — AMP tab: pan knob + amp ADSR
+      AmpPanel.js             — AMP tab: pan + velocity-sens + master LEVEL knob (the machine's overall out level) + → FX-track send + amp ADSR. The LEVEL knob hosts each machine's master output level — the param flagged `ampMaster: true` in its SPEC/getParamList (conventionally 'output.level'), found via Machine.ampLevelPath(). Per-osc / per-operator / sub levels stay in the SYNTH tab; the machine's own panel skips the ampMaster param.
       LFOPanel.js             — LFO tab: sub-tabs, destination dropdown, simple/advanced layouts
       FXPanel.js              — Generic FX knob-row renderer: render(ctx, fxObj, fmtOverrides). Used by FXPipelinePanel for ALL blocks' inline editor (base four + added instances); the dedicated DELAY/CRUSH/CHORUS/REVERB tabs were removed.
       FXPipelinePanel.js      — FX tab: snaking reorderable signal path + per-block ON/OFF + inline param editor for every block + ADD FX menu + SAVE (name/tags) + LOAD (opens FXPresetModal)

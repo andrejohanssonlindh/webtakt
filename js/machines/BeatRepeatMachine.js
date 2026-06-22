@@ -211,7 +211,7 @@ export class BeatRepeatMachine extends Machine {
       { path: 'decay',         label: 'Decay',    type: 'number', min: 0,  max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
       { path: 'sample.speed',  label: 'Speed',    type: 'number', min: 0.125, max: 4, default: 1,   modulatable: false, plockMode: 'js' },
       { path: 'sample.reverse',label: 'Reverse',  type: 'boolean', default: false,                  plockMode: 'js' },
-      { path: 'output.level',  label: 'Level',    type: 'number', min: 0,  max: 1,   default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+      { path: 'output.level',  label: 'Level',    type: 'number', min: 0,  max: 1,   default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam', ampMaster: true },
     ];
   }
 

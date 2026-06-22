@@ -41,6 +41,7 @@ export class TrackRow {
     state.on('holdModeChanged', () => this.render());
     state.on('drumModeChanged', () => this.render());
     state.on('fxSendChanged',   () => this.render());   // refresh send dots + FX-button list
+    state.on('muteChanged',     () => this.render());   // mute toggled from ALL panel → sync dots
     this._startGlowLoop();
   }
 
@@ -100,7 +101,7 @@ export class TrackRow {
         if (e.target.classList.contains('mute-dot')) {
           const fx = this.state.project.fxTrack;
           fx.muted ? fx.unmute() : fx.mute();
-          this.render();
+          this.state.emit('muteChanged', { track: fx });   // re-renders via the muteChanged listener
         }
       });
       this.container.appendChild(fxBtn);
@@ -132,7 +133,7 @@ export class TrackRow {
     btn.addEventListener('pointerdown', (e) => {
       if (e.target.classList.contains('mute-dot')) {
         track.muted ? track.unmute() : track.mute();
-        this.render();
+        this.state.emit('muteChanged', { track });   // re-renders via the muteChanged listener
         return;
       }
       if (this.state.drumMode && this.keyboard) {

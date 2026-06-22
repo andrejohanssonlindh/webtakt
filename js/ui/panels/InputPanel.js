@@ -159,18 +159,8 @@ export class InputPanel {
     row.appendChild(gainKnob.el);
     this.ctx.activeWidgets.push(gainKnob);
 
-    const levelKnob = new KnobWidget({
-      label:   'Level',
-      min:     0,
-      max:     1,
-      value:   this.machine.getParam('output.level'),
-      bipolar: false,
-      size:    64,
-      fmt:     v => `${Math.round(v * 100)}%`,
-      onChange: v => this.ctx.writeValue(this.machine, 'output.level', v, true),
-    });
-    row.appendChild(levelKnob.el);
-    this.ctx.activeWidgets.push(levelKnob);
+    // Master output level ('output.level') lives on the AMP page (LEVEL knob);
+    // only the input boost (input.gain) stays here.
 
     // Gate toggle — Continuous (default) vs. Note-gated. Flipping it re-applies
     // the per-voice amp gate via Track._applyInputGate.

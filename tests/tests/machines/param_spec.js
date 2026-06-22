@@ -40,7 +40,7 @@ const EXPECTED = {
     { path: 'osc.detune',    label: 'Detune',       type: 'number', min: -100, max: 100, default: 0,   modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
     { path: 'sub.level',     label: 'Sub Level',    type: 'number', min: 0,    max: 1,   default: 0.3, modulatable: true, lfoMin: 0,    lfoMax: 1,   group: 'SUB', plockMode: 'audioParam' },
     { path: 'sub.waveform',  label: 'Sub Waveform', type: 'enum',   options: ['sine','sawtooth','square','triangle'], group: 'SUB', plockMode: 'js' },
-    { path: 'output.level',  label: 'Level',        type: 'number', min: 0,    max: 1,   default: 0.8, modulatable: true, lfoMin: 0,    lfoMax: 1,   group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level',  label: 'Level',        type: 'number', min: 0,    max: 1,   default: 0.8, modulatable: true, lfoMin: 0,    lfoMax: 1,   group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   snare: [
     { path: 'tune',         label: 'Tune',      type: 'number', min: 100,  max: 400,  default: 200,  modulatable: true, lfoMin: 100,  lfoMax: 400,  group: 'TONE', plockMode: 'audioParam' },
@@ -48,7 +48,7 @@ const EXPECTED = {
     { path: 'tone',         label: 'Tone',      type: 'number', min: 0,    max: 1,    default: 0.4,  modulatable: true, lfoMin: 0,    lfoMax: 1,    group: 'TONE', plockMode: 'audioParam' },
     { path: 'snap',         label: 'Snap',      type: 'number', min: 0,    max: 1,    default: 0.8,  modulatable: true, lfoMin: 0,    lfoMax: 1,    group: 'NOISE', plockMode: 'audioParam' },
     { path: 'noise.cutoff', label: 'Noise Cut', type: 'number', min: 200,  max: 8000, default: 2000, modulatable: true, lfoMin: 200,  lfoMax: 8000, group: 'NOISE', plockMode: 'audioParam' },
-    { path: 'output.level', label: 'Level',     type: 'number', min: 0,    max: 1,    default: 0.85, modulatable: true, lfoMin: 0,    lfoMax: 1,    group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',     type: 'number', min: 0,    max: 1,    default: 0.85, modulatable: true, lfoMin: 0,    lfoMax: 1,    group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   'snare.analogue': [
     { path: 'tune',         label: 'Tune',      type: 'number', min: 100,  max: 400,  default: 185,  modulatable: true, lfoMin: 100,  lfoMax: 400,  group: 'TONE', plockMode: 'audioParam' },
@@ -57,7 +57,7 @@ const EXPECTED = {
     { path: 'snap',         label: 'Snap',      type: 'number', min: 0,    max: 1,    default: 0.8,  modulatable: true, lfoMin: 0,    lfoMax: 1,    group: 'NOISE', plockMode: 'audioParam' },
     { path: 'noise.cutoff', label: 'Noise Cut', type: 'number', min: 200,  max: 8000, default: 1800, modulatable: true, lfoMin: 200,  lfoMax: 8000, group: 'NOISE', plockMode: 'audioParam' },
     { path: 'drift',        label: 'Drift',     type: 'number', min: 0,    max: 1,    default: 0.4,  group: 'NOISE', plockMode: 'js' },
-    { path: 'output.level', label: 'Level',     type: 'number', min: 0,    max: 1,    default: 0.85, modulatable: true, lfoMin: 0,    lfoMax: 1,    group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',     type: 'number', min: 0,    max: 1,    default: 0.85, modulatable: true, lfoMin: 0,    lfoMax: 1,    group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   chord: [
     { path: 'osc.detune',   label: 'Detune',    type: 'number', min: -100, max: 100, default: 0,   modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
@@ -65,7 +65,7 @@ const EXPECTED = {
     { path: 'inversion',    label: 'Inversion', type: 'number', min: 0, max: 3,  default: 0,   group: 'CHORD', plockMode: 'js' },
     { path: 'spread',       label: 'Spread',    type: 'number', min: 0, max: 50, default: 8,   modulatable: true, lfoMin: 0, lfoMax: 50, group: 'CHORD', plockMode: 'js' },
     { path: 'waveform',     label: 'Waveform',  type: 'enum',   options: ['sawtooth','square','triangle','sine'], group: 'OSC', plockMode: 'js' },
-    { path: 'output.level', label: 'Level',     type: 'number', min: 0, max: 1,  default: 0.7, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',     type: 'number', min: 0, max: 1,  default: 0.7, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   'kick.silk': [
     { path: 'tune',         label: 'Tune',        type: 'number', min: 20, max: 200, default: 60, modulatable: true, lfoMin: 20, lfoMax: 200, group: 'TONE', plockMode: 'audioParam' },
@@ -73,7 +73,7 @@ const EXPECTED = {
     { path: 'sweep',        label: 'Sweep',       type: 'number', min: 1, max: 8, default: 4.0, group: 'TONE', plockMode: 'js' },
     { path: 'punch',        label: 'Punch',       type: 'number', min: 0, max: 1, default: 0.7, group: 'PUNCH', plockMode: 'js' },
     { path: 'punch.decay',  label: 'Punch Decay', type: 'number', min: 0.005, max: 0.08, default: 0.025, group: 'PUNCH', plockMode: 'js' },
-    { path: 'output.level', label: 'Level',       type: 'number', min: 0, max: 1, default: 0.9, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',       type: 'number', min: 0, max: 1, default: 0.9, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   'kick.hard': [
     { path: 'tune',         label: 'Tune',        type: 'number', min: 20, max: 200, default: 60, modulatable: true, lfoMin: 20, lfoMax: 200, group: 'TONE', plockMode: 'audioParam' },
@@ -83,7 +83,7 @@ const EXPECTED = {
     { path: 'drive',        label: 'Drive',       type: 'number', min: 1, max: 6, default: 3.0, group: 'TONE', plockMode: 'js' },
     { path: 'punch',        label: 'Punch',       type: 'number', min: 0, max: 1, default: 0.7, group: 'PUNCH', plockMode: 'js' },
     { path: 'punch.decay',  label: 'Punch Decay', type: 'number', min: 0.005, max: 0.08, default: 0.025, group: 'PUNCH', plockMode: 'js' },
-    { path: 'output.level', label: 'Level',       type: 'number', min: 0, max: 1, default: 0.9, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',       type: 'number', min: 0, max: 1, default: 0.9, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   'kick.analogue': [
     { path: 'tune',         label: 'Tune',        type: 'number', min: 20, max: 200, default: 55, modulatable: true, lfoMin: 20, lfoMax: 200, group: 'TONE', plockMode: 'audioParam' },
@@ -94,7 +94,7 @@ const EXPECTED = {
     { path: 'drift',        label: 'Drift',       type: 'number', min: 0, max: 1, default: 0.4, group: 'TONE', plockMode: 'js' },
     { path: 'punch',        label: 'Punch',       type: 'number', min: 0, max: 1, default: 0.6, group: 'PUNCH', plockMode: 'js' },
     { path: 'punch.decay',  label: 'Punch Decay', type: 'number', min: 0.005, max: 0.08, default: 0.025, group: 'PUNCH', plockMode: 'js' },
-    { path: 'output.level', label: 'Level',       type: 'number', min: 0, max: 1, default: 0.9, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',       type: 'number', min: 0, max: 1, default: 0.9, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   hihat: [
     { path: 'decay',        label: 'Decay',      type: 'number', min: 0.01, max: 0.25, default: 0.06, group: 'DECAY', plockMode: 'js' },
@@ -103,7 +103,7 @@ const EXPECTED = {
     { path: 'note.track',   label: 'Note Track', type: 'boolean', default: false, group: 'TONE', plockMode: 'js' },
     { path: 'cutoff',       label: 'Cutoff',     type: 'number', min: 500, max: 12000, default: 3000, modulatable: true, lfoMin: 500, lfoMax: 12000, group: 'TONE', plockMode: 'audioParam' },
     { path: 'tone',         label: 'Tone',       type: 'number', min: 0, max: 8, default: 2.0, modulatable: true, lfoMin: 0, lfoMax: 8, group: 'TONE', plockMode: 'audioParam' },
-    { path: 'output.level', label: 'Level',      type: 'number', min: 0, max: 1, default: 0.75, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',      type: 'number', min: 0, max: 1, default: 0.75, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   'hihat.analogue': [
     { path: 'decay',        label: 'Decay',      type: 'number', min: 0.01, max: 0.25, default: 0.06, group: 'DECAY', plockMode: 'js' },
@@ -113,7 +113,7 @@ const EXPECTED = {
     { path: 'cutoff',       label: 'Cutoff',     type: 'number', min: 500, max: 12000, default: 3000, modulatable: true, lfoMin: 500, lfoMax: 12000, group: 'TONE', plockMode: 'audioParam' },
     { path: 'tone',         label: 'Tone',       type: 'number', min: 0, max: 8, default: 2.0, modulatable: true, lfoMin: 0, lfoMax: 8, group: 'TONE', plockMode: 'audioParam' },
     { path: 'drift',        label: 'Drift',      type: 'number', min: 0, max: 1, default: 0.4, group: 'TONE', plockMode: 'js' },
-    { path: 'output.level', label: 'Level',      type: 'number', min: 0, max: 1, default: 0.75, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',      type: 'number', min: 0, max: 1, default: 0.75, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   clapp: [
     // tone/snap defaults retuned in the 2026-06 clap rework (lowpass filter +
@@ -123,7 +123,7 @@ const EXPECTED = {
     { path: 'note.track',   label: 'Note Track', type: 'boolean', default: false, group: 'TONE', plockMode: 'js' },
     { path: 'decay',        label: 'Decay',  type: 'number', min: 0.05, max: 1.0, default: 0.3, group: 'SHAPE', plockMode: 'js' },
     { path: 'spread',       label: 'Spread', type: 'number', min: 0, max: 30, default: 8, group: 'SHAPE', plockMode: 'js' },
-    { path: 'output.level', label: 'Level',  type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',  type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   'clapp.analogue': [
     // tone/snap defaults retuned in the 2026-06 clap rework (fused single-stream
@@ -133,7 +133,7 @@ const EXPECTED = {
     { path: 'note.track',   label: 'Note Track', type: 'boolean', default: false, group: 'TONE', plockMode: 'js' },
     { path: 'decay',        label: 'Decay',  type: 'number', min: 0.05, max: 1.0, default: 0.3, group: 'SHAPE', plockMode: 'js' },
     { path: 'spread',       label: 'Spread', type: 'number', min: 0, max: 30, default: 8, group: 'SHAPE', plockMode: 'js' },
-    { path: 'output.level', label: 'Level',  type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',  type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   cymbal: [
     { path: 'tune',         label: 'Tune',       type: 'number', min: 100, max: 800, default: 300, modulatable: true, lfoMin: 100, lfoMax: 800, group: 'TONE', plockMode: 'audioParam' },
@@ -144,7 +144,7 @@ const EXPECTED = {
     { path: 'mid.decay',    label: 'Mid Decay',  type: 'number', min: 0.1, max: 2.0, default: 0.6, group: 'DECAY', plockMode: 'js' },
     { path: 'open.decay',   label: 'Open Decay', type: 'number', min: 0.5, max: 8.0, default: 2.5, group: 'DECAY', plockMode: 'js' },
     { path: 'mode',         label: 'Mode',       type: 'enum',   options: ['closed','mid','open'], group: 'DECAY', plockMode: 'js' },
-    { path: 'output.level', label: 'Level',      type: 'number', min: 0, max: 1, default: 0.5, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',      type: 'number', min: 0, max: 1, default: 0.5, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   'cymbal.analogue': [
     { path: 'tune',         label: 'Tune',       type: 'number', min: 100, max: 800, default: 300, modulatable: true, lfoMin: 100, lfoMax: 800, group: 'TONE', plockMode: 'audioParam' },
@@ -156,7 +156,7 @@ const EXPECTED = {
     { path: 'open.decay',   label: 'Open Decay', type: 'number', min: 0.5, max: 8.0, default: 2.5, group: 'DECAY', plockMode: 'js' },
     { path: 'mode',         label: 'Mode',       type: 'enum',   options: ['closed','mid','open'], group: 'DECAY', plockMode: 'js' },
     { path: 'drift',        label: 'Drift',      type: 'number', min: 0, max: 1, default: 0.4, group: 'DECAY', plockMode: 'js' },
-    { path: 'output.level', label: 'Level',      type: 'number', min: 0, max: 1, default: 0.5, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',      type: 'number', min: 0, max: 1, default: 0.5, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   'tom.analogue': [
     { path: 'tune',         label: 'Tune',      type: 'number', min: 60, max: 400, default: 120, modulatable: true, lfoMin: 60, lfoMax: 400, group: 'TONE', plockMode: 'audioParam' },
@@ -166,7 +166,7 @@ const EXPECTED = {
     { path: 'drift',        label: 'Drift',     type: 'number', min: 0, max: 1, default: 0.4, group: 'TONE', plockMode: 'js' },
     { path: 'attack',       label: 'Attack',    type: 'number', min: 0, max: 1, default: 0.35, group: 'ATTACK', plockMode: 'js' },
     { path: 'attack.decay', label: 'Atk Decay', type: 'number', min: 0.005, max: 0.05, default: 0.015, group: 'ATTACK', plockMode: 'js' },
-    { path: 'output.level', label: 'Level',     type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',     type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   tom: [
     { path: 'tune',         label: 'Tune',      type: 'number', min: 60, max: 400, default: 110, modulatable: true, lfoMin: 60, lfoMax: 400, group: 'TONE', plockMode: 'audioParam' },
@@ -176,7 +176,7 @@ const EXPECTED = {
     { path: 'tone',         label: 'Tone',      type: 'number', min: 0, max: 1, default: 0.25, group: 'TONE', plockMode: 'js' },
     { path: 'click',        label: 'Click',     type: 'number', min: 0, max: 1, default: 0.3, group: 'ATTACK', plockMode: 'js' },
     { path: 'click.decay',  label: 'Clk Decay', type: 'number', min: 0.003, max: 0.04, default: 0.012, group: 'ATTACK', plockMode: 'js' },
-    { path: 'output.level', label: 'Level',     type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',     type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   'tom.fm': [
     { path: 'tune',         label: 'Tune',     type: 'number', min: 60, max: 400, default: 120, modulatable: true, lfoMin: 60, lfoMax: 400, group: 'TONE', plockMode: 'audioParam' },
@@ -185,7 +185,7 @@ const EXPECTED = {
     { path: 'ratio',        label: 'Ratio',    type: 'number', min: 0.5, max: 12, default: 2.5, group: 'FM', plockMode: 'js' },
     { path: 'fm',           label: 'FM',       type: 'number', min: 0, max: 1, default: 0.5, group: 'FM', plockMode: 'js' },
     { path: 'fm.decay',     label: 'FM Decay', type: 'number', min: 0.05, max: 1, default: 0.35, group: 'FM', plockMode: 'js' },
-    { path: 'output.level', label: 'Level',    type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',    type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   noise: [
     { path: 'color',        label: 'Color',      type: 'number', min: 0, max: 1, default: 0.3, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'COLOR', plockMode: 'js' },
@@ -195,7 +195,7 @@ const EXPECTED = {
     { path: 'note.track',   label: 'Note Track', type: 'boolean', default: false, group: 'BODY', plockMode: 'js' },
     { path: 'crush',        label: 'Crush',      type: 'number', min: 0, max: 1, default: 0.0, group: 'SHAPE', plockMode: 'js' },
     { path: 'decay',        label: 'Decay',      type: 'number', min: 0.01, max: 4.0, default: 0.25, group: 'SHAPE', plockMode: 'js' },
-    { path: 'output.level', label: 'Level',      type: 'number', min: 0, max: 1, default: 0.8, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',      type: 'number', min: 0, max: 1, default: 0.8, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   karplus: [
     { path: 'damping',      label: 'Damping',     type: 'number', min: 0, max: 1, default: 0.5, group: 'STRING', plockMode: 'js' },
@@ -203,7 +203,7 @@ const EXPECTED = {
     { path: 'excite',       label: 'Excite',      type: 'number', min: 1, max: 50, default: 8, group: 'EXCITE', plockMode: 'js' },
     { path: 'excite.tone',  label: 'Excite Tone', type: 'number', min: 200, max: 20000, default: 8000, group: 'EXCITE', plockMode: 'js' },
     { path: 'stretch',      label: 'Stretch',     type: 'number', min: -12, max: 12, default: 0, group: 'STRING', plockMode: 'js' },
-    { path: 'output.level', label: 'Level',       type: 'number', min: 0, max: 1, default: 0.8, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',       type: 'number', min: 0, max: 1, default: 0.8, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   comb: [
     { path: 'ratio',        label: 'Ratio',   type: 'number', min: 0.5, max: 8, default: 2.756, modulatable: false, group: 'TUBE', plockMode: 'js' },
@@ -211,7 +211,7 @@ const EXPECTED = {
     { path: 'decay2',       label: 'Decay 2', type: 'number', min: 0.1, max: 2, default: 0.35, modulatable: false, group: 'TUBE', plockMode: 'js' },
     { path: 'mix',          label: 'Mix',     type: 'number', min: 0, max: 1, default: 0.4, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'VOICE', plockMode: 'js' },
     { path: 'strike',       label: 'Strike',  type: 'number', min: 0, max: 1, default: 0.6, modulatable: false, group: 'VOICE', plockMode: 'js' },
-    { path: 'output.level', label: 'Level',   type: 'number', min: 0, max: 1, default: 0.8, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',   type: 'number', min: 0, max: 1, default: 0.8, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   marimba: [
     { path: 'decay1',       label: 'Decay 1',     type: 'number', min: 0.2, max: 8.0, default: 1.8, group: 'DECAY', plockMode: 'js' },
@@ -223,7 +223,7 @@ const EXPECTED = {
     { path: 'p3level',      label: 'P3 Level',    type: 'number', min: 0, max: 1, default: 0.15, group: 'PARTIALS', plockMode: 'js' },
     { path: 'mallet',       label: 'Mallet',      type: 'number', min: 0, max: 1, default: 0.5, group: 'MALLET', plockMode: 'js' },
     { path: 'mallet.tone',  label: 'Mallet Tone', type: 'number', min: 500, max: 8000, default: 2500, modulatable: true, lfoMin: 500, lfoMax: 8000, group: 'MALLET', plockMode: 'audioParam' },
-    { path: 'output.level', label: 'Level',       type: 'number', min: 0, max: 1, default: 0.9, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',       type: 'number', min: 0, max: 1, default: 0.9, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   transient: [
     { path: 'pitch',        label: 'Pitch',       type: 'number', min: 0, max: 2000, default: 0, modulatable: true, lfoMin: 0, lfoMax: 2000, group: 'BODY', plockMode: 'js' },
@@ -233,7 +233,7 @@ const EXPECTED = {
     { path: 'click.freq',   label: 'Click Freq',  type: 'number', min: 100, max: 8000, default: 1200, modulatable: true, lfoMin: 100, lfoMax: 8000, group: 'CLICK', plockMode: 'audioParam' },
     { path: 'click.decay',  label: 'Click Decay', type: 'number', min: 0.001, max: 0.05, default: 0.008, group: 'CLICK', plockMode: 'js' },
     { path: 'noise.click',  label: 'Crack',       type: 'number', min: 0, max: 1, default: 0.3, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'CLICK', plockMode: 'audioParam' },
-    { path: 'output.level', label: 'Level',       type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',       type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   wood: [
     { path: 'freq1',        label: 'Freq 1',     type: 'number', min: 200, max: 4000, default: 600, modulatable: true, lfoMin: 200, lfoMax: 4000, group: 'RESONATOR', plockMode: 'audioParam' },
@@ -244,7 +244,7 @@ const EXPECTED = {
     { path: 'decay',        label: 'Decay',      type: 'number', min: 0.001, max: 0.4, default: 0.08, group: 'STRIKE', plockMode: 'js' },
     { path: 'click',        label: 'Click',      type: 'number', min: 0, max: 1, default: 0.6, group: 'STRIKE', plockMode: 'js' },
     { path: 'click.freq',   label: 'Click Freq', type: 'number', min: 500, max: 12000, default: 3000, modulatable: true, lfoMin: 500, lfoMax: 12000, group: 'STRIKE', plockMode: 'audioParam' },
-    { path: 'output.level', label: 'Level',      type: 'number', min: 0, max: 1, default: 1.0, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',      type: 'number', min: 0, max: 1, default: 1.0, modulatable: true, lfoMin: 0, lfoMax: 1, group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   bass: [
     { path: 'osc.detune',   label: 'Detune',    type: 'number', min: -100, max: 100,  default: 0,    modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
@@ -253,7 +253,7 @@ const EXPECTED = {
     { path: 'drive',        label: 'Drive',     type: 'number', min: 0,    max: 1,    default: 0.0,                                 group: 'VOICE',  plockMode: 'js'        },
     { path: 'glide',        label: 'Glide',     type: 'number', min: 0,    max: 500,  default: 0,                                   group: 'VOICE',  plockMode: 'js'        },
     { path: 'accent',       label: 'Accent',    type: 'number', min: 0,    max: 127,  default: 100,                                 group: 'VOICE',  plockMode: 'js'        },
-    { path: 'output.level', label: 'Level',     type: 'number', min: 0,    max: 1,    default: 0.85, modulatable: true, lfoMin: 0,    lfoMax: 1,   group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',     type: 'number', min: 0,    max: 1,    default: 0.85, modulatable: true, lfoMin: 0,    lfoMax: 1,   group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   swarm: [
     { path: 'osc.wave',     label: 'Wave',       type: 'enum',   options: ['sawtooth','square','triangle','sine'], group: 'OSC', plockMode: 'js' },
@@ -263,7 +263,7 @@ const EXPECTED = {
     { path: 'slope',        label: 'Slope',      type: 'number', min: -1,   max: 1,   default: 0,                                  group: 'SWARM',  plockMode: 'js'        },
     { path: 'noise.amount', label: 'Noise Amt',  type: 'number', min: 0,    max: 50,  default: 8,    modulatable: true, lfoMin: 0,    lfoMax: 50,  group: 'NOISE',  plockMode: 'js'        },
     { path: 'noise.color',  label: 'Noise Rate', type: 'number', min: 0,    max: 1,   default: 0.15, modulatable: true, lfoMin: 0,    lfoMax: 1,   group: 'NOISE',  plockMode: 'js'        },
-    { path: 'output.level', label: 'Level',      type: 'number', min: 0,    max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,    lfoMax: 1,   group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',      type: 'number', min: 0,    max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,    lfoMax: 1,   group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   strings: [
     { path: 'mode',         label: 'Mode',     type: 'enum',   options: ['violin','viola','cello','ensemble'], group: 'VOICE', plockMode: 'js' },
@@ -277,7 +277,7 @@ const EXPECTED = {
     { path: 'vibrato.rate', label: 'Vib Rate', type: 'number', min: 0.5,  max: 12,   default: 5.0,  modulatable: true, lfoMin: 0.5,  lfoMax: 12,   group: 'VIBRATO', plockMode: 'audioParam' },
     { path: 'vibrato.syncMode',   label: 'Vib Sync', type: 'enum',   options: ['hz','bpm'],                                            hidden: true, plockMode: 'js' },
     { path: 'vibrato.bpmCount32', label: 'Vib Div',  type: 'number', min: 1, max: 128, default: 8,                                     hidden: true, plockMode: 'js' },
-    { path: 'output.level', label: 'Level',    type: 'number', min: 0,    max: 1,    default: 0.7,  modulatable: true, lfoMin: 0,    lfoMax: 1,    group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level', label: 'Level',    type: 'number', min: 0,    max: 1,    default: 0.7,  modulatable: true, lfoMin: 0,    lfoMax: 1,    group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   moogish: [
     { path: 'osc1.waveform', label: 'O1 Wave',   type: 'enum',   options: ['saw','square','triangle','pulse','sine'], group: 'OSC 1', plockMode: 'js' },
@@ -304,7 +304,7 @@ const EXPECTED = {
     { path: 'hum',           label: 'Hum',       type: 'number', min: 0,   max: 1,   default: 0.0,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'TEXTURE', plockMode: 'js' },
     { path: 'humFreq',       label: 'Hum Hz',    type: 'enum',   options: [50, 60], group: 'TEXTURE', plockMode: 'js' },
     { path: 'osc.detune',    label: 'Detune',    type: 'number', min: -100, max: 100, default: 0,   modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
-    { path: 'output.level',  label: 'Level',     type: 'number', min: 0,   max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level',  label: 'Level',     type: 'number', min: 0,   max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   juno: [
     { path: 'pwm.width',     label: 'PW',        type: 'number', min: 0.05, max: 0.95, default: 0.5, modulatable: true, lfoMin: 0.05, lfoMax: 0.95, group: 'OSC', plockMode: 'js' },
@@ -315,7 +315,7 @@ const EXPECTED = {
     { path: 'noise.level',   label: 'Noise',     type: 'number', min: 0,   max: 1,   default: 0.0,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'TEXTURE', plockMode: 'audioParam' },
     { path: 'drift',         label: 'Drift',     type: 'number', min: 0,   max: 1,   default: 0.4,  group: 'TEXTURE', plockMode: 'js' },
     { path: 'osc.detune',    label: 'Detune',    type: 'number', min: -100, max: 100, default: 0,   modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
-    { path: 'output.level',  label: 'Level',     type: 'number', min: 0,   max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level',  label: 'Level',     type: 'number', min: 0,   max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   oberish: [
     { path: 'osc1.waveform', label: 'O1 Wave',   type: 'enum',   options: ['saw','square','triangle','pulse','sine'], group: 'OSC 1', plockMode: 'js' },
@@ -330,7 +330,7 @@ const EXPECTED = {
     { path: 'noise.level',   label: 'Noise',     type: 'number', min: 0,   max: 1,   default: 0.0,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'TEXTURE', plockMode: 'audioParam' },
     { path: 'drift',         label: 'Drift',     type: 'number', min: 0,   max: 1,   default: 0.6,  group: 'TEXTURE', plockMode: 'js' },
     { path: 'osc.detune',    label: 'Detune',    type: 'number', min: -100, max: 100, default: 0,   modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
-    { path: 'output.level',  label: 'Level',     type: 'number', min: 0,   max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level',  label: 'Level',     type: 'number', min: 0,   max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   fold: [
     { path: 'wave',          label: 'Wave',      type: 'enum',   options: ['sine','triangle'], group: 'OSC', plockMode: 'js' },
@@ -342,7 +342,7 @@ const EXPECTED = {
     { path: 'ratio',         label: 'Ratio',     type: 'number', min: 0.5, max: 8,   default: 1.0,  group: 'FM', plockMode: 'js' },
     { path: 'drift',         label: 'Drift',     type: 'number', min: 0,   max: 1,   default: 0.4,  group: 'TEXTURE', plockMode: 'js' },
     { path: 'osc.detune',    label: 'Detune',    type: 'number', min: -100, max: 100, default: 0,   modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
-    { path: 'output.level',  label: 'Level',     type: 'number', min: 0,   max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'OUTPUT', plockMode: 'audioParam' },
+    { path: 'output.level',  label: 'Level',     type: 'number', min: 0,   max: 1,   default: 0.8,  modulatable: true, lfoMin: 0,   lfoMax: 1,  group: 'OUTPUT', ampMaster: true, plockMode: 'audioParam' },
   ],
   sampler: [
     { path: 'sample.start',     label: 'Start',    type: 'number',  min: 0,   max: 1,   default: 0,    modulatable: false, plockMode: 'js' },
@@ -354,7 +354,7 @@ const EXPECTED = {
     { path: 'sample.reverse', label: 'Reverse', type: 'boolean', default: false,                    plockMode: 'js' },
     { path: 'sample.loop',    label: 'Loop',    type: 'boolean', default: false,                    plockMode: 'js' },
     { path: 'sample.pitch',   label: 'Pitch',   type: 'boolean', default: true,                     plockMode: 'js' },
-    { path: 'output.level',   label: 'Level',   type: 'number',  min: 0,   max: 1,   default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+    { path: 'output.level',   label: 'Level',   type: 'number',  min: 0,   max: 1,   default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, ampMaster: true, plockMode: 'audioParam' },
   ],
 };
 

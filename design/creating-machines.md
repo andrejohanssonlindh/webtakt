@@ -127,7 +127,11 @@ export class FooMachine extends Machine {
   static SPEC = {
     'tone':         { label: 'Tone', type: 'number', min: 0, max: 1, default: 0.5,
                       target: m => m._toneNode.frequency, modulatable: true, lfoMin: 0, lfoMax: 1 },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.5,
+    // MASTER out level — flag it `ampMaster: true` so the AMP page hosts it as the
+    // track's LEVEL knob (and the machine's own panel skips it). Exactly ONE param
+    // per machine carries this flag; per-osc / per-operator levels do NOT. See
+    // Machine.ampLevelPath().
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.5, ampMaster: true,
                       target: m => m.outputGain.gain, modulatable: true, lfoMin: 0, lfoMax: 1 },
   };
   constructor(context) {
@@ -178,7 +182,7 @@ export class FooSamplerMachine extends Machine {
   setParam(p, v, t) { this._params[p] = v; if (p === 'output.level') this.outputGain.gain.setTargetAtTime(v, t ?? this.context.currentTime, 0.01); }
   getParam(p) { return this._params[p]; }
   resolveAudioParam(p) { return p === 'output.level' ? this.outputGain.gain : null; }
-  getParamList() { return [ /* …; output.level → plockMode:'audioParam', modulatable:true */ ]; }
+  getParamList() { return [ /* …; output.level → plockMode:'audioParam', modulatable:true, ampMaster:true (AMP-page LEVEL) */ ]; }
   toJSON()   { return { type: this.type, sampleId: this.sampleId, sampleName: this.sampleName, params: { ...this._params } }; }
   fromJSON(o){ this.sampleId = o.sampleId ?? null; this.sampleName = o.sampleName ?? ''; Object.entries(o.params ?? {}).forEach(([k,v]) => this.setParam(k,v)); }
 }

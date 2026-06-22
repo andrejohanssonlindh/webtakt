@@ -345,14 +345,19 @@ export const MANUAL_CONTENT = {
   amp: {
     title: 'AMP',
     blurb: 'Controls the volume envelope that shapes every note\'s loudness over ' +
-           'time, plus stereo placement and velocity response. The ADSR curve ' +
-           'applies to the track\'s amplitude on every triggered step.',
+           'time, plus stereo placement, velocity response, and the track\'s overall ' +
+           'output level. The ADSR curve applies to the track\'s amplitude on every ' +
+           'triggered step.',
     items: [
       ['PAN', 'Stereo position from L100 (hard left) through C (centre) to R100 ' +
                  '(hard right). Bipolar knob; p-lockable per step for auto-pan effects.'],
       ['VEL', 'Velocity sensitivity. How much the step\'s velocity value scales the ' +
                  'amp envelope. At 100% a velocity-127 note is full amplitude and a ' +
                  'velocity-1 note is near-silent. At 0% velocity has no effect.'],
+      ['LEVEL', 'The machine\'s overall output level (0–100%). This is the master ' +
+                 'out level for the whole track and lives here for every machine — ' +
+                 'individual oscillator / FM-operator / sub levels stay on the SYNTH ' +
+                 'tab. p-lockable per step; mirrored by the MIXER LEVEL knob.'],
       ['Amp ADSR', 'The amplitude envelope. ATTACK — time from silence to peak. ' +
                  'DECAY — time from peak down to the sustain level. SUSTAIN — ' +
                  'level held while the note is on. RELEASE — fade-out time after ' +
@@ -436,11 +441,14 @@ export const MANUAL_CONTENT = {
   all: {
     title: 'ALL',
     blurb: 'An all-tracks overview: one compact step row per track, stacked so ' +
-           'you can read the whole arrangement at once. Read-only — cells mirror ' +
-           'the step grid (notes, p-locks, beat markers, playhead). Click a row ' +
-           'to select that track and edit it in the other tabs.',
+           'you can read the whole arrangement at once. The step cells are ' +
+           'read-only (mirroring the step grid), but each row has an M mute ' +
+           'toggle. Click a row to select that track and edit it in the other tabs.',
     items: [
-      ['Track row', 'One per track, labelled T1, T2, … with the machine type underneath.'],
+      ['Track row', 'One per track, labelled T1, T2, … with the machine type underneath. ' +
+                'Muted tracks are dimmed.'],
+      ['M', 'Mute / unmute this track. Stays in sync with the mute dot on the track ' +
+                'row up top and the bare-digit (1–9) mute shortcut.'],
       ['Cells', 'The whole pattern (all steps) shown small. Red = a note, amber border = ' +
                 'p-lock/condition data, white = the current playhead.'],
       ['Click a row', 'Selects that track (same as clicking it in the track row up top).'],
@@ -457,8 +465,8 @@ export const MANUAL_CONTENT = {
            'no binds show just LEVEL + DJ FILT.',
     items: [
       ['LEVEL', 'Output level for this track\'s machine (0–100%). Linked to the ' +
-                 'machine\'s output.level param — moving it here updates the SYNTH ' +
-                 'tab knob for the selected track.'],
+                 'machine\'s output.level param — moving it here updates the AMP ' +
+                 'tab LEVEL knob for the selected track.'],
       ['Bound-FX row', 'For each FX you keybind (FX 1–4) on a track, the strip ' +
                  'shows that effect\'s glyph + name, its main knob (wet / mix / ' +
                  'amount / depth, depending on the effect), and an ON/OFF toggle. ' +

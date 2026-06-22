@@ -78,7 +78,7 @@ export class MultiSamplerPanel {
     const globalG = makeGroup('GLOBAL');
     globalG.appendChild(this._makeModeSelect());
     addKnob(globalG, 'sample.speed', 'SPEED', 0.125, 4, v => v.toFixed(2) + 'x');
-    addKnob(globalG, 'output.level', 'LEVEL', 0, 1, v => Math.round(v * 100) + '%');
+    // Master output level lives on the AMP page (LEVEL knob), not here.
 
     // ── Zone strips ──
     for (let i = 0; i < MAX_ZONES; i++) {

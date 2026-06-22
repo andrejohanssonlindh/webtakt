@@ -44,7 +44,7 @@ export class CombMachine extends Machine {
     'decay2':       { label: 'Decay 2', type: 'number', min: 0.1, max: 2, default: 0.35, group: 'TUBE', modulatable: false, plockMode: 'js' },
     'mix':          { label: 'Mix', type: 'number', min: 0, max: 1, default: 0.4, group: 'VOICE', modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'js' },
     'strike':       { label: 'Strike', type: 'number', min: 0, max: 1, default: 0.6, group: 'VOICE', modulatable: false, plockMode: 'js' },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8, group: 'OUTPUT',
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8, group: 'OUTPUT', ampMaster: true,
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

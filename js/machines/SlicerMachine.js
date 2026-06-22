@@ -219,7 +219,7 @@ export class SlicerMachine extends Machine {
       { path: 'sample.gain',   label: 'Gain',    type: 'number', min: 0,  max: 20,  default: 1,   modulatable: false, plockMode: 'js' },
       { path: 'sample.reverse',label: 'Reverse', type: 'boolean', default: false,             plockMode: 'js' },
       { path: 'sample.loop',   label: 'Loop',    type: 'boolean', default: false,             plockMode: 'js' },
-      { path: 'output.level',  label: 'Level',   type: 'number', min: 0,  max: 1,   default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+      { path: 'output.level',  label: 'Level',   type: 'number', min: 0,  max: 1,   default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam', ampMaster: true },
     ];
   }
 

@@ -37,7 +37,7 @@ export class ClappMachine extends Machine {
     'note.track':   { label: 'Note Track', type: 'boolean', default: false, group: 'TONE', plockMode: 'js' },
     'decay':        { label: 'Decay', type: 'number', min: 0.05, max: 1.0, default: 0.3, group: 'SHAPE', plockMode: 'js' },
     'spread':       { label: 'Spread', type: 'number', min: 0, max: 30, default: 8, group: 'SHAPE', plockMode: 'js' },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85, group: 'OUTPUT',
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85, group: 'OUTPUT', ampMaster: true,
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

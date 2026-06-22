@@ -57,7 +57,7 @@ export class CymbalMachine extends Machine {
     'mid.decay':    { label: 'Mid Decay', type: 'number', min: 0.1, max: 2.0, default: 0.6, group: 'DECAY', plockMode: 'js' },
     'open.decay':   { label: 'Open Decay', type: 'number', min: 0.5, max: 8.0, default: 2.5, group: 'DECAY', plockMode: 'js' },
     'mode':         { label: 'Mode', type: 'enum', options: ['closed','mid','open'], default: 'closed', group: 'DECAY', plockMode: 'js' },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.5, group: 'OUTPUT',
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.5, group: 'OUTPUT', ampMaster: true,
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

@@ -47,7 +47,7 @@ export class TomMachine extends Machine {
                       apply: (v, t, m) => m._toneGain.gain.setTargetAtTime(v, t, 0.01) },
     'click':        { label: 'Click', type: 'number', min: 0, max: 1, default: 0.3, group: 'ATTACK', plockMode: 'js' },
     'click.decay':  { label: 'Clk Decay', type: 'number', min: 0.003, max: 0.04, default: 0.012, group: 'ATTACK', plockMode: 'js' },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85, group: 'OUTPUT',
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85, group: 'OUTPUT', ampMaster: true,
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

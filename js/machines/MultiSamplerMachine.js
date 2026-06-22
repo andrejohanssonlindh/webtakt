@@ -254,7 +254,7 @@ export class MultiSamplerMachine extends Machine {
       );
     }
     list.push(
-      { path: 'output.level', label: 'Level', type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+      { path: 'output.level', label: 'Level', type: 'number', min: 0, max: 1, default: 0.85, modulatable: true, lfoMin: 0, lfoMax: 1, plockMode: 'audioParam', ampMaster: true },
     );
     return list;
   }

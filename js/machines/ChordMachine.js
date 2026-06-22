@@ -89,7 +89,7 @@ export class ChordMachine extends Machine {
     'waveform':     { label: 'Waveform', type: 'enum', options: ['sawtooth','square','triangle','sine'],
                       default: 'sawtooth', group: 'OSC', plockMode: 'js',
                       apply: (v, t, m) => m._oscs.forEach(osc => { osc.type = v; }) },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.7, group: 'OUTPUT',
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.7, group: 'OUTPUT', ampMaster: true,
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

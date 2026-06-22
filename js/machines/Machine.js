@@ -144,6 +144,9 @@ export class Machine {
       if (s.modulatable)        { d.modulatable = true; d.lfoMin = s.lfoMin; d.lfoMax = s.lfoMax; }
       else if ('modulatable' in s) d.modulatable = false;   // samplers emit this explicitly
       if (s.hidden) d.hidden = true;
+      // Master output-level flag: the AMP page hosts this param as the track's
+      // overall LEVEL knob, and the machine's own panel skips it. See ampLevelPath().
+      if (s.ampMaster) d.ampMaster = true;
       // Optional layout hint: panels (DefaultMachinePanel) cluster params sharing
       // a `group` into a labelled row. No group → flows in the default run, so
       // machines that don't declare it render exactly as before.
@@ -237,6 +240,20 @@ export class Machine {
       const v = this.getParam(p.path);
       if (v !== undefined) this.setParam(p.path, v, time);
     });
+  }
+
+  /**
+   * Path of this machine's MASTER output-level param, or null if it has none.
+   * This is the single "overall out level" the AMP page hosts (a LEVEL knob),
+   * so it is hidden from the machine's own panel. A machine declares it by
+   * flagging exactly one getParamList() descriptor with `ampMaster: true`
+   * (conventionally 'output.level'). Per-oscillator / per-operator / sub levels
+   * are NOT flagged — those stay in the synth panel.
+   * @returns {string|null}
+   */
+  ampLevelPath() {
+    const d = this.getParamList().find(p => p.ampMaster);
+    return d ? d.path : null;
   }
 
   /** Convert MIDI note number to frequency in Hz. */

@@ -358,7 +358,7 @@ export class SampleSwarmMachine extends Machine {
       { path: 'slope',          label: 'Slope',      type: 'number',  min: -1,    max: 1,    default: 0,    modulatable: false, plockMode: 'js' },
       { path: 'noise.amount',   label: 'Noise Amt',  type: 'number',  min: 0,     max: 50,   default: 8,    modulatable: false, plockMode: 'js' },
       { path: 'noise.color',    label: 'Noise Rate', type: 'number',  min: 0,     max: 1,    default: 0.15, modulatable: false, plockMode: 'js' },
-      { path: 'output.level',   label: 'Level',      type: 'number',  min: 0,     max: 1,    default: 0.8,  modulatable: true,  lfoMin: 0, lfoMax: 1,  plockMode: 'audioParam' },
+      { path: 'output.level',   label: 'Level',      type: 'number',  min: 0,     max: 1,    default: 0.8,  modulatable: true,  lfoMin: 0, lfoMax: 1,  plockMode: 'audioParam', ampMaster: true },
     ];
   }
 

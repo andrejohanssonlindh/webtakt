@@ -73,7 +73,7 @@ export class FoldMachine extends Machine {
                        target: m => m._carOsc.detune, manualTarget: true,
                        apply: (v, t, m) => m._retune(t) },
 
-    'output.level':  { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8, group: 'OUTPUT',
+    'output.level':  { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8, group: 'OUTPUT', ampMaster: true,
                        modulatable: true, lfoMin: 0, lfoMax: 1,
                        target: m => m.outputGain.gain, schedule: 'setValue' },
   };

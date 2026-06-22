@@ -59,6 +59,7 @@ export class DefaultMachinePanel {
 
     machine.getParamList().forEach(p => {
       if (p.hidden) return;
+      if (p.ampMaster) return;   // master output level lives on the AMP page (LEVEL knob)
       const dst = targetFor(p);
 
       const base = p.path.includes('.') ? p.path.slice(0, p.path.lastIndexOf('.')) : null;

@@ -120,7 +120,7 @@ export class InputMachine extends Machine {
     'input.gain':   { label: 'Gain', type: 'number', min: 0, max: 8, default: 2.0,
                       modulatable: true, lfoMin: 0, lfoMax: 8,
                       target: m => m.inputGain.gain, schedule: 'setValue' },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 1.0,
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 1.0, ampMaster: true,
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
     // Gate mode is a JS-only enum-ish boolean; the actual gate behaviour is

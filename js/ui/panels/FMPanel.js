@@ -262,19 +262,8 @@ export class FMPanel {
     opsRow.appendChild(mkOpCell('op3', 'OP3', 'MOD',     'fm-role-mod',     ['op3.ratio', 'op3.level', 'op3.detune']));
     opsRow.appendChild(mkOpCell('op4', 'OP4', 'MOD',     'fm-role-mod',     ['op4.ratio', 'op4.level', 'op4.detune']));
 
-    // OUTPUT — its own section, matching every other machine.
-    const outG = document.createElement('div');
-    outG.className = 'param-group fm-op-group';
-    const outLbl = document.createElement('div');
-    outLbl.className = 'param-group-label';
-    outLbl.textContent = 'OUTPUT';
-    outG.appendChild(outLbl);
-    const outBody = document.createElement('div');
-    outBody.className = 'param-group-body';
-    const outKnob = mkKnob('output.level', 44);
-    if (outKnob) outBody.appendChild(outKnob.el);
-    outG.appendChild(outBody);
-    opsRow.appendChild(outG);
+    // Master output level ('output.level') is hosted on the AMP page (LEVEL knob),
+    // not here — only the per-operator levels (op1–op4) live in the synth panel.
 
     wrap.appendChild(opsRow);
 

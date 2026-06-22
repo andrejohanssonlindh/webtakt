@@ -226,7 +226,7 @@ export class GranularMachine extends Machine {
       { path: 'sample.root',   label: 'Root',     type: 'number', min: 0,    max: 127, default: 60,   modulatable: false, plockMode: 'js' },
       { path: 'sample.pitch',  label: 'Pitch',    type: 'boolean', default: true,                     plockMode: 'js' },
       { path: 'sample.reverse',label: 'Reverse',  type: 'boolean', default: false,                    plockMode: 'js' },
-      { path: 'output.level',  label: 'Level',    type: 'number', min: 0,    max: 1,   default: 0.85, modulatable: true,  lfoMin: 0, lfoMax: 1, plockMode: 'audioParam' },
+      { path: 'output.level',  label: 'Level',    type: 'number', min: 0,    max: 1,   default: 0.85, modulatable: true,  lfoMin: 0, lfoMax: 1, plockMode: 'audioParam', ampMaster: true },
     ];
   }
 

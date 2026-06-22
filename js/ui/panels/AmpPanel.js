@@ -16,6 +16,7 @@ export class AmpPanel {
     const { track, container, activeWidgets, knobByPath, state, getStep, hasStepNow } = ctx;
     const step    = ctx.step;
     const hasStep = step !== null;
+    const writeValue = ctx.writeValue;
 
     // ── AMP section (pan + velocity knobs) ─────────────────────
     // `.param-group` sections (same idiom as DefaultMachinePanel / FMPanel):
@@ -111,6 +112,49 @@ export class AmpPanel {
     panBody.appendChild(velKnob.el);
     activeWidgets.push(velKnob);
     knobByPath.set('env.velSens', velKnob);
+
+    // ── Master output LEVEL (the machine's overall out level) ──
+    // Every machine's "overall out level" now lives here on the AMP page rather
+    // than in its own panel (per-oscillator / per-operator / sub levels stay in
+    // the synth). The actual param is the machine's master-level path (usually
+    // 'output.level'), found via Machine.ampLevelPath(); writes go through the
+    // same p-lock-aware path the machine panel used (ctx.writeValue → step p-lock
+    // when a step is selected, else machine.setParam + pool sync). Machines with
+    // no master level (e.g. MIDI) skip the knob entirely.
+    const levelPath = track.machine.ampLevelPath?.();
+    if (levelPath) {
+      const hasLvlPLock = hasStep && step.plocks.has(levelPath);
+      const lvlVal = () => {
+        if (hasStep && step.plocks.has(levelPath)) return step.plocks.get(levelPath);
+        return track.machine.getParam(levelPath);
+      };
+      const levelKnob = new KnobWidget({
+        label:   'LEVEL',
+        min:     0,
+        max:     1,
+        value:   lvlVal(),
+        bipolar: false,
+        size:    64,
+        fmt:     v => Math.round(v * 100) + '%',
+        onChange: v => {
+          writeValue(track.machine, levelPath, v, false);
+          levelKnob.setHasPLock(hasStep);
+        },
+        onRelease: () => {
+          if (hasStep) {
+            state.emit('stepChanged', {
+              trackIndex: state.selectedTrackIndex,
+              stepIndex:  state.selectedStepIndex,
+              step,
+            });
+          }
+        },
+      });
+      levelKnob.setHasPLock(hasLvlPLock);
+      panBody.appendChild(levelKnob.el);
+      activeWidgets.push(levelKnob);
+      knobByPath.set(levelPath, levelKnob);
+    }
 
     // ── → FX TRACK send ────────────────────────────────────────
     // Route this track through the global FX track (insert) before output. Shown

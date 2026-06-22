@@ -59,7 +59,7 @@ export class MarimbaMachine extends Machine {
     'mallet.tone':  { label: 'Mallet Tone', type: 'number', min: 500, max: 8000, default: 2500, group: 'MALLET',
                       modulatable: true, lfoMin: 500, lfoMax: 8000,
                       target: m => m._malletFilter.frequency, schedule: 'setTarget', tc: 0.005 },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.9, group: 'OUTPUT',
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.9, group: 'OUTPUT', ampMaster: true,
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

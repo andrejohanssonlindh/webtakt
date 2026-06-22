@@ -167,8 +167,7 @@ export class GranularPanel {
     pitchG.appendChild(this._makeToggle('PITCH', 'sample.pitch'));
     pitchG.appendChild(this._makeToggle('REV',   'sample.reverse'));
 
-    const outG = makeGroup('OUTPUT');
-    addKnob(outG, 'output.level', 'LEVEL', 0, 1, v => Math.round(v * 100) + '%');
+    // Master output level lives on the AMP page (LEVEL knob), not here.
 
     this.container.appendChild(wrap);
     addBrowseButton(this);

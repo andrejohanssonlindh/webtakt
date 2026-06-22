@@ -457,7 +457,7 @@ export class FMMachine extends Machine {
       ...envDefs('op4', 'a', 'A', 0.001), ...envDefs('op4', 'd', 'D', 0.15),
       ...envDefs('op4', 's', 'S', 0.0),   ...envDefs('op4', 'r', 'R', 0.05),
       // Output
-      { path: 'output.level', label: 'Level',  type: 'number', min: 0,    max: 1,  default: 0.8, modulatable: true, lfoMin: 0,    lfoMax: 1,  plockMode: 'audioParam' },
+      { path: 'output.level', label: 'Level',  type: 'number', min: 0,    max: 1,  default: 0.8, modulatable: true, lfoMin: 0,    lfoMax: 1,  plockMode: 'audioParam', ampMaster: true },
     ];
   }
 

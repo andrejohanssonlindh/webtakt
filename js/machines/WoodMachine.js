@@ -61,7 +61,7 @@ export class WoodMachine extends Machine {
     'click.freq':   { label: 'Click Freq', type: 'number', min: 500, max: 12000, default: 3000, group: 'STRIKE',
                       modulatable: true, lfoMin: 500, lfoMax: 12000,
                       target: m => m._clickOsc.frequency, schedule: 'setTarget', tc: 0.005 },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 1.0, group: 'OUTPUT',
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 1.0, group: 'OUTPUT', ampMaster: true,
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

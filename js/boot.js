@@ -831,7 +831,7 @@ document.addEventListener('keydown', (e) => {
     // bare digit → mute / unmute
     const track = state.project.tracks[num - 1];
     track.muted ? track.unmute() : track.mute();
-    trackRow.render();
+    state.emit('muteChanged', { track });   // TrackRow + ALL panel re-sync via listeners
   }
 });
 

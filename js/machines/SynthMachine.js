@@ -40,7 +40,7 @@ export class SynthMachine extends Machine {
                       target: m => m._subGain.gain, schedule: 'setTarget', tc: 0.005 },
     'sub.waveform': { label: 'Sub Waveform', type: 'enum', options: ['sine','sawtooth','square','triangle'],
                       default: 'square', group: 'SUB', plockMode: 'js', apply: (v, t, m) => { m._oscSub.type = v; } },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8, group: 'OUTPUT',
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.8, group: 'OUTPUT', ampMaster: true,
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };

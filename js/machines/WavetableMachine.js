@@ -257,7 +257,7 @@ export class WavetableMachine extends Machine {
       { path: 'osc.detune',   label: 'Detune',    type: 'number', min: -100, max: 100,                  default: 0,   modulatable: true, lfoMin: -100, lfoMax: 100, plockMode: 'audioParam', hidden: true },
       { path: 'pos',          label: 'Pos',        type: 'number', min: 0,    max: NUM_WAVETABLES - 1,   default: 2.0, modulatable: false, plockMode: 'js' },
       { path: 'sub.level',    label: 'Sub Level',  type: 'number', min: 0,    max: 1,                    default: 0.25, modulatable: true, lfoMin: 0,   lfoMax: 1,   plockMode: 'audioParam' },
-      { path: 'output.level', label: 'Level',      type: 'number', min: 0,    max: 1,                    default: 0.8,  modulatable: true, lfoMin: 0,   lfoMax: 1,   plockMode: 'audioParam' },
+      { path: 'output.level', label: 'Level',      type: 'number', min: 0,    max: 1,                    default: 0.8,  modulatable: true, lfoMin: 0,   lfoMax: 1,   plockMode: 'audioParam', ampMaster: true },
     ];
   }
 

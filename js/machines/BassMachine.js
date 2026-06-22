@@ -59,7 +59,7 @@ export class BassMachine extends Machine {
                       apply: (v, t, m) => { m._distortion.curve = _buildClipCurve(v); } },
     'glide':        { label: 'Glide', type: 'number', min: 0, max: 500, default: 0, group: 'VOICE', plockMode: 'js' },
     'accent':       { label: 'Accent', type: 'number', min: 0, max: 127, default: 100, group: 'VOICE', plockMode: 'js' },
-    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85, group: 'OUTPUT',
+    'output.level': { label: 'Level', type: 'number', min: 0, max: 1, default: 0.85, group: 'OUTPUT', ampMaster: true,
                       modulatable: true, lfoMin: 0, lfoMax: 1,
                       target: m => m.outputGain.gain, schedule: 'setValue' },
   };
