@@ -39,6 +39,8 @@ import { SoundsPanel }          from './panels/SoundsPanel.js';
 import { FXLibrary }            from '../state/FXLibrary.js';
 import { MachinePickerPanel, MACHINE_GROUPS, MACHINE_DEFS } from './panels/MachinePickerPanel.js';
 import { ManualOverlay }        from './manual.js';
+import { PianoRollPanel }       from './panels/PianoRollPanel.js';
+import { AllTracksPanel }       from './panels/AllTracksPanel.js';
 
 export class SynthPanel {
   /**
@@ -84,13 +86,23 @@ export class SynthPanel {
     // the header chain mini-outline so bypassed blocks dim/undim in sync.
     state.on('fxEnabledChanged', () => this._renderFXChainOutline());
     state.on('lfoChanged',    () => { if (state.activeTab === 'lfo') this._renderContent(); });
-    state.on('stepSelected',  () => { this._renderPLockTabIndicators(); this._renderContent(); });
+    // Track length changed — the roll draws all stepCount columns, so rebuild it.
+    state.on('stepCountChanged', () => { if (state.activeTab === 'roll' || state.activeTab === 'all') this._renderContent(); });
+    state.on('stepSelected',  () => {
+      this._renderPLockTabIndicators();
+      // The roll redraws its own note tints in place (keeps scroll position); a
+      // full _renderContent would rebuild the grid and reset the view.
+      if (state.activeTab === 'roll') { this._roll?.refreshTints(); return; }
+      this._renderContent();
+    });
     // stepChanged: re-render only on trig tab (note display + button state must update).
     // On other tabs we skip — must not rebuild knobs mid-drag. Always refresh the
     // p-lock tab indicators (a p-lock may have been added/removed on this step).
     state.on('stepChanged',   () => {
       this._renderPLockTabIndicators();
       if (state.activeTab === 'trig') this._renderContent();
+      else if (state.activeTab === 'roll') this._roll?.refresh();
+      else if (state.activeTab === 'all') this._allTracks?.refresh();
     });
     // paramChanged: mod wheel (or any external source) changed a param — update knob + viz
     state.on('paramChanged',  ({ path, value }) => {
@@ -254,7 +266,7 @@ export class SynthPanel {
     this._tabBar.appendChild(stepsBtn);
 
     // Voice tabs only — FX moved to right-side toggles
-    const leftTabs = ['machine', 'sounds', 'scales', 'trig', 'synth', 'arp', 'filter', 'amp', 'lfo', 'midi', 'mixer', 'deck'];
+    const leftTabs = ['machine', 'sounds', 'scales', 'trig', 'synth', 'roll', 'arp', 'filter', 'amp', 'lfo', 'midi', 'all', 'mixer', 'deck'];
     leftTabs.forEach(tab => {
       const btn = document.createElement('button');
       btn.className   = 'tab-btn';
@@ -555,12 +567,14 @@ export class SynthPanel {
 
     switch (this.state.activeTab) {
       case 'machine': this._renderMachineTab(track); break;
+      case 'all':     this._renderAllTracks();       break;
       case 'mixer':   this._renderMixer();           break;
       case 'deck':    this._renderDeck();            break;
       case 'sounds':  this._renderSounds(track);  break;
       case 'scales':  this._renderScales(track);  break;
       case 'trig':   this._renderTrig(track);   break;
       case 'synth':  this._renderSynth(track);  break;
+      case 'roll':   this._renderRoll(track);   break;
       case 'arp':    this._renderArp(track);    break;
       case 'filter': this._renderFilter(track); break;
       case 'amp':    this._renderEnv(track);    break;
@@ -634,6 +648,16 @@ export class SynthPanel {
 
   _renderDeck() {
     new DeckPanel().render(this._makeTabContext(this.state.selectedTrack));
+  }
+
+  _renderRoll(track) {
+    this._roll = new PianoRollPanel();
+    this._roll.render(this._makeTabContext(track));
+  }
+
+  _renderAllTracks() {
+    this._allTracks = new AllTracksPanel();
+    this._allTracks.render(this._makeTabContext(this.state.selectedTrack));
   }
 
   // Machine list re-exported from MachinePickerPanel for backward compat.

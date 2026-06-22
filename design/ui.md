@@ -13,11 +13,13 @@ The panel header has two zones in a single row:
 | SCALES | Scale dropdown + root note picker (12 buttons) + chromatic preview strip |
 | TRIG | Note display, REMOVE NOTE, RESET TRIG, condition/chance/length/nudge/detune/tone knobs. NUDGE is only shown when a step is selected. The track-wide no-step controls — QUANTIZE knob (0–100%), **NOTE FOLLOW** dropdown, and **FLW DLY** knob (0–500ms) — live in a separate right-hand column (`.trig-side-col`, a sibling of `.trig-panel` in the wrapping flex `.panel-content`) shown only when no step is selected. SHIFT ◀/▶ rotates the whole pattern via `Sequencer.shiftAll` when no step is selected; with a step selected the buttons read **◀ MOVE / MOVE ▶** and move just that trigger one slot via `Sequencer.moveStep` (collision-push: slides into an empty slot, else pushes the run ahead of it to the first gap; wraps over the whole pattern, not per page; selection follows across pages). The ←/→ keys (`keybinds.moveLeft/moveRight`) drive the same — trigger-move when a step is selected, whole-track shift otherwise. Buttons and keys share the `moveSelectedStep` coordinator (`_shiftSelected`) in index.html, which branches on selection. |
 | SYNTH | Machine params — varies by machine type. Detune is hidden here (moved to TRIG). Rendered by a machine-specific panel from `js/ui/panels/`. |
+| ROLL | Per-track piano roll. A *renderer* over `Step.voices` (Y = pitch, X = step, all `stepCount` columns scrolled — paging dissolved). See Piano Roll Tab section below. |
 | ARP | Per-track arpeggiator. ON/OFF toggle + mode selector (Chord / Manual / Random / Input). Input mode is keyboard-driven + recordable. See Arpeggiator section below. |
 | FILTER | Single row: type dropdown + cutoff/res/gain/env knobs (left) + FilterViz (centre) + right column with compact filter ADSR above base HPF/LPF knobs. All p-lockable. |
 | AMP | Single row: PAN knob (left, p-lockable + LFO-assignable) + compact amp ADSR (right, canvasH=80, 44px knobs). Each A/D/R knob has a small MS/BPM tag for per-stage tempo-sync (BPM stage shows e.g. "1/8"; canvas plots resolved seconds). |
 | LFO | LFO sub-selector (LFO 1, LFO 2, …, +) capped at 220px wide, destination dropdown (grouped), waveform/trig, unified RATE knob (click center HZ↔BPM), depth/phase/fade knobs |
 | MIDI | Per-track MIDI In: input port dropdown, channel filter (All / Ch 1–16), CC→param mapping table (CC# + target param dropdown, + Add CC / × remove). |
+| ALL | All-tracks overview: one compact step row per track (whole pattern, scaled small), stacked + scrollable. Read-only *renderer* over every track's `Step[]`; clicking a row selects that track. See All-Tracks Tab section below. |
 | MIXER | All-tracks mixer island: one strip per track showing Level, DLY wet, CRUSH wet, REV wet, and DJ Filter knobs. Clicking a strip selects that track. |
 | DECK | DJ crossfade between two decks (Project instances). Two symmetric deck columns (A/B) with a constant-power crossfader between them. Per deck: LOAD song, CONTROL (point editing UI at this deck), SILENCE (mute deck bus), UNLOAD (free CPU). See Deck Tab section below. |
 
@@ -57,7 +59,7 @@ Content is **centralized** in `js/ui/manual.js` — *not* scattered as `descript
 - **`MANUAL_CONTENT`** — keyed by tab name; one `{ title, blurb, items: [[name, desc], …] }` entry per tab.
 - **`MACHINE_MANUAL`** — keyed by machine type (`track.machine.type`). The SYNTH tab is machine-dependent, so when its `?` opens, `SynthPanel` passes the loaded machine's type; the overlay shows the matching `MACHINE_MANUAL` entry if present, else falls back to the generic `synth` entry in `MANUAL_CONTENT`.
 
-Tabs/machines without an entry render a "not yet documented" placeholder, so the affordance ships incrementally. Currently documented tabs: **MACHINE, SOUNDS, SCALES, TRIG, ARP, FILTER, AMP, LFO, MIDI, MIXER, DECK, DELAY, CRUSH, CHORUS, REVERB** — plus a generic **SYNTH** fallback. Per-machine `MACHINE_MANUAL` entries cover: `synth, bass, chord, wavetable, swarm, fm, karplus, marimba, comb, strings, moogish` (melodic), `kick.silk, kick.hard, snare, hihat, clapp, cymbal, wood, transient, noise` (digital drums), `kick.analogue, snare.analogue, hihat.analogue, cymbal.analogue, tom.analogue, clapp.analogue` (Patina analogue drums), `sampler, wt-sampler, sample-swarm` (samplers). MidiMachine has no SYNTH-tab params and falls back to the generic entry gracefully.
+Tabs/machines without an entry render a "not yet documented" placeholder, so the affordance ships incrementally. Currently documented tabs: **MACHINE, SOUNDS, SCALES, TRIG, ROLL, ARP, FILTER, AMP, LFO, MIDI, ALL, MIXER, DECK, DELAY, CRUSH, CHORUS, REVERB** — plus a generic **SYNTH** fallback. Per-machine `MACHINE_MANUAL` entries cover: `synth, bass, chord, wavetable, swarm, fm, karplus, marimba, comb, strings, moogish` (melodic), `kick.silk, kick.hard, snare, hihat, clapp, cymbal, wood, transient, noise` (digital drums), `kick.analogue, snare.analogue, hihat.analogue, cymbal.analogue, tom.analogue, clapp.analogue` (Patina analogue drums), `sampler, wt-sampler, sample-swarm` (samplers). MidiMachine has no SYNTH-tab params and falls back to the generic entry gracefully.
 
 ### P-Lock Knob Pattern
 
@@ -77,6 +79,69 @@ everything else → SYNTH). `_renderPLockTabIndicators()` refreshes on render + 
 
 **FilterViz refresh pattern**: all knobs in the FILTER tab call `mainViz.refresh()` in both
 `onChange` (live animation while dragging) and `onRelease`.
+
+---
+
+## Piano Roll Tab (ROLL)
+
+A per-track piano roll — `js/ui/panels/PianoRollPanel.js`. It is a **renderer over the
+existing `Step[]` model**, not a new data structure: every note block is one `voice` on a
+`Step` (see `design/sequencer.md` → Step Data Model + Sequencer Mode). Editing only ever
+mutates `step.voices` / `step.active` and emits `stepChanged`.
+
+**Axes:**
+- **Y** = pitch, 128 MIDI rows (vertical scroll, auto-centred on existing notes / C4). A sticky
+  left gutter labels **every** row (C rows emphasised with the octave number); black-key rows dimmed.
+- **X** = step. **All `stepCount` columns** are drawn and scrolled horizontally — the 16-step
+  paging is dissolved here. Beat lines every 4 steps.
+
+**Note block geometry:** `left = (step.index + voice.nudge)·COL_W`, `width = voice.length·COL_W`,
+`top = (127 − voice.note)·ROW_H`, opacity scaled by `voice.velocity`.
+
+**Decorations:**
+- Out-of-scale pitch rows shaded (`noteInScale`, skipped when chromatic).
+- Pitch rows that hold ≥1 note get a faint amber band so used notes are easy to scan across.
+
+**Edits (manual mode only — disabled when `track.sequencerMode !== 'manual'`):**
+| Gesture | Effect |
+|---|---|
+| Click empty cell | Add a voice at that pitch/step (`step.active = true`; inherits `track.trigVelocity`). |
+| Click a note block | Select that step (emits `selectStepAbs` → page jump + `selectStep`, so the step grid + TRIG/SYNTH tabs drive p-locks / condition / chance / retrigger). **Notes-only roll:** deeper per-step editing stays in those tabs. |
+| Drag a block's right edge | `voice.length`. Snaps to the **sync-knob grid** (`settings.gridBase`: one step = a 1/16 note, so finest sub-step = `16/gridBase` — 1/32→0.5, 1/64→0.25, 1/128→0.125 of a step). Hold **Alt** for free (un-snapped). |
+| Alt-drag a block body | `voice.nudge` (−0.99..+0.99 of a step, grid-snapped unless Alt). |
+| Double-click a block | Remove that voice (`step.removeVoice`, auto-clears `active` on the last voice). |
+
+**Render lifecycle (SynthPanel):**
+- `trackSelected` / `tabChanged` → full `render()` (fresh panel instance, kept as `this._roll`).
+- `stepChanged` → `roll.refresh()` (full note rebuild; keeps scroll position).
+- `stepSelected` → `roll.refreshTints()` (toggles the `.sel` class **in place**, does *not* recreate
+  blocks — critical so an in-flight double-click keeps its target element; rebuilding on select was
+  the original remove-note bug).
+- `stepCountChanged` → full `_renderContent()` (column count changed).
+
+---
+
+## All-Tracks Tab (ALL)
+
+An all-tracks overview — `js/ui/panels/AllTracksPanel.js`. A **read-only renderer** over every
+track's `Step[]`: one compact row per track, stacked and vertically scrollable. Like the piano
+roll and step grid it only reads steps; it never edits them.
+
+**Per row:** a `T{n}` label (+ machine type) and a thin strip of the **whole pattern** (all
+`stepCount` cells, scaled small). Cells mirror the StepGrid states via parallel CSS classes
+(`alltracks-cell` + `has-note` / `has-data` / `beat-start` / `playing`) so red = note, amber
+border = p-lock/condition, white = the playhead.
+
+**Interaction:** clicking a row calls `state.selectTrack(i)` (same as the track row). No cell-level
+editing — that stays in the per-track tabs.
+
+**Playhead:** a self-contained `requestAnimationFrame` loop reads each track's
+`sequencer._stepIndex` and toggles the `playing` class on the two affected cells per row. The loop
+stops itself once the panel's DOM is detached (guarded on `isConnected`), like the Oscilloscope
+loop — no clock-callback wiring in boot.js.
+
+**Re-render (SynthPanel):** `trackSelected` / `tabChanged` → full rebuild; `stepChanged` →
+`refresh()` (repaint cells); `stepCountChanged` → full rebuild (cell count changed).
 
 ---
 
@@ -300,7 +365,9 @@ exposes a `render()` method called explicitly when its data changes.
 | `tabChanged` | `{ tab }` | SynthPanel |
 | `lfoChanged` | `{ index }` | SynthPanel |
 | `stepSelected` | `{ index, step }` | StepGrid, SynthPanel |
-| `stepChanged` | `{ trackIndex, stepIndex, step }` | StepGrid, SynthPanel (trig tab only) |
+| `stepChanged` | `{ trackIndex, stepIndex, step }` | StepGrid, SynthPanel (trig + roll tabs) |
+| `stepCountChanged` | `{ trackIndex, stepCount }` | SynthPanel (roll tab rebuilds — it draws all `stepCount` columns). Emitted by `_setStepCount` in boot.js. |
+| `selectStepAbs` | `{ absIndex }` | boot.js — selects a step by ABSOLUTE index: jumps to that step's page first (so the page-based `selectStep` resolves it), then selects. Emitted by the piano roll, which works in absolute-step space. `absIndex` < 0 clears selection. |
 | `recordingChanged` | `{ recording }` | index.html transport (REC button) |
 | `panic` | `{}` | Keyboard (drop held-key state). Emitted by the STOP ALL button. |
 

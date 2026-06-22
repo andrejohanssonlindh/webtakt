@@ -584,6 +584,23 @@ function _goToPage(pageIndex) {
   _lastHighlight = -1;
 }
 
+// Select a step by ABSOLUTE index (0 .. stepCount-1). Jumps to that step's page
+// first so the page-based selectStep() resolves it, then selects it. Emitted by
+// renderers that work in absolute-step space (PianoRoll) so the step grid + TRIG
+// tab follow along. dir<0 / index -1 just clears selection.
+state.on('selectStepAbs', ({ absIndex }) => {
+  const seq = state.selectedTrack.sequencer;
+  if (absIndex == null || absIndex < 0) { state.selectStep(-1); return; }
+  const page = Math.floor(absIndex / 16);
+  if (seq.pageOffset !== page) {
+    seq.pageOffset = page;
+    _updatePageCounter();
+    stepGrid._build();
+    _lastHighlight = -1;
+  }
+  state.selectStep(absIndex % 16);
+});
+
 function _setStepCount(n) {
   const seq = state.selectedTrack.sequencer;
   seq.stepCount = Math.max(1, n);
@@ -591,6 +608,8 @@ function _setStepCount(n) {
   lpSteps.textContent = seq.stepCount;
   state.selectStep(-1);
   stepGrid._build();
+  // Renderers that draw the whole length (PianoRoll) need to rebuild their grid.
+  state.emit('stepCountChanged', { trackIndex: state.selectedTrackIndex, stepCount: seq.stepCount });
 }
 
 // ── SHIFT one step in `dir` — scope depends on selection (TRIG buttons + ←→) ──

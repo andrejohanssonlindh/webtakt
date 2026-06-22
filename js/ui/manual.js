@@ -201,6 +201,25 @@ export const MANUAL_CONTENT = {
     ],
   },
 
+  roll: {
+    title: 'ROLL',
+    blurb: 'A piano roll for this track. Pitch runs bottom-to-top, time runs ' +
+           'left-to-right across every step (paging is dissolved — scroll ' +
+           'horizontally). It edits the same notes as the step grid, just ' +
+           'spatially. Notes-only: p-locks, condition and chance still live in ' +
+           'the TRIG and SYNTH tabs (click a note to point them at that step).',
+    items: [
+      ['Add a note', 'Click an empty cell — the row sets the pitch, the column the step.'],
+      ['Chords', 'Click several pitches in the same column; each is a separate voice on that step.'],
+      ['Resize', 'Drag a note\'s right edge to set its length. Snaps to the sync-knob grid ' +
+                 '(Settings → grid). Hold Alt to drag freely.'],
+      ['Nudge', 'Alt-drag a note left/right to shift it off the grid (±1 step). Snaps unless Alt is held.'],
+      ['Remove', 'Double-click a note.'],
+      ['Select', 'Single-click a note to select its step — the TRIG/SYNTH tabs then edit that step.'],
+      ['Out-of-scale rows', 'Shaded dark when the track has a scale set. Rows that already hold a note get a faint amber band.'],
+    ],
+  },
+
   trig: {
     title: 'TRIG',
     blurb: 'Per-step playback parameters: how long a note lasts, how often it ' +
@@ -411,6 +430,20 @@ export const MANUAL_CONTENT = {
       ['MIDI Monitor', 'Scrolling log of note-on/off events received on any input, ' +
                  'with timestamps. Useful for confirming a controller is sending and ' +
                  'which notes/channels are arriving. Clear resets the log.'],
+    ],
+  },
+
+  all: {
+    title: 'ALL',
+    blurb: 'An all-tracks overview: one compact step row per track, stacked so ' +
+           'you can read the whole arrangement at once. Read-only — cells mirror ' +
+           'the step grid (notes, p-locks, beat markers, playhead). Click a row ' +
+           'to select that track and edit it in the other tabs.',
+    items: [
+      ['Track row', 'One per track, labelled T1, T2, … with the machine type underneath.'],
+      ['Cells', 'The whole pattern (all steps) shown small. Red = a note, amber border = ' +
+                'p-lock/condition data, white = the current playhead.'],
+      ['Click a row', 'Selects that track (same as clicking it in the track row up top).'],
     ],
   },
 

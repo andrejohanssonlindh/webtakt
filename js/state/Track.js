@@ -322,6 +322,12 @@ export class Track {
     this._latchedVoices = new Map();
     this.followSource = null;
 
+    // Who writes this track's Step[]. 'manual' = hand-edited (keyboard / step grid
+    // / piano roll). Future generator modes (e.g. 'euclidean') would own the steps
+    // and disable hand-edits. Renderers (StepGrid, PianoRoll, AllTracks) always
+    // just read Step[]. Currently only 'manual' exists.
+    this.sequencerMode = 'manual';
+
     // Global FX-track flag. Set true by Project for the dedicated FX track. An FX
     // track sums the per-track SENDS (other tracks routed into it) ALONGSIDE its
     // own panner output before its FX chain — see _rewireFXChain + fxSendInput.
@@ -1609,6 +1615,7 @@ export class Track {
     if (this.held)  this.setHold(false);
     this.followSource = null;
     this.followDelay  = 0;
+    this.sequencerMode = 'manual';
     // Drop the SEND back to the normal bus (no fxTrack ref needed for "off").
     this.fxSend       = false;
     this._fxChainDest = this._outputBus;
@@ -1712,6 +1719,7 @@ export class Track {
       muted:        this.muted,
       followSource: this.followSource,
       followDelay:  this.followDelay,
+      sequencerMode: this.sequencerMode,
       fxSend:       this.fxSend,
       pan:          this.pannerNode.pan.value,
       trigTone:      this.trigTone,
@@ -1769,6 +1777,7 @@ export class Track {
     this.muted        = obj.muted        ?? false;
     this.followSource = obj.followSource ?? null;
     this.followDelay  = obj.followDelay  ?? 0;
+    this.sequencerMode = obj.sequencerMode ?? 'manual';
     // SEND state: store the flag now; Project re-applies the actual routing
     // (needs the fxTrack ref) after all tracks load, via applyFXSends().
     this.fxSend       = obj.fxSend       ?? false;

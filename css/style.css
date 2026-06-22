@@ -5669,3 +5669,171 @@ body {
     font-size: 0.8rem;
   }
 }
+
+/* ─── PIANO ROLL (ROLL tab) ──────────────────────────────────
+ * A renderer over Step[]: Y = pitch (128 rows), X = step (1–64 cols). The roll
+ * takes the full panel-content width; its scroller holds a sticky pitch gutter
+ * plus the editable grid surface. Note blocks are absolutely positioned. */
+.roll-root {
+  flex: 1 1 100%;
+  min-width: 0;
+  height: 340px;
+  display: flex;
+}
+.roll-scroller {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+  background: var(--step-bg);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+}
+.roll-scroller::-webkit-scrollbar { width: 8px; height: 8px; }
+.roll-scroller::-webkit-scrollbar-track { background: transparent; }
+.roll-scroller::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* Sticky pitch keys on the left */
+.roll-keys {
+  position: sticky;
+  left: 0;
+  flex: 0 0 46px;
+  width: 46px;
+  z-index: 2;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+.roll-key {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--border-dim);
+  font-size: 0.5rem;
+  color: var(--text-dim);
+  padding-left: 4px;
+  line-height: 14px;
+  background: var(--surface);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.roll-key.black {
+  background: var(--surface-2);
+  color: #444;
+}
+.roll-key.octave {
+  color: var(--text);
+  font-weight: 600;
+  border-bottom-color: var(--border);
+}
+
+/* Grid surface */
+.roll-grid {
+  position: relative;
+  flex: 0 0 auto;
+  /* faint per-step horizontal/vertical grid via repeating gradients */
+  background-image:
+    repeating-linear-gradient(to right,  transparent 0 29px, var(--border-dim) 29px 30px),
+    repeating-linear-gradient(to bottom, transparent 0 13px, var(--border-dim) 13px 14px);
+}
+.roll-row-block {       /* out-of-scale pitch row shading */
+  position: absolute;
+  left: 0;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+.roll-row-active {      /* a pitch row that holds at least one note */
+  position: absolute;
+  left: 0;
+  width: 100%;
+  background: rgba(232, 160, 32, 0.16);
+  border-top: 1px solid rgba(232, 160, 32, 0.4);
+  border-bottom: 1px solid rgba(232, 160, 32, 0.4);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.roll-beat-col {        /* every-4th-step beat line */
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+  pointer-events: none;
+}
+.roll-note {
+  position: absolute;
+  box-sizing: border-box;
+  background: var(--accent);
+  border: 1px solid #5a3c08;
+  border-radius: 2px;
+  cursor: pointer;
+  /* right-edge resize affordance */
+}
+.roll-note:hover {
+  border-color: var(--text-bright);
+}
+.roll-note.sel {
+  background: var(--text-bright);
+  border-color: var(--accent);
+  z-index: 1;
+}
+
+/* ─── ALL TRACKS (ALL tab) ───────────────────────────────────
+ * One compact step row per track, stacked + scrollable. Read-only overview;
+ * cells mirror the StepGrid note/data/beat/playing states at a small size. */
+.alltracks-wrap {
+  flex: 1 1 100%;
+  min-width: 0;
+  max-height: 340px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.alltracks-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border: 1px solid var(--border-dim);
+  border-radius: 3px;
+  cursor: pointer;
+  background: var(--surface);
+}
+.alltracks-row:hover { background: var(--surface-2); }
+.alltracks-row.selected {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+.alltracks-label {
+  flex: 0 0 64px;
+  font-size: 0.7rem;
+  color: var(--text-bright);
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.alltracks-type {
+  font-size: 0.5rem;
+  color: var(--text-dim);
+}
+.alltracks-strip {
+  flex: 1;
+  display: flex;
+  gap: 1px;
+  overflow-x: auto;
+}
+.alltracks-cell {
+  flex: 1 0 8px;
+  min-width: 8px;
+  height: 18px;
+  background: var(--step-bg);
+  border: 1px solid var(--step-border-empty);
+  border-radius: 1px;
+  box-sizing: border-box;
+}
+.alltracks-cell.beat-start { border-left-color: var(--border); }
+.alltracks-cell.has-data   { border-color: var(--step-border-mod); }
+.alltracks-cell.has-note   { background: var(--step-border-note); border-color: var(--step-border-note); }
+.alltracks-cell.playing    { background: var(--step-playing-bg); border-color: var(--step-playing-bg); }

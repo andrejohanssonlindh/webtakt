@@ -57,6 +57,26 @@ Condition is evaluated first (ratio logic), then chance (random). Both must pass
 
 ---
 
+## Sequencer Mode (renderers vs generators)
+
+`Track.sequencerMode` (string, default `'manual'`, serialised in `toJSON`/`fromJSON`) names **who
+writes the track's `Step[]`**. This is the seam that keeps future pattern *generators* additive:
+
+- **`Step[]` is the played truth.** The Sequencer always fires whatever is in `steps` — it does
+  not care how the steps got there.
+- **Renderers** draw `Step[]`: the StepGrid (`js/ui/StepGrid.js`) and the piano roll
+  (`PianoRollPanel`, see `design/ui.md` → Piano Roll Tab). They read steps and, in manual mode,
+  write them back via hand edits.
+- **Generators** would *own* `Step[]` in a non-manual mode (e.g. a future `'euclidean'` mode that
+  derives the pattern from pulses/steps/rotation params). In such a mode, hand-edits in the
+  renderers are disabled (the piano roll already early-returns its edit handlers when
+  `sequencerMode !== 'manual'`); editing means turning the generator's knobs, or baking to manual.
+
+Currently only `'manual'` exists. Adding a generator mode = a new value + the code that fills
+`steps` from its params; no renderer needs to change.
+
+---
+
 ## P-Lock Architecture
 
 P-locks are per-step parameter overrides stored in `step.plocks` (a `Map<string, value>`).
