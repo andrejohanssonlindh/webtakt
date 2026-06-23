@@ -85,6 +85,7 @@ import { Envelope }      from '../signal/Envelope.js';
 import { VoicePool }     from '../signal/VoicePool.js';
 import { LFO }           from '../signal/LFO.js';
 import { Sequencer }     from '../sequencer/Sequencer.js';
+import { makeDefaultGen } from '../sequencer/algos.js';
 import { DelayFX }       from '../signal/DelayFX.js';
 import { BitcrushFX }    from '../signal/BitcrushFX.js';
 import { ChorusFX }      from '../signal/ChorusFX.js';
@@ -327,6 +328,12 @@ export class Track {
     // and disable hand-edits. Renderers (StepGrid, PianoRoll, AllTracks) always
     // just read Step[]. Currently only 'manual' exists.
     this.sequencerMode = 'manual';
+
+    // GEN tab config — per-track algorithmic generator. When `algo` is non-null
+    // the GenPanel writes this track's Step[] live from these params (regenerated
+    // on every param change, and each bar when `regen` is on). 'manual' tracks
+    // (algo === null) are untouched. See js/ui/panels/GenPanel.js + algos.js.
+    this.gen = makeDefaultGen();
 
     // Global FX-track flag. Set true by Project for the dedicated FX track. An FX
     // track sums the per-track SENDS (other tracks routed into it) ALONGSIDE its
@@ -1616,6 +1623,7 @@ export class Track {
     this.followSource = null;
     this.followDelay  = 0;
     this.sequencerMode = 'manual';
+    this.gen = makeDefaultGen();
     // Drop the SEND back to the normal bus (no fxTrack ref needed for "off").
     this.fxSend       = false;
     this._fxChainDest = this._outputBus;
@@ -1720,6 +1728,7 @@ export class Track {
       followSource: this.followSource,
       followDelay:  this.followDelay,
       sequencerMode: this.sequencerMode,
+      gen:          { ...this.gen },   // GEN config; evolving prev-state is runtime-only
       fxSend:       this.fxSend,
       pan:          this.pannerNode.pan.value,
       trigTone:      this.trigTone,
@@ -1778,6 +1787,15 @@ export class Track {
     this.followSource = obj.followSource ?? null;
     this.followDelay  = obj.followDelay  ?? 0;
     this.sequencerMode = obj.sequencerMode ?? 'manual';
+    // GEN config — merge saved fields over defaults so older saves get new knobs.
+    this.gen = { ...makeDefaultGen(), ...(obj.gen ?? {}) };
+    // Migrate the pre-layer schema (single `algo` + `noteMode`) to rhythm + pitch.
+    if (obj.gen && 'algo' in obj.gen) {
+      const a = obj.gen.algo;
+      this.gen.rhythm = a === 'markov' ? 'all' : (a ?? 'off');   // old markov = note-per-step
+      this.gen.pitch  = a === 'markov' ? 'markov' : (obj.gen.noteMode ?? 'fixed');
+      delete this.gen.algo; delete this.gen.noteMode;
+    }
     // SEND state: store the flag now; Project re-applies the actual routing
     // (needs the fxTrack ref) after all tracks load, via applyFXSends().
     this.fxSend       = obj.fxSend       ?? false;

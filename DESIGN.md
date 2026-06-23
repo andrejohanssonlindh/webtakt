@@ -47,6 +47,20 @@ js/
     Sequencer.js        — Per-track step runner, polyrhythm, page logic, p-lock dispatch
     Step.js             — Single step: note, vel, length, nudge, retrigger, chance, condition, plocks
     Condition.js        — Condition objects: ratio-based (hits:of) and always
+    algos.js            — Pure, DOM-free pattern generators for the GEN tab: euclid (Bjorklund),
+                          turingBits (shift register), markovNotes (+defaultMarkovTable), cellularRow
+                          (elementary CA) + seed/mulberry32, and makeDefaultGen() (per-track gen config
+                          shape). No audio/state deps → deterministic unit tests (tests/gen_algos.js).
+    genRunner.js        — Headless glue: runGen(track, evolve) builds TWO independent layers —
+                          RHYTHM (gen.rhythm: off/manual/all/euclid/turing/cellular → which steps
+                          fire; manual = re-pitch the user's hand-placed steps, never toggle active) ×
+                          PITCH (gen.pitch: fixed/scale/markov → note per ACTIVE step; walks advance
+                          per active step, not per slot) — and maps the result onto the track's Step[]
+                          (sets active + voices[0], preserves p-locks/condition/chance on steps that
+                          stay on, clears them on switched-off ones). Called by GenPanel (every param
+                          change) AND by Sequencer at each bar boundary when gen.regen is on (evolving
+                          state on track._genState, runtime-only). Sequencer.onGenRegen hook (set in
+                          boot.js) refreshes the UI off the audio callback.
     LiveRecorder.js     — Records live MIDI-In notes into the pattern while armed. Per (track,note); uses each track's own Sequencer.stepIndexAtTime() for absStep+nudge, so it places notes correctly on every armed track regardless of which is selected. (Keyboard.js keeps its own inline record path.)
   machines/
     Machine.js          — Abstract base class all machines extend. Optional declarative

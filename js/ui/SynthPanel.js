@@ -41,6 +41,7 @@ import { MachinePickerPanel, MACHINE_GROUPS, MACHINE_DEFS } from './panels/Machi
 import { ManualOverlay }        from './manual.js';
 import { PianoRollPanel }       from './panels/PianoRollPanel.js';
 import { AllTracksPanel }       from './panels/AllTracksPanel.js';
+import { GenPanel }             from './panels/GenPanel.js';
 
 export class SynthPanel {
   /**
@@ -146,7 +147,12 @@ export class SynthPanel {
     if (this.state.activeTab === 'fx' && this.state.fxSelectedBlockId && track) {
       fxType = track.getFXType(this.state.fxSelectedBlockId);
     }
-    this._manual.show(this.state.activeTab, machineType, fxType);
+    // GEN tab: pass the current rhythm/pitch modes so the manual appends the
+    // matching per-mode knob sections below the static overview.
+    const opts = (this.state.activeTab === 'gen' && track)
+      ? { genModes: { rhythm: track.gen.rhythm, pitch: track.gen.pitch } }
+      : undefined;
+    this._manual.show(this.state.activeTab, machineType, fxType, opts);
   }
 
   /** Toggle the manual overlay (open if closed, close if open). */
@@ -271,7 +277,9 @@ export class SynthPanel {
     this._tabBar.appendChild(stepsBtn);
 
     // Voice tabs only — FX moved to right-side toggles
-    const leftTabs = ['machine', 'sounds', 'scales', 'trig', 'synth', 'roll', 'arp', 'filter', 'amp', 'lfo', 'midi', 'all', 'mixer', 'deck'];
+    // 'all', 'mixer', 'deck' are not per-track tabs (overview / global), so they
+    // sit to the right of the divider (the divider is the border-left on 'all').
+    const leftTabs = ['machine', 'sounds', 'scales', 'trig', 'synth', 'roll', 'gen', 'arp', 'filter', 'amp', 'lfo', 'midi', 'all', 'mixer', 'deck'];
     leftTabs.forEach(tab => {
       const btn = document.createElement('button');
       btn.className   = 'tab-btn';
@@ -580,6 +588,7 @@ export class SynthPanel {
       case 'trig':   this._renderTrig(track);   break;
       case 'synth':  this._renderSynth(track);  break;
       case 'roll':   this._renderRoll(track);   break;
+      case 'gen':    this._renderGen(track);    break;
       case 'arp':    this._renderArp(track);    break;
       case 'filter': this._renderFilter(track); break;
       case 'amp':    this._renderEnv(track);    break;
@@ -663,6 +672,11 @@ export class SynthPanel {
   _renderAllTracks() {
     this._allTracks = new AllTracksPanel();
     this._allTracks.render(this._makeTabContext(this.state.selectedTrack));
+  }
+
+  _renderGen(track) {
+    this._gen = new GenPanel();
+    this._gen.render(this._makeTabContext(track));
   }
 
   // Machine list re-exported from MachinePickerPanel for backward compat.

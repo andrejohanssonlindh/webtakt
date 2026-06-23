@@ -772,10 +772,10 @@ body {
   z-index: 1;
 }
 
-/* MIXER tab island — sits between LFO and the FX block with border separators */
-.tab-btn[data-tab="mixer"] {
+/* Non-track tab island (ALL / MIXER / DECK) — these are overview/global views,
+   not per-track tabs, so the divider sits to the LEFT of ALL (on its border). */
+.tab-btn[data-tab="all"] {
   margin-left: 10px;
-  margin-right: 4px;
   border-left-color: var(--border);
 }
 
@@ -3186,6 +3186,112 @@ body {
   opacity: 0.3;
 }
 
+/* ── GEN tab: algorithmic sequencer ── */
+.gen-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+/* Two side-by-side groups (RHYTHM | PITCH); wrap below each other when narrow. */
+.gen-cols {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.gen-col {
+  flex: 1 1 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.gen-col-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gen-col-title {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+}
+
+.gen-col-params {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 1px;
+}
+
+.gen-footer {
+  display: flex;
+}
+
+.gen-algo-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.gen-algo-btn,
+.gen-regen-btn,
+.gen-step-btn {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.818rem;
+  padding: 5px 10px;
+  transition: border-color 0.1s, color 0.1s, background 0.1s;
+}
+
+.gen-algo-btn:hover,
+.gen-regen-btn:hover,
+.gen-step-btn:hover {
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+
+.gen-algo-btn.active,
+.gen-regen-btn.active {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.gen-knob-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.gen-regen-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.gen-manual-note {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  max-width: 40ch;
+}
+
 /* ─── SCALES FOLD ROW ────────────────────────────────────── */
 
 .scales-fold-row {
@@ -3529,6 +3635,20 @@ body {
   color: var(--text-dim);
   font-size: 1rem;
   font-style: italic;
+}
+
+/* GEN per-mode sub-section heading — divider + accent label between the static
+   overview and the mode-specific knob lists. */
+.manual-subhead {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
 }
 
 .manual-list {

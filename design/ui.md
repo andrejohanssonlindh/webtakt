@@ -14,6 +14,7 @@ The panel header has two zones in a single row:
 | TRIG | Note display, REMOVE NOTE, RESET TRIG, condition/chance/length/nudge/detune/tone knobs. NUDGE is only shown when a step is selected. The track-wide no-step controls — QUANTIZE knob (0–100%), **NOTE FOLLOW** dropdown, and **FLW DLY** knob (0–500ms) — live in a separate right-hand column (`.trig-side-col`, a sibling of `.trig-panel` in the wrapping flex `.panel-content`) shown only when no step is selected. SHIFT ◀/▶ rotates the whole pattern via `Sequencer.shiftAll` when no step is selected; with a step selected the buttons read **◀ MOVE / MOVE ▶** and move just that trigger one slot via `Sequencer.moveStep` (collision-push: slides into an empty slot, else pushes the run ahead of it to the first gap; wraps over the whole pattern, not per page; selection follows across pages). The ←/→ keys (`keybinds.moveLeft/moveRight`) drive the same — trigger-move when a step is selected, whole-track shift otherwise. Buttons and keys share the `moveSelectedStep` coordinator (`_shiftSelected`) in index.html, which branches on selection. |
 | SYNTH | Machine params — varies by machine type. Detune is hidden here (moved to TRIG). Rendered by a machine-specific panel from `js/ui/panels/`. |
 | ROLL | Per-track piano roll. A *renderer* over `Step.voices` (Y = pitch, X = step, all `stepCount` columns scrolled — paging dissolved). See Piano Roll Tab section below. |
+| GEN | Per-track **algorithmic** sequencer. Unlike ROLL/ALL (renderers) it *writes* `Step[]` from two independent layers: RHYTHM (OFF/MANUAL/ALL/EUCLID/TURING/CELLULAR — which steps fire; MANUAL = re-pitch your hand-placed steps only) × PITCH (FIXED/SCALE/MARKOV — what note each active step plays). Live regen — any selector/knob change rewrites steps immediately (no generate button). REGEN/BAR re-runs evolving rhythms each bar. Config on `Track.gen` (persisted, per-track). See GEN Tab section below. |
 | ARP | Per-track arpeggiator. ON/OFF toggle + mode selector (Chord / Manual / Random / Input). Input mode is keyboard-driven + recordable. See Arpeggiator section below. |
 | FILTER | Single row: type dropdown + cutoff/res/gain/env knobs (left) + FilterViz (centre) + right column with compact filter ADSR above base HPF/LPF knobs. All p-lockable. |
 | AMP | Single row: PAN knob (left, p-lockable + LFO-assignable) + compact amp ADSR (right, canvasH=80, 44px knobs). Each A/D/R knob has a small MS/BPM tag for per-stage tempo-sync (BPM stage shows e.g. "1/8"; canvas plots resolved seconds). |
@@ -22,6 +23,10 @@ The panel header has two zones in a single row:
 | ALL | All-tracks overview: one compact step row per track (whole pattern, scaled small), stacked + scrollable. Read-only *renderer* over every track's `Step[]`; clicking a row selects that track. See All-Tracks Tab section below. |
 | MIXER | All-tracks mixer island: one strip per track showing Level, DLY wet, CRUSH wet, REV wet, and DJ Filter knobs. Clicking a strip selects that track. |
 | DECK | DJ crossfade between two decks (Project instances). Two symmetric deck columns (A/B) with a constant-power crossfader between them. Per deck: LOAD song, CONTROL (point editing UI at this deck), SILENCE (mute deck bus), UNLOAD (free CPU). See Deck Tab section below. |
+
+The per-track tabs end at MIDI; **ALL / MIXER / DECK** are overview/global views, so a vertical
+divider sits to their left (CSS `border-left` on the `data-tab="all"` button — the first non-track
+tab). The tab order is set by `leftTabs` in `SynthPanel`.
 
 ### Oscilloscope Strip (centre of header, always visible)
 
@@ -142,6 +147,61 @@ loop — no clock-callback wiring in boot.js.
 
 **Re-render (SynthPanel):** `trackSelected` / `tabChanged` → full rebuild; `stepChanged` →
 `refresh()` (repaint cells); `stepCountChanged` → full rebuild (cell count changed).
+
+---
+
+## GEN Tab (algorithmic sequencer)
+
+Per-track **generator** — `js/ui/panels/GenPanel.js` + the headless runner
+`js/sequencer/genRunner.js` over the pure algorithms in `js/sequencer/algos.js`. Unlike ROLL/ALL
+(renderers), GEN **writes** `Step[]`: it sets `step.active` + `voices[0].{note,velocity}`. Config
+lives on **`Track.gen`** (persisted via `toJSON`/`fromJSON`; defaults from `makeDefaultGen()`), so
+every track has its own independent generator.
+
+**Layout:** two side-by-side groups (`.gen-cols` → `.gen-col`), **RHYTHM** | **PITCH**, each a
+bordered card with its selector button-strip + that layer's knobs. They sit side by side on laptop
+and wrap below each other on narrow screens (`flex: 1 1 240px`). A full-width footer (`.gen-footer`)
+holds the shared REGEN/BAR + STEP controls.
+
+**Two independent layers** (`gen.rhythm` × `gen.pitch`), any combination:
+
+- **RHYTHM** — which steps fire. `off` (detached — leave `Step[]` alone) · `manual` (read the
+  user's hand-placed active steps and re-pitch ONLY those — never toggles `active`, never touches
+  p-locks/velocity/length/nudge) · `all` (every step) · `euclid` (pulses/steps/rotate, Bjorklund) ·
+  `turing` (length/randomness shift register) · `cellular` (rule 0–255 elementary CA).
+- **PITCH** — what note each ACTIVE step plays. `fixed` (baseNote) · `scale` (walk up the track's
+  scale, one degree per active step) · `markov` (length/degrees weighted scale-degree walk).
+
+The pitch layer only fills steps the rhythm layer turned on, and the Markov/scale walks **advance
+once per active step** — so a sparse EUCLID groove gets a sparse melody (Markov is no longer forced
+to 16/16). RHYTHM = `off` detaches the generator so the pattern freezes for hand-editing.
+
+**Live regen — no generate button.** Every knob / selector change calls `runGen(track)` and emits
+`stepChanged`, so the grid / ROLL / TRIG redraw immediately and you watch the pattern morph.
+
+**Coexistence with hand-edits:** `runGen` owns `active` + `voices[0]` base note/velocity. It
+**preserves** per-step p-locks / condition / chance on steps that stay active, and **clears** them
+only on steps it switches off (`step.plocks.clear()` + `chance = 100`). Existing `length`/`nudge` on
+a kept step are preserved.
+
+**REGEN / BAR:** the toggle (`gen.regen`) makes the **Sequencer** re-run `runGen(track, evolve=true)`
+at *its own* bar boundary (`_onTick` wrap, per-track `stepCount`), so a track keeps evolving even
+while another tab is showing. It is offered whenever something evolves per pass — an **evolving
+rhythm** (turing/cellular) **or a MARKOV pitch** (the note walk re-rolls each bar; SCALE/FIXED are
+deterministic so there's nothing to re-roll). `evolve=true` advances `gen.seed` (re-rolls the markov
+walk) and steps the evolving rhythm state on `track._genState` (turing register / CA row;
+runtime-only, reseeded on load). The `Sequencer.onGenRegen` hook (set in `boot.js`) emits
+`stepChanged` for the **selected** track only, deferred to `requestAnimationFrame` so the UI repaint
+happens off the audio callback. **STEP ▸** advances one iteration by hand.
+
+**Manual:** the `?` overlay shows a static GEN overview (`MANUAL_CONTENT.gen`) followed by two
+mode-specific sub-sections that track the track's current `gen.rhythm` / `gen.pitch`
+(`GEN_MODE_MANUAL.rhythm[…]` + `.pitch[…]`, rendered under `.manual-subhead` dividers). SynthPanel
+passes `{ genModes: { rhythm, pitch } }` to `ManualOverlay.show()`; the overview stays put while the
+sub-sections swap as the user changes modes.
+
+**Tests:** the algorithms are pure (no audio/DOM) → deterministic unit tests in
+`tests/tests/gen_algos.js` (seeded `mulberry32`), registered in `tests/index.html`.
 
 ---
 

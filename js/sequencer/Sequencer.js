@@ -41,6 +41,7 @@
  */
 
 import { Step } from './Step.js';
+import { runGen } from './genRunner.js';
 
 const DEFAULT_STEP_COUNT = 16;
 const STEPS_PER_PAGE     = 16;
@@ -219,6 +220,14 @@ getVisibleSteps() {
     if (this._stepIndex >= this.stepCount) {
       this._stepIndex = 0;
       this._playCount++;
+      // GEN regen-each-bar: evolve this track's algorithmic pattern at its own bar
+      // boundary (per-track stepCount). Writes Step[] for the bar about to play;
+      // the UI is refreshed off the global tick callback (see boot.js onGenRegen).
+      const g = this.track.gen;
+      if (g?.regen && g.rhythm && g.rhythm !== 'off') {
+        runGen(this.track, true);
+        Sequencer.onGenRegen?.(this.track);
+      }
     }
   }
 

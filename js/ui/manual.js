@@ -220,6 +220,28 @@ export const MANUAL_CONTENT = {
     ],
   },
 
+  gen: {
+    title: 'GEN',
+    blurb: 'An ALGORITHMIC sequencer for this track, built from two independent ' +
+           'layers shown side by side: RHYTHM (which steps fire) and PITCH (what ' +
+           'note each fires). Mix freely — e.g. EUCLID rhythm + MARKOV pitch is a ' +
+           'Euclidean groove whose notes wander musically. The pattern is written ' +
+           'into the normal step grid live as you tweak, so you watch it morph.',
+    items: [
+      ['Two layers', 'RHYTHM chooses which steps are active; PITCH voices whichever ' +
+                 'steps are active. The pitch walk advances once per ACTIVE step, so ' +
+                 'a sparse rhythm gets a sparse melody (never forced 16/16). The ' +
+                 'section below this one explains the knobs for your current modes.'],
+      ['Live, per-track', 'Every change rewrites the steps immediately — no generate ' +
+                 'button. Each track has its own generator, saved with the project.'],
+      ['Stays editable', 'Generated steps remain hand-editable in TRIG / ROLL / grid. ' +
+                 'Set RHYTHM to OFF to freeze the pattern and stop GEN overwriting it.'],
+      ['REGEN / BAR', 'Re-run the generator once per bar while playing, so evolving ' +
+                 'modes (TURING/CELLULAR rhythm, MARKOV pitch) keep changing. STEP ▸ ' +
+                 'advances one iteration by hand. Shown only when something can evolve.'],
+    ],
+  },
+
   trig: {
     title: 'TRIG',
     blurb: 'Per-step playback parameters: how long a note lasts, how often it ' +
@@ -1934,6 +1956,106 @@ export const MACHINE_MANUAL = {
 };
 
 /**
+ * GEN tab per-mode sections. The overlay shows the static `gen` entry (above)
+ * followed by the rhythm-mode entry then the pitch-mode entry matching the
+ * track's current `gen.rhythm` / `gen.pitch`. Keyed by mode id; same shape as
+ * MANUAL_CONTENT. Keep these knob-level — the overview lives in `gen`.
+ */
+export const GEN_MODE_MANUAL = {
+  rhythm: {
+    off: {
+      title: 'RHYTHM · OFF',
+      blurb: 'The generator is detached — your steps are hand-edited and never ' +
+             'touched by GEN. Pick this once you\'re happy with a pattern (or to ' +
+             'edit a generated one by hand without it being overwritten).',
+      items: [],
+    },
+    manual: {
+      title: 'RHYTHM · MANUAL',
+      blurb: 'YOUR hand-placed steps are the rhythm; GEN only sets their PITCH. ' +
+             'Place hits in TRIG / ROLL / grid, then let the PITCH layer voice ' +
+             'them. Never toggles steps and never touches your p-locks, velocity, ' +
+             'length or nudge — pair it with SCALE or MARKOV (FIXED would flatten ' +
+             'every hit to one note).',
+      items: [],
+    },
+    all: {
+      title: 'RHYTHM · ALL',
+      blurb: 'Every step fires — a note on each step. Combine with a PITCH layer ' +
+             'for a melody or arpeggio that hits every slot.',
+      items: [],
+    },
+    euclid: {
+      title: 'RHYTHM · EUCLID',
+      blurb: 'Euclidean rhythm — the PULSES hits are spread as evenly as possible ' +
+             'across STEPS slots (Bjorklund\'s algorithm), the classic generative ' +
+             'groove. The pattern tiles across the track\'s step count.',
+      items: [
+        ['PULSES', 'How many hits to place (0–32). E(3,8) = the tresillo; E(5,8) = the cinquillo.'],
+        ['STEPS', 'The pattern length the pulses are distributed over (1–64). Use a ' +
+                 'value other than the track length for polyrhythms (it repeats to fill).'],
+        ['ROTATE', 'Shift the whole pattern left/right (wraps). Moves where the first hit lands.'],
+      ],
+    },
+    turing: {
+      title: 'RHYTHM · TURING',
+      blurb: 'A Turing-machine shift register — a looping bit pattern that can ' +
+             'slowly mutate. Great for grooves that stay coherent but never quite ' +
+             'repeat. Evolves with REGEN/BAR.',
+      items: [
+        ['LENGTH', 'Length of the looping register (1–64 steps).'],
+        ['RANDOM', 'Chance each bit flips per pass. 0% = a locked loop; small values ' +
+                 'mutate slowly; 100% = fully random every pass.'],
+      ],
+    },
+    cellular: {
+      title: 'RHYTHM · CELLULAR',
+      blurb: 'An elementary cellular automaton (Wolfram). Each step\'s next state ' +
+             'comes from its neighbours per the RULE; with REGEN/BAR the row ' +
+             'evolves bar to bar into organic, shifting rhythms.',
+      items: [
+        ['RULE', 'The 8-bit rule (0–255) that decides how each cell evolves. Try ' +
+                 '110 (complex), 90 (Sierpiński), 30 (chaotic). 0 = silence, 255 = full.'],
+      ],
+    },
+  },
+  pitch: {
+    fixed: {
+      title: 'PITCH · FIXED',
+      blurb: 'Every active step plays the same single note — for drums or a single ' +
+             'pitched hit.',
+      items: [
+        ['NOTE', 'The MIDI note every active step plays.'],
+        ['VEL', 'Velocity for the generated hits.'],
+      ],
+    },
+    scale: {
+      title: 'PITCH · SCALE',
+      blurb: 'Active steps walk up the track\'s scale (set in the SCALES tab) from ' +
+             'ROOT — one scale degree per active step, so the line climbs in key.',
+      items: [
+        ['ROOT', 'The starting note; the walk climbs the scale from here.'],
+        ['VEL', 'Velocity for the generated hits.'],
+      ],
+    },
+    markov: {
+      title: 'PITCH · MARKOV',
+      blurb: 'A weighted note walk: each active step plays a scale degree, biased ' +
+             'to step ±1 or stay put with the occasional leap, so the melody ' +
+             'wanders musically. Advances per ACTIVE step (follows the rhythm). ' +
+             'Re-rolls each bar with REGEN/BAR.',
+      items: [
+        ['ROOT', 'The origin the scale degrees are measured from.'],
+        ['VEL', 'Velocity for the generated hits.'],
+        ['LENGTH', 'How many notes the walk generates before it loops (1–64).'],
+        ['DEGREES', 'How many scale tones the walk roams across (2–12) — small = ' +
+                 'tight motif, large = wide-ranging melody.'],
+      ],
+    },
+  },
+};
+
+/**
  * Overlay that renders one tab's manual section centered over the UI.
  * One instance, reused; `.show(tabKey)` swaps content and reveals it.
  */
@@ -1966,10 +2088,12 @@ export class ManualOverlay {
    *   type; selects a per-machine section if one exists in MACHINE_MANUAL.
    * @param {string} [fxType]      — for the FX tab, the selected block's type
    *   (delay/crush/.../phaser/normalizer); shows that effect's own entry.
+   * @param {object} [opts]        — extra context. `genModes: {rhythm, pitch}`
+   *   on the GEN tab appends the mode-specific sub-sections below the overview.
    */
-  show(tabKey, machineType, fxType) {
+  show(tabKey, machineType, fxType, opts) {
     if (!this._el) this._build();
-    this._render(tabKey, machineType, fxType);
+    this._render(tabKey, machineType, fxType, opts);
     this._el.style.display = 'flex';
     document.addEventListener('keydown', this._onKey);
   }
@@ -1982,7 +2106,7 @@ export class ManualOverlay {
 
   isOpen() { return !!this._el && this._el.style.display === 'flex'; }
 
-  _render(tabKey, machineType, fxType) {
+  _render(tabKey, machineType, fxType, opts) {
     const box = this._box;
     box.innerHTML = '';
 
@@ -2031,6 +2155,23 @@ export class ManualOverlay {
       return;
     }
 
+    // Static overarching section (blurb + items).
+    this._appendSection(box, content);
+
+    // GEN tab: append the mode-specific sub-sections that track the user's
+    // current RHYTHM and PITCH selections, under a divider. Static section
+    // above stays put; only this part changes as they switch modes.
+    if (tabKey === 'gen' && opts?.genModes) {
+      const { rhythm, pitch } = opts.genModes;
+      const r = GEN_MODE_MANUAL.rhythm[rhythm];
+      const p = GEN_MODE_MANUAL.pitch[pitch];
+      if (r) this._appendSubSection(box, r);
+      if (p) this._appendSubSection(box, p);
+    }
+  }
+
+  /** Render a content object's blurb + items into `box` (no header). */
+  _appendSection(box, content) {
     const blurb = document.createElement('p');
     blurb.className = 'manual-blurb';
     blurb.textContent = content.blurb;
@@ -2049,6 +2190,15 @@ export class ManualOverlay {
       });
       box.appendChild(list);
     }
+  }
+
+  /** A divider + sub-heading + the section body — used for the GEN mode sections. */
+  _appendSubSection(box, content) {
+    const sub = document.createElement('div');
+    sub.className = 'manual-subhead';
+    sub.textContent = content.title;
+    box.appendChild(sub);
+    this._appendSection(box, content);
   }
 
   destroy() {

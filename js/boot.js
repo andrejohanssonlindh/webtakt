@@ -25,6 +25,7 @@ import { GlobalRecorder }    from './core/GlobalRecorder.js';
 import { Clock }         from './core/Clock.js';
 import { MidiEngine }    from './core/MidiEngine.js';
 import { LiveRecorder }  from './sequencer/LiveRecorder.js';
+import { Sequencer }     from './sequencer/Sequencer.js';
 import { AppState }      from './state/AppState.js';
 import { Project }       from './state/Project.js';
 import { DeckManager }   from './state/DeckManager.js';
@@ -56,6 +57,18 @@ const project = new Project(audio, clock);
 const decks   = new DeckManager(audio, clock, project);
 const state   = new AppState(project, decks);
 const library = new SoundLibrary();
+
+// GEN regen-each-bar → UI refresh. The Sequencer evolves the track's Step[] on
+// the audio thread at its bar boundary; here we (deferred to rAF, off the audio
+// callback) emit stepChanged so the grid / ROLL / GEN renderers reflect the new
+// bar — but only for the currently-selected track (background tracks still evolve
+// and play; they just don't need a redraw until selected).
+Sequencer.onGenRegen = (track) => {
+  if (track !== state.selectedTrack) return;
+  requestAnimationFrame(() => {
+    state.emit('stepChanged', { trackIndex: track.index, stepIndex: -1, step: null });
+  });
+};
 
 // ── MIDI ─────────────────────────────────────────────────
 const midiEngine = new MidiEngine();
