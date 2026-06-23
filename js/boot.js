@@ -534,13 +534,11 @@ document.getElementById('btn-export').addEventListener('click', () => {
     URL.revokeObjectURL(url);
   });
 });
-document.getElementById('btn-import').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  await state.project.importFile(file);
-  // IMPORT loads into the controlled deck; mark it loaded + name it for the DECK tab.
+// Refresh all UI after a whole-project swap (IMPORT or a shared link). Marks the
+// active deck loaded + names it for the DECK tab, then rebuilds the panels.
+function _reloadAfterProjectSwap(name) {
   decks._loaded[decks.active] = true;
-  decks.setName(decks.active, file.name);
+  decks.setName(decks.active, name);
   trackCountDisplay.textContent = state.project.tracks.length;
   if (state.selectedTrackIndex >= state.project.tracks.length) {
     state.selectedTrackIndex = state.project.tracks.length - 1;
@@ -550,6 +548,13 @@ document.getElementById('btn-import').addEventListener('change', async (e) => {
   trackRow._build();
   synthPanel.render();
   stepGrid._build();
+}
+
+document.getElementById('btn-import').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  await state.project.importFile(file);
+  _reloadAfterProjectSwap(file.name);
 });
 
 // ── Track nav: page counter + next page + length popup ───
@@ -877,3 +882,99 @@ function unlockAudio() {
   document.addEventListener(ev, unlockAudio));
 
 // No auto-load — always start fresh. Use IMPORT to load a saved project.
+
+// ── Share via link (data-in-URL) ─────────────────────────
+// SHARE serializes the whole project into the URL fragment (#p=…) — no hosting,
+// works on static GitHub Pages. Optional "Shorten…" wraps it via the free v.gd
+// API. On startup, a #p= link is decoded and loaded (overrides "start fresh").
+
+async function _loadFromHash() {
+  const m = location.hash.match(/[#&]p=([^&]+)/);
+  if (!m) return;
+  try {
+    await state.project.fromShareString(decodeURIComponent(m[1]));
+    _reloadAfterProjectSwap('shared link');
+  } catch (err) {
+    console.warn('Webtakt: could not load shared project from URL', err);
+  }
+}
+_loadFromHash();
+
+const _SHARE_BASE = location.origin + location.pathname;
+
+document.getElementById('btn-share').addEventListener('click', async () => {
+  let link;
+  try {
+    link = `${_SHARE_BASE}#p=${await state.project.toShareString()}`;
+  } catch (err) {
+    console.error('Webtakt: could not build share link', err);
+    _openModal('Could not build a share link.', null, () => {});
+    return;
+  }
+  try { await navigator.clipboard.writeText(link); } catch (_) { /* clipboard optional */ }
+
+  const orphans = state.project.unshareableSamples();
+  const warn = orphans.length
+    ? `\n\n⚠ These samples are local/recorded and won't travel in the link ` +
+      `(recipient gets the pattern, not the audio):\n• ${orphans.join('\n• ')}`
+    : '';
+  _openShareModal(link, warn);
+});
+
+// Share modal: shows the (copied) link with a "Shorten…" action. Reuses the
+// confirm-modal DOM; adds a Shorten button next to OK, removed on close.
+function _openShareModal(link, warn) {
+  const modal   = document.getElementById('confirm-modal');
+  const msgEl   = document.getElementById('confirm-msg');
+  const inputEl = document.getElementById('confirm-input');
+  const okBtn   = document.getElementById('confirm-ok');
+  const cancelBtn = document.getElementById('confirm-cancel');
+
+  msgEl.textContent = 'Share link (copied to clipboard):' + warn;
+  inputEl.value = link;
+  inputEl.style.display = 'block';
+  inputEl.readOnly = true;
+  setTimeout(() => { inputEl.focus(); inputEl.select(); }, 0);
+
+  const shortBtn = document.createElement('button');
+  shortBtn.id = 'confirm-shorten';
+  shortBtn.className = 'btn';
+  shortBtn.textContent = 'Shorten…';
+  okBtn.before(shortBtn);
+
+  modal.style.display = 'flex';
+
+  async function shorten() {
+    shortBtn.textContent = 'Shortening…';
+    shortBtn.disabled = true;
+    try {
+      // TinyURL: shortens localhost URLs (so this works in dev too) and is the
+      // most reliably browser-callable free shortener. v.gd/is.gd send no CORS
+      // header (browser blocks them) AND reject localhost — avoid both.
+      const api = 'https://tinyurl.com/api-create.php?url=' + encodeURIComponent(inputEl.value);
+      const res = await fetch(api);
+      const text = (await res.text()).trim();
+      if (!res.ok || !/^https?:\/\//.test(text)) throw new Error(text || `HTTP ${res.status}`);
+      inputEl.value = text;
+      inputEl.select();
+      try { await navigator.clipboard.writeText(text); } catch (_) {}
+      shortBtn.textContent = 'Shortened ✓';
+    } catch (err) {
+      // A bare "Failed to fetch" with no status is almost always a CORS block.
+      console.warn('Webtakt: shorten failed (CORS or network)', err);
+      shortBtn.textContent = 'Shorten failed — long link still works';
+      shortBtn.disabled = false;
+    }
+  }
+  function close() {
+    modal.style.display = 'none';
+    inputEl.readOnly = false;
+    shortBtn.remove();
+    okBtn.removeEventListener('click', close);
+    cancelBtn.removeEventListener('click', close);
+    shortBtn.removeEventListener('click', shorten);
+  }
+  shortBtn.addEventListener('click', shorten);
+  okBtn.addEventListener('click', close);
+  cancelBtn.addEventListener('click', close);
+}

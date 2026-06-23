@@ -16,7 +16,7 @@
 
 import { KnobWidget } from '../KnobWidget.js';
 import { formatCount32, MUSICAL_SNAP_32 } from '../../util/BpmSync.js';
-import { addBrowseButton } from './sampleBrowserButton.js';
+import { makeSlotBrowseButton, fetchUrlAsFile } from './sampleBrowserButton.js';
 
 const WAVE_H  = 72;  // canvas CSS height per slot (matches .wt-sampler-waveform)
 const SNAP_PX = 10;  // pixel snap zone for handle pick-up
@@ -171,7 +171,6 @@ export class WavetableSamplerPanel {
     this.ctx.activeWidgets.push(sweepSpeedKnob);
 
     this.container.appendChild(wrap);
-    addBrowseButton(this);
 
     // Initial draw after layout settles
     requestAnimationFrame(() => {
@@ -235,6 +234,9 @@ export class WavetableSamplerPanel {
     });
     fileLabel.appendChild(fileInput);
     bar.appendChild(fileLabel);
+
+    // 🔍 BROWSE (slot-aware: loads into THIS slot and keeps the source URL)
+    bar.appendChild(makeSlotBrowseButton((url, name) => this._loadUrl(url, name, slot)));
 
     // ▶ Preview
     const playBtn = document.createElement('button');
@@ -496,7 +498,22 @@ export class WavetableSamplerPanel {
 
   // ── File loading ─────────────────────────────────────────────
 
-  async _loadFile(file, slot) {
+  /** Fetch a browsed remote sample into the given slot, keeping its URL. */
+  async _loadUrl(url, name, slot) {
+    const nameEl = slot === 'A' ? this._nameElA : this._nameElB;
+    nameEl.textContent = 'Fetching…';
+    try {
+      const file = await fetchUrlAsFile(url, name);
+      await this._loadFile(file, slot, url);
+    } catch (err) {
+      nameEl.textContent = 'Load error';
+      console.error('WavetableSamplerPanel: URL load failed', err);
+    }
+  }
+
+  // url (optional): remote source, persisted so a saved/shared project re-fetches
+  // it when the local copy is gone. (See WavetableSamplerMachine.toJSON.)
+  async _loadFile(file, slot, url = null) {
     const nameEl = slot === 'A' ? this._nameElA : this._nameElB;
     nameEl.textContent = 'Loading…';
     try {
@@ -504,8 +521,8 @@ export class WavetableSamplerPanel {
       const audioBuf = await this.audioContext.decodeAudioData(arrayBuf);
       const { id }   = this.sampleStore.save(file.name, audioBuf);
 
-      if (slot === 'A') this.machine.setBufferA(audioBuf, id, file.name);
-      else              this.machine.setBufferB(audioBuf, id, file.name);
+      if (slot === 'A') this.machine.setBufferA(audioBuf, id, file.name, url);
+      else              this.machine.setBufferB(audioBuf, id, file.name, url);
 
       nameEl.textContent = file.name;
       this._setupCanvas(slot);

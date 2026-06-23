@@ -20,6 +20,9 @@
  *   load()            — restore from localStorage (returns false if nothing saved)
  *   exportFile()      — trigger browser download of .json file
  *   importFile(file)  — read a .json File object and restore
+ *   toShareString()   — gzip+base64url of the project, for a data-in-URL link
+ *   fromShareString() — restore from a share string
+ *   unshareableSamples() — local/mic samples that won't travel in a share link
  */
 
 import { Track }       from './Track.js';
@@ -351,4 +354,94 @@ export class Project {
     const text = await file.text();
     this.fromJSON(JSON.parse(text));
   }
+
+  // ── Shareable link (data-in-URL, no hosting) ───────────────
+  // The whole project is serialized → gzipped → base64url, small enough to ride
+  // in a URL fragment. GitHub Pages is static, so this is the only zero-infra
+  // way to share: nothing is stored server-side, the data IS the link.
+
+  /** Serialize the project to a compact base64url string for a share URL. */
+  async toShareString() {
+    const json = JSON.stringify(this.toJSON());
+    return _gzipToBase64url(json);
+  }
+
+  /** Restore the project from a share string produced by toShareString(). */
+  async fromShareString(str) {
+    const json = await _base64urlToGunzip(str);
+    this.fromJSON(JSON.parse(json));
+  }
+
+  /**
+   * List samples that will NOT survive a shared link: a buffer is loaded
+   * (sampleId set) but there's no remote URL to re-fetch it from — i.e. a
+   * local file pick or mic recording. Recipients get the pattern, not the audio.
+   * @returns {string[]} human-readable "Track N: name" descriptions
+   */
+  unshareableSamples() {
+    const out = [];
+    this.tracks.forEach((t, i) => {
+      const m = t.machine; if (!m) return;
+      const label = (name) => `Track ${i + 1}: ${name || '(unnamed sample)'}`;
+      // Single-buffer family (sampler/granular/slicer/stretch/beatrepeat)
+      if (m.sampleId && !m.sampleUrl) out.push(label(m.sampleName));
+      // wt-sampler A/B slots
+      if (m.sampleIdA && !m.sampleUrlA) out.push(label(m.sampleNameA));
+      if (m.sampleIdB && !m.sampleUrlB) out.push(label(m.sampleNameB));
+      // MultiSampler zones
+      if (Array.isArray(m.zoneSampleIds)) {
+        m.zoneSampleIds.forEach((id, z) => {
+          if (id && !m.zoneSampleUrls?.[z]) out.push(label(m.zoneSampleNames?.[z]));
+        });
+      }
+    });
+    return out;
+  }
+}
+
+// ── gzip + base64url codec (native CompressionStream, no deps) ─────────────
+// Falls back to plain base64 of the UTF-8 bytes where CompressionStream is
+// unavailable (older Safari); fromShareString sniffs which was used.
+const _GZIP_OK = typeof CompressionStream !== 'undefined';
+
+async function _gzipToBase64url(text) {
+  const bytes = new TextEncoder().encode(text);
+  let out, tag;
+  if (_GZIP_OK) {
+    const cs = new CompressionStream('gzip');
+    const buf = await new Response(
+      new Blob([bytes]).stream().pipeThrough(cs)
+    ).arrayBuffer();
+    out = new Uint8Array(buf); tag = 'g';
+  } else {
+    out = bytes; tag = 'r';
+  }
+  return tag + _bytesToBase64url(out);
+}
+
+async function _base64urlToGunzip(str) {
+  const tag   = str[0];
+  const bytes = _base64urlToBytes(str.slice(1));
+  if (tag === 'g') {
+    const ds  = new DecompressionStream('gzip');
+    const buf = await new Response(
+      new Blob([bytes]).stream().pipeThrough(ds)
+    ).arrayBuffer();
+    return new TextDecoder().decode(buf);
+  }
+  return new TextDecoder().decode(bytes); // 'r' = raw, uncompressed
+}
+
+function _bytesToBase64url(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function _base64urlToBytes(b64u) {
+  const b64 = b64u.replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 }

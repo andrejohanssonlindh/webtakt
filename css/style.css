@@ -3526,6 +3526,7 @@ body {
   color: var(--text-bright);
   font-size: 1rem;
   line-height: 1.5;
+  white-space: pre-line;   /* honour \n in confirm / share messages */
 }
 
 .modal-btns {

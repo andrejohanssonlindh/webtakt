@@ -1836,14 +1836,19 @@ export class Track {
     }
     // Restore wt-sampler buffers asynchronously
     if (this.machine.type === 'wt-sampler' && this.sampleStore) {
-      if (this.machine.sampleIdA) {
-        this.sampleStore.load(this.machine.sampleIdA, this.audio.context).then(buf => {
-          if (buf) this.machine.setBufferA(buf, this.machine.sampleIdA, this.machine.sampleNameA);
+      const m = this.machine;
+      if (m.sampleIdA || m.sampleUrlA) {
+        this.sampleStore.load(m.sampleIdA, this.audio.context).then(async buf => {
+          // Local copy missing (big samples don't fit localStorage / shared link
+          // recipient never had it) but we kept the source URL — re-fetch it.
+          if (!buf && m.sampleUrlA) buf = await this._fetchUrlBuffer(m.sampleUrlA);
+          if (buf) m.setBufferA(buf, m.sampleIdA, m.sampleNameA, m.sampleUrlA);
         });
       }
-      if (this.machine.sampleIdB) {
-        this.sampleStore.load(this.machine.sampleIdB, this.audio.context).then(buf => {
-          if (buf) this.machine.setBufferB(buf, this.machine.sampleIdB, this.machine.sampleNameB);
+      if (m.sampleIdB || m.sampleUrlB) {
+        this.sampleStore.load(m.sampleIdB, this.audio.context).then(async buf => {
+          if (!buf && m.sampleUrlB) buf = await this._fetchUrlBuffer(m.sampleUrlB);
+          if (buf) m.setBufferB(buf, m.sampleIdB, m.sampleNameB, m.sampleUrlB);
         });
       }
     }

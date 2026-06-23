@@ -47,15 +47,40 @@ export function addBrowseButton(panel) {
 /** Fetch a remote sample URL into a File and run it through the panel loader. */
 async function loadUrlInto(panel, url, name) {
   if (panel._nameEl) panel._nameEl.textContent = 'Fetching…';
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const blob = await res.blob();
-  // Give it a sane filename (archive names can carry odd chars / no ext).
-  const fname = /\.[a-z0-9]{2,4}$/i.test(name) ? name : `${name}.wav`;
-  const file = new File([blob], fname, { type: blob.type || 'audio/wav' });
+  const file = await fetchUrlAsFile(url, name);
   await panel._loadFile(file);
   // Remember where this sample came from so saving the track persists the link.
   // Large samples don't fit in localStorage; on reload the machine re-fetches
   // from this URL when the local copy is missing. (See SamplerMachine.toJSON.)
   if (panel.machine) panel.machine.sampleUrl = url;
+}
+
+/** Fetch a remote sample URL into a File with a sane filename. */
+export async function fetchUrlAsFile(url, name) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const blob = await res.blob();
+  // Give it a sane filename (archive names can carry odd chars / no ext).
+  const fname = /\.[a-z0-9]{2,4}$/i.test(name) ? name : `${name}.wav`;
+  return new File([blob], fname, { type: blob.type || 'audio/wav' });
+}
+
+/**
+ * Slot-aware BROWSE button (for multi-slot panels like wt-sampler). Opens the
+ * shared browser; on pick, hands the URL + name to `onPick(url, name)` so the
+ * panel can route it to the correct slot and persist the source URL itself.
+ * @returns {HTMLButtonElement}
+ */
+export function makeSlotBrowseButton(onPick) {
+  const browse = document.createElement('button');
+  browse.className = 'btn sampler-browse-btn';
+  browse.textContent = '🔍';
+  browse.title = 'Browse curated + archive.org samples (no login)';
+  browse.addEventListener('click', () => {
+    new SampleBrowser({
+      curated: curated(),
+      onLoad: (url, name) => onPick(url, name),
+    });
+  });
+  return browse;
 }

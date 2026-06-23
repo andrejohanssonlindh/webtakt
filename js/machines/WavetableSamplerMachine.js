@@ -60,6 +60,8 @@ export class WavetableSamplerMachine extends Machine {
     this.sampleIdB   = null;
     this.sampleNameA = '';
     this.sampleNameB = '';
+    this.sampleUrlA  = null;  // remote source URL, persisted for re-fetch
+    this.sampleUrlB  = null;  // remote source URL, persisted for re-fetch
 
     this._workletNode  = null;
     this._workletReady = false;
@@ -153,17 +155,19 @@ export class WavetableSamplerMachine extends Machine {
 
   // ── Buffer management ──────────────────────────────────────────────────────
 
-  setBufferA(buffer, id, name) {
+  setBufferA(buffer, id, name, url = null) {
     this._bufferA    = buffer;
     this.sampleIdA   = id;
     this.sampleNameA = name;
+    this.sampleUrlA  = url;
     if (this._workletReady) this._sendBuffer('bufferA', buffer);
   }
 
-  setBufferB(buffer, id, name) {
+  setBufferB(buffer, id, name, url = null) {
     this._bufferB    = buffer;
     this.sampleIdB   = id;
     this.sampleNameB = name;
+    this.sampleUrlB  = url;
     if (this._workletReady) this._sendBuffer('bufferB', buffer);
   }
 
@@ -304,6 +308,8 @@ export class WavetableSamplerMachine extends Machine {
       sampleIdB:   this.sampleIdB,
       sampleNameA: this.sampleNameA,
       sampleNameB: this.sampleNameB,
+      sampleUrlA:  this.sampleUrlA ?? null,  // remote source; re-fetched if local copy is gone
+      sampleUrlB:  this.sampleUrlB ?? null,
       params:      { ...this._params },
     };
   }
@@ -313,6 +319,8 @@ export class WavetableSamplerMachine extends Machine {
     this.sampleIdB   = obj.sampleIdB   ?? null;
     this.sampleNameA = obj.sampleNameA ?? '';
     this.sampleNameB = obj.sampleNameB ?? '';
+    this.sampleUrlA  = obj.sampleUrlA  ?? null;
+    this.sampleUrlB  = obj.sampleUrlB  ?? null;
     Object.entries(obj.params ?? {}).forEach(([k, v]) => this.setParam(k, v));
   }
 
@@ -324,10 +332,10 @@ export class WavetableSamplerMachine extends Machine {
   syncFrom(other) {
     if (!(other instanceof WavetableSamplerMachine)) return;
     if (other._bufferA && other._bufferA !== this._bufferA) {
-      this.setBufferA(other._bufferA, other.sampleIdA, other.sampleNameA);
+      this.setBufferA(other._bufferA, other.sampleIdA, other.sampleNameA, other.sampleUrlA);
     }
     if (other._bufferB && other._bufferB !== this._bufferB) {
-      this.setBufferB(other._bufferB, other.sampleIdB, other.sampleNameB);
+      this.setBufferB(other._bufferB, other.sampleIdB, other.sampleNameB, other.sampleUrlB);
     }
   }
 }
