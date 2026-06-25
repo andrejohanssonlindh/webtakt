@@ -111,6 +111,17 @@ export class Project {
   }
 
   /**
+   * The starter-kit machine type for a given track index (kick/snare/hihat/bass/
+   * moogish/synth/sampler/granular; 'synth' past the list). Used by CLR TRACK /
+   * CLR ALL so a reset restores the original layout, not 8 identical synths.
+   * @param {number} i
+   * @returns {string}
+   */
+  defaultMachineFor(i) {
+    return DEFAULT_MACHINES[i] ?? 'synth';
+  }
+
+  /**
    * Build the global FX track: a silent processor track (machine 'midi' outputs
    * silence) flagged isFXTrack so it sums per-track sends at its FX-chain head.
    * It feeds the same deck bus as every other track.

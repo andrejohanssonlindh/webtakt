@@ -1577,12 +1577,15 @@ export class Track {
 
   /**
    * Full reset: clear notes + restore all params to defaults + reset LFOs to one empty LFO.
+   * @param {string} [machineType='synth'] — machine to reset to. Callers pass the
+   *   track's starter-kit default (Project.defaultMachineFor) so CLR TRACK / CLR ALL
+   *   restore the original kick/snare/hihat/… layout rather than 8 plain synths.
    */
-  resetTrack() {
+  resetTrack(machineType = 'synth') {
     this.clearNotes();
 
-    // Reset machine to synth with defaults (rebuilds pool)
-    this.setMachine('synth');
+    // Reset machine (rebuilds pool) — to the requested type, default synth.
+    this.setMachine(machineType);
 
     // Reset filter
     this.filter.fromJSON({});

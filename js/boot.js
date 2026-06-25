@@ -503,7 +503,10 @@ document.getElementById('btn-clear-notes').addEventListener('click', () => {
 
 document.getElementById('btn-clear-track').addEventListener('click', () => {
   confirmAction('Reset this track to defaults?\nAll params, LFOs and notes will be cleared.', () => {
-    state.selectedTrack.resetTrack();
+    const t = state.selectedTrack;
+    // Reset to the track's starter-kit machine (not plain synth) for normal
+    // tracks; the FX track has no kit slot, so it falls back to synth.
+    t.resetTrack(t.isFXTrack ? 'synth' : state.project.defaultMachineFor(t.index));
     _afterClear();
   });
 });
@@ -517,7 +520,8 @@ document.getElementById('btn-clear-notes-all').addEventListener('click', () => {
 
 document.getElementById('btn-clear-all').addEventListener('click', () => {
   confirmAction('Reset ALL tracks to defaults?\nEverything will be cleared.', () => {
-    state.project.tracks.forEach(t => t.resetTrack());
+    // Restore the original starter kit (kick/snare/hihat/bass/…), not 8 synths.
+    state.project.tracks.forEach((t, i) => t.resetTrack(state.project.defaultMachineFor(i)));
     _afterClear();
   });
 });

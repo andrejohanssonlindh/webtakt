@@ -20,8 +20,12 @@ Wiring lives in `boot.js`:
   `visibilitychange → hidden` so closing/backgrounding the tab persists immediately.
 - **Load:** `_loadFromHash()` restores the cache when no `#p=` share link is present;
   a share link still overrides the cache on boot.
-- **Clear:** `CLR ALL` resets every track to defaults, which auto-saves an empty
-  project — that is the "start over" path.
+- **Clear:** `CLR ALL` resets every track to its **starter-kit** machine + default
+  params (kick/snare/hihat/bass/moogish/synth/sampler/granular — the same layout a
+  fresh project boots with, via `Project.defaultMachineFor(i)`), which auto-saves
+  that clean project — the "start over" path. `CLR TRACK` does the same for the
+  selected track (FX track falls back to plain synth). `Track.resetTrack(type)`
+  takes the target machine type (default `'synth'`).
 
 EXPORT/IMPORT remains the explicit file save path (downloads / reads a `.json` File).
 The DECK performance layer (deck B) is intentionally NOT cached.
