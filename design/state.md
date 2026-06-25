@@ -9,10 +9,22 @@
 
 `Project.fromJSON(obj)` restores full state.
 
-**No auto-load on boot** — always starts fresh. EXPORT/IMPORT is the explicit save path.
-Export downloads a `.json` file; Import reads a `.json` File object.
+**Auto-cache (work-in-progress persistence).** The boot project (deck A — the song
+the user works on) is auto-saved to localStorage under `webtakt_project` and
+restored on the next load, so a reload or a close-and-reopen brings the whole song
+back (pattern, params, FX, sample IDs — and the sample audio itself via SampleStore).
+Wiring lives in `boot.js`:
+- **Save:** `AppState.onAny()` (a wildcard event subscriber) schedules a debounced
+  `project.save()` (~800 ms) after any mutation — knob drags, step edits, machine
+  swaps, sample loads, clears. A synchronous flush runs on `pagehide` and on
+  `visibilitychange → hidden` so closing/backgrounding the tab persists immediately.
+- **Load:** `_loadFromHash()` restores the cache when no `#p=` share link is present;
+  a share link still overrides the cache on boot.
+- **Clear:** `CLR ALL` resets every track to defaults, which auto-saves an empty
+  project — that is the "start over" path.
 
-> Note: `Project.js` uses `'pysynth_project'` as the localStorage key (old name). Low priority since auto-load is disabled.
+EXPORT/IMPORT remains the explicit file save path (downloads / reads a `.json` File).
+The DECK performance layer (deck B) is intentionally NOT cached.
 
 ---
 

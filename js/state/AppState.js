@@ -23,6 +23,7 @@
  *   setActiveLFO(index)
  *   selectStep(index)     — select a step (-1 to deselect)
  *   on(event, callback)   — subscribe to a named event
+ *   onAny(callback)       — subscribe to every event (wildcard); cb(event, data)
  *   off(event, callback)  — unsubscribe
  *   emit(event, data)     — fire an event
  *
@@ -57,6 +58,7 @@ export class AppState {
     this.drumMode               = false;
     this.lastStepScheduledTime  = null;   // AudioContext time of the most recently fired step
     this._listeners             = new Map();  // event → Set<callback>
+    this._anyListeners          = new Set();  // wildcard subscribers (see onAny)
   }
 
   /** Toggle record mode on/off. */
@@ -172,6 +174,17 @@ export class AppState {
     this._listeners.get(event).add(callback);
   }
 
+  /**
+   * Subscribe to EVERY emitted event (wildcard). The callback gets
+   * (event, data). Used by the auto-cache to persist on any mutation without
+   * having to enumerate event names.
+   * @param {function} callback
+   */
+  onAny(callback) {
+    if (!this._anyListeners) this._anyListeners = new Set();
+    this._anyListeners.add(callback);
+  }
+
   /** @param {string} event @param {function} callback */
   off(event, callback) {
     this._listeners.get(event)?.delete(callback);
@@ -180,5 +193,6 @@ export class AppState {
   /** @param {string} event @param {*} data */
   emit(event, data) {
     this._listeners.get(event)?.forEach(cb => cb(data));
+    this._anyListeners?.forEach(cb => cb(event, data));
   }
 }

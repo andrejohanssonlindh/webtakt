@@ -884,16 +884,48 @@ function unlockAudio() {
 ['touchend', 'pointerdown', 'click'].forEach(ev =>
   document.addEventListener(ev, unlockAudio));
 
-// No auto-load — always start fresh. Use IMPORT to load a saved project.
+// ── Auto-cache (work-in-progress persistence) ─────────────
+// The boot project (deck A) is the song the user works on. We persist it to
+// localStorage so a reload — or closing and reopening the tab — restores the
+// pattern, params, FX, sample IDs, everything. Samples themselves persist via
+// SampleStore (WAV-base64 in localStorage), so they come back too. CLR ALL
+// resets every track to defaults, which auto-saves an empty project — that is
+// the "clear it" path. A #p= share link still overrides the cache on boot.
+//
+// We save on a short debounce after ANY app event, and flush synchronously when
+// the tab is hidden/closed, so no edit path needs to know about caching.
+let _autoSaveTimer = null;
+function _scheduleAutoSave() {
+  if (_autoSaveTimer) return;
+  _autoSaveTimer = setTimeout(() => { _autoSaveTimer = null; project.save(); }, 800);
+}
+function _flushAutoSave() {
+  if (_autoSaveTimer) { clearTimeout(_autoSaveTimer); _autoSaveTimer = null; }
+  project.save();
+}
+// Every UI/state mutation funnels through state.emit, so one wildcard subscriber
+// catches knob drags, step edits, machine swaps, sample loads, clears, etc.
+state.onAny(() => _scheduleAutoSave());
+// Flush on tab close / hide (pagehide fires on mobile + desktop close; the
+// visibility hook covers backgrounding where pagehide may not run).
+window.addEventListener('pagehide', _flushAutoSave);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') _flushAutoSave();
+});
 
 // ── Share via link (data-in-URL) ─────────────────────────
 // SHARE serializes the whole project into the URL fragment (#p=…) — no hosting,
 // works on static GitHub Pages. Optional "Shorten…" wraps it via the free v.gd
-// API. On startup, a #p= link is decoded and loaded (overrides "start fresh").
+// API. On startup, a #p= link is decoded and loaded (overrides the cache); with
+// no share link, the auto-cached project (if any) is restored.
 
 async function _loadFromHash() {
   const m = location.hash.match(/[#&]p=([^&]+)/);
-  if (!m) return;
+  if (!m) {
+    // No share link → restore the auto-cached song, if one was saved.
+    if (project.load()) _reloadAfterProjectSwap('cached song');
+    return;
+  }
   try {
     await state.project.fromShareString(decodeURIComponent(m[1]));
     _reloadAfterProjectSwap('shared link');
