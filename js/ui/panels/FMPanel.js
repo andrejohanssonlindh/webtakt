@@ -16,10 +16,10 @@
  */
 
 import { KnobWidget } from '../KnobWidget.js';
-import { formatCount32, count32ToSeconds, MUSICAL_SNAP_32 } from '../../util/BpmSync.js';
+import { formatCount32, count32ToSeconds, MUSICAL_SNAP_32, quantizeCount, minBpmCount } from '../../util/BpmSync.js';
 
 // Count bounds for BPM-mode operator-env knobs (1/32 … 4 bars in 1/32 units).
-const FM_COUNT_LO = 1, FM_COUNT_HI = 128;
+const FM_COUNT_HI = 128;
 
 export class FMPanel {
   render(ctx) {
@@ -186,7 +186,7 @@ export class FMPanel {
         // Active param: the 1/32 count in BPM mode, raw seconds otherwise.
         const activeKey = () => isBpm() ? countKey : path;
         const range = () => isBpm()
-          ? { min: FM_COUNT_LO, max: FM_COUNT_HI }
+          ? { min: minBpmCount(), max: FM_COUNT_HI }   // grid step floor (1/32…1/128)
           : { min: p.min, max: p.max };
         const fmt = (v) => {
           if (!syncable) return Math.round(v * 100) + '%';     // sustain
@@ -205,12 +205,14 @@ export class FMPanel {
           size:        44,
           fmt,
           centerLabel: centerLabel(),
-          // BPM mode: shift-snap the 1/32 count to musical divisions.
+          // BPM mode: quantize free drag to the grid, shift-snap to divisions.
           snapPoints:  isBpm() ? MUSICAL_SNAP_32 : null,
+          quantize:    isBpm() ? quantizeCount : null,
+          dragStep:    isBpm() ? minBpmCount() : null,
           onChange: v => {
-            // BPM mode stores an integer 1/32 count (like the FX sync knobs).
-            const val = isBpm() ? Math.round(v) : v;
-            writeValue(machine, activeKey(), val, false);
+            // The knob already quantized to the grid — store v as-is (Math.round
+            // here would collapse 1/64 / 1/128 sub-counts back to integer 1/32).
+            writeValue(machine, activeKey(), v, false);
             knob.setHasPLock(hasStep);
             drawEnvCanvas();
           },
@@ -220,7 +222,8 @@ export class FMPanel {
             const next = isBpm() ? 'ms' : 'bpm';
             writeValue(machine, modeKey, next, false);
             const r = range();
-            knob.setRange(r.min, r.max, fmt, isBpm() ? MUSICAL_SNAP_32 : null);
+            knob.setRange(r.min, r.max, fmt, isBpm() ? MUSICAL_SNAP_32 : null,
+                          isBpm() ? quantizeCount : null, isBpm() ? minBpmCount() : null);
             knob.setValue(get(activeKey()) ?? r.min);
             knob.setCenterLabel(centerLabel());
             knob.setHasPLock(hasStep && (step.plocks.has(activeKey())

@@ -29,6 +29,12 @@ const KNOB_ACCENT  = '#e8a020';
 const KNOB_TRACK   = 'rgba(255,255,255,0.09)';
 const KNOB_BODY    = '#181828';
 
+// Pixels of pointer travel per value-step for a grid-paced (dragStep) knob. Small
+// enough that the full BPM range is still a comfortable drag, large enough that the
+// finest grid (1/128) is reachable without sub-pixel precision. Shift = half this
+// (finer). Wheel/shift-snap are unaffected.
+const STEP_PX = 4;
+
 function _clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
 function _mkCanvas(w) {
@@ -185,6 +191,18 @@ export class KnobWidget {
     this.color    = opts.color    ?? KNOB_ACCENT;
     this.fmt      = opts.fmt      ?? (v => v.toFixed(2));
     this.snapPoints = opts.snapPoints ?? null;  // shift snaps to nearest of these (real values)
+    // Optional grid-quantizer applied to EVERY value the knob produces (free drag,
+    // wheel, shift-snap, setValue). BPM-sync knobs pass BpmSync.quantizeCount here
+    // so a free drag lands on the user's grid (1/32, 1/64, …) instead of an
+    // arbitrary float that formatCount32 then renders as "1/8 + 31/64". Identity
+    // (no quantize) for ordinary continuous knobs.
+    this.quantize = opts.quantize ?? null;
+    // Optional drag granularity (value units per step). When set, the knob advances
+    // in VALUE space — one `dragStep` per STEP_PX of pointer travel — instead of the
+    // default range-proportional drag. BPM-sync knobs pass the grid step so a fine
+    // grid (1/64=0.5, 1/128=0.25) is actually reachable: the range-proportional
+    // drag moves ≈1 unit/px over a 0.25..128 knob and skips every sub-1/32 stop.
+    this.dragStep = opts.dragStep ?? null;
     this.centerLabel  = opts.centerLabel  ?? null;  // text drawn in the knob body (e.g. mode)
     this.onCenterClick = opts.onCenterClick ?? null; // click (no drag) on center hotspot
     this.onChange  = opts.onChange  ?? null;
@@ -253,15 +271,24 @@ export class KnobWidget {
     this._redraw();
   }
 
+  /** Clamp to range, then apply the optional grid quantizer (re-clamped after,
+   *  since rounding can push a near-max value over). The single choke point every
+   *  value-producing path routes through so BPM-grid quantization is consistent. */
+  _q(v) {
+    let out = _clamp(v, this.min, this.max);
+    if (this.quantize) out = _clamp(this.quantize(out), this.min, this.max);
+    return out;
+  }
+
   _setFromNorm(n) {
-    this._value = _clamp(this._fromNorm(_clamp(n, 0, 1)), this.min, this.max);
+    this._value = this._q(this._fromNorm(_clamp(n, 0, 1)));
     this._redraw();
     if (this.onChange) this.onChange(this._value);
   }
 
   /** Snap a real value to the nearest configured snap point. */
   _snap(v) {
-    if (!this.snapPoints || this.snapPoints.length === 0) return v;
+    if (!this.snapPoints || this.snapPoints.length === 0) return this._q(v);
     let best = this.snapPoints[0], bestD = Math.abs(v - best);
     for (const p of this.snapPoints) {
       const d = Math.abs(v - p);
@@ -301,8 +328,12 @@ export class KnobWidget {
         this._value = this._snapStep(e.deltaY > 0 ? -1 : 1);
       } else {
         const fine = e.shiftKey || e.ctrlKey;
-        const step = (this.max - this.min) * (fine ? 0.002 : 0.02);
-        this._value = _clamp(this._value + (e.deltaY > 0 ? -step : step), this.min, this.max);
+        // Grid-paced knobs (BPM sync) step ONE grid unit per wheel tick so 1/64 /
+        // 1/128 are reachable; others stay range-proportional.
+        const step = this.dragStep
+          ? this.dragStep
+          : (this.max - this.min) * (fine ? 0.002 : 0.02);
+        this._value = this._q(this._value + (e.deltaY > 0 ? -step : step));
       }
       this._redraw();
       if (this.onChange) this.onChange(this._value);
@@ -322,6 +353,7 @@ export class KnobWidget {
       const dx = (p.clientX - rect.left) - this.size / 2;
       const dy = (p.clientY - rect.top)  - this.size / 2;
       downInCenter = Math.hypot(dx, dy) <= this.size * 0.35;
+      this._dragRaw = this._value;   // seed grid-paced drag from the current value
       e.preventDefault();
     };
 
@@ -334,16 +366,32 @@ export class KnobWidget {
       // Summing both axes means a horizontal swipe (the natural phone gesture)
       // works just as well as the classic vertical drag.
       const move  = (p.clientX - lastX) + (lastY - p.clientY);
-      const norm  = _clamp(this._toNorm(this._value) + move * speed, 0, 1);
       lastX       = p.clientX;
       lastY       = p.clientY;
       if (e.cancelable) e.preventDefault();   // touch: stop the page scrolling under the drag
       if (snapMode) {
         // Drag with shift on a snap knob → continuously snap to nearest division.
+        const norm = _clamp(this._toNorm(this._value) + move * speed, 0, 1);
         this._value = this._snap(this._fromNorm(norm));
         this._redraw();
         if (this.onChange) this.onChange(this._value);
+      } else if (this.dragStep) {
+        // Grid-paced drag (BPM sync, no shift): advance by dragStep per STEP_PX px
+        // so every grid stop (incl. 1/64, 1/128) is reachable — a range-proportional
+        // drag jumps ≈1 unit/px and skips the sub-1/32 steps. `_dragRaw` is the
+        // continuous position the pointer drives; the shown value is that snapped to
+        // the grid via _q(), so slow drags accumulate instead of rounding away.
+        // (Shift is handled by the snapMode branch above → jump to divisions.)
+        this._dragRaw = _clamp((this._dragRaw ?? this._value) + (move / STEP_PX) * this.dragStep,
+                               this.min, this.max);
+        const q = this._q(this._dragRaw);
+        if (q !== this._value) {
+          this._value = q;
+          this._redraw();
+          if (this.onChange) this.onChange(this._value);
+        }
       } else {
+        const norm = _clamp(this._toNorm(this._value) + move * speed, 0, 1);
         this._setFromNorm(norm);
       }
     };
@@ -405,14 +453,19 @@ export class KnobWidget {
    * firing onChange. Used to flip a sync knob between MS and BPM modes.
    * The caller should call setValue() afterwards with the new mode's value.
    */
-  setRange(min, max, fmt, snapPoints = null) {
+  setRange(min, max, fmt, snapPoints = null, quantize = null, dragStep = null) {
     this.min = min;
     this.max = max;
     if (fmt) this.fmt = fmt;
     this.snapPoints = snapPoints;
+    this.quantize   = quantize;
+    this.dragStep   = dragStep;
     this._value = _clamp(this._value, this.min, this.max);
     this._redraw();
   }
+
+  /** Swap the grid quantizer in place (null = continuous). */
+  setQuantize(fn) { this.quantize = fn; }
 
   getValue() {
     return this._value;

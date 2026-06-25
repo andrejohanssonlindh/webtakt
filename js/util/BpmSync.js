@@ -8,7 +8,7 @@
  * DelayFX, ReverbFX, LFO and Arpeggiator:
  *   count32ToSeconds(count, bpm)  — grid count → wall-clock seconds
  *   MUSICAL_SNAP_32               — shift-snap points (grid units)
- *   formatCount32(count)          — human label ("1/8 + 1/32")
+ *   formatCount32(count)          — human label ("1/1 + 1/4", "2/1 + 5/128")
  *   divToCount32(div)             — legacy division string → grid count (load)
  *
  * GRID_BASE is the single knob that sets the resolution of the whole sync model:
@@ -16,10 +16,10 @@
  * one grid unit == one 1/32 note and the stored counts match the old
  * `bpmCount32` semantics exactly (hence the field name is kept). Raising it makes
  * the grid finer everywhere the snap points / labels / conversions are derived —
- * change this one constant and the rest follows. The FX sync knobs additionally
- * sweep a SUB-grid (see FINE_STEP) so they can land BETWEEN musical divisions
- * (e.g. the points between 1/32 and 1/16) without disturbing the integer-count
- * defaults stored by envelopes / LFO / arp.
+ * change this one constant and the rest follows. The user's Settings grid lets the
+ * knobs land on a SUB-grid (1/64 → count step 0.5, 1/128 → 0.25) so they can sit
+ * BETWEEN musical divisions (e.g. between 1/32 and 1/16) — quantizeCount snaps free
+ * drag to that step; counts stay in 1/32 units so saved projects never rescale.
  *
  * Legacy (back-compat only, consumed by divToCount32):
  *   DIV_QN / SYNC_DIVISIONS / divToSeconds(div, bpm)
@@ -69,18 +69,6 @@ export function divToSeconds(div, bpm) {
 export const GRID_UNIT_QN = 4 / GRID_BASE;
 
 /**
- * Display resolution for the fractional remainder of a count. formatCount32
- * splits a count into whole grid units + a remainder of 1/FINE_STEP-th of a
- * unit; at 16 the remainder can name 1/64 (8/16) and 1/128 (4/16) cleanly. This
- * is a LABEL granularity only — free drag quantizes to the user's grid (see
- * `quantizeCount`), so the remainder in practice is always 0, a 1/64 or a 1/128.
- */
-export const FINE_STEP = 16;
-
-/** Smallest fractional grid increment the formatter can name. */
-export const FINE_INCREMENT = 1 / FINE_STEP;
-
-/**
  * Free-drag quantize step in stored 1/32 units. The user's Settings grid sets
  * how finely the sync knobs move WITHOUT shift: 1/32 → 1 unit, 1/64 → 0.5,
  * 1/128 → 0.25. Stored counts stay in 1/32 units (GRID_BASE is fixed) so a 1/64
@@ -92,6 +80,16 @@ let _quantStep = 1;
 /** Quantize a free-dragged count to the current grid step (1/32, 1/64, 1/128). */
 export function quantizeCount(count) {
   return Math.round(count / _quantStep) * _quantStep;
+}
+
+/**
+ * Smallest BPM count the sync knobs allow = ONE grid step (1 at 1/32, 0.5 at 1/64,
+ * 0.25 at 1/128). Sync knobs use this as their `min` so a finer grid actually
+ * lowers the floor below 1/32 — without it the hardcoded min:1 pins everything at
+ * 1/32 no matter the grid (the "can't go below 1/32" bug). Follows the live grid.
+ */
+export function minBpmCount() {
+  return _quantStep;
 }
 
 /** Convert a grid count (may be fractional) + BPM to seconds. */
@@ -109,33 +107,44 @@ export function count32ToHz(count, bpm) {
   return 1 / Math.max(count32ToSeconds(count, bpm), 1e-6);
 }
 
-// Musical divisions as a fraction of a whole note → grid units (× GRID_BASE).
-// dotted-1/16, 1/8, dotted-1/8, 1/4, dotted-1/4, 1/2, dotted-1/2,
-// whole, 2 bars, 4 bars. The fine head (1/32 and any finer 1/64, 1/128) is
-// prepended by _buildSnap() per the user's resolution setting.
-const _MUSICAL_WHOLE_FRACTIONS = [
-  3 / 32, 1 / 8, 3 / 16, 1 / 4, 3 / 8, 1 / 2,
-  3 / 4, 1, 3 / 2, 2, 3, 4,
-];
+// COARSE musical divisions above the dense fine region (in grid units). The fine
+// region (everything up to and including 1/4 = 8 units) is filled densely at the
+// user's resolution by _buildSnap; these are the larger targets where a per-1/64
+// snap would be pointless (you don't want 512 snap points up to 4 bars).
+// dotted-1/4, 1/2, dotted-1/2, whole, 2 bars, 4 bars.
+const _MUSICAL_COARSE_FRACTIONS = [3 / 8, 1 / 2, 3 / 4, 1, 3 / 2, 2, 3, 4];
+
+// Top of the densely-filled fine region, in grid units (1/4 note = 8 × 1/32).
+// Below/at this, shift-snap lands on EVERY step of the user's grid; above it, the
+// coarse musical divisions take over.
+const _FINE_REGION_TOP = 8;
 
 /**
  * Build the snap-point array for a given finest division (grid units per whole
- * note, 32/64/128). Always includes 1/32, 1/16 and every musical division
- * above; for 64/128 it prepends 1/64 (and 1/128) as fractional 1/32 counts
- * (1/64 → 0.5, 1/128 → 0.25). Sorted ascending.
+ * note, 32/64/128). The fine region (≤ 1/4 note) is filled with EVERY step of the
+ * user's grid — at 1/32 the whole counts 1..8 (1/32, 1/16, …, 1/4: now incl. the
+ * 5/32 and 7/32 the old musical-only set skipped, so shift-snap matches free-drag),
+ * at 1/64 every half-unit (1/64 steps), at 1/128 every quarter-unit — so raising
+ * the grid fills in the steps BETWEEN 1/32 and 1/16 (and up to 1/4), not just one
+ * point below 1/32. Coarse musical divisions above 1/4 are appended unchanged.
+ * Sorted ascending, de-duped.
  */
 function _buildSnap(finestBase) {
-  const head = [1 / 32, 1 / 16];               // always available
-  if (finestBase >= 64)  head.unshift(1 / 64);
-  if (finestBase >= 128) head.unshift(1 / 128);
-  const fracs = [...head, ..._MUSICAL_WHOLE_FRACTIONS];
-  return fracs.map(f => f * GRID_BASE).sort((a, b) => a - b);
+  const step = GRID_BASE / finestBase;         // 1/32→1, 1/64→0.5, 1/128→0.25
+  const fine = [];
+  for (let v = step; v <= _FINE_REGION_TOP + 1e-9; v += step) fine.push(v);
+  const coarse = _MUSICAL_COARSE_FRACTIONS.map(f => f * GRID_BASE);
+  // De-dupe the boundary (1/4 = 8 is in `fine`; dotted-1/4 = 12 starts `coarse`).
+  const all = [...fine, ...coarse].sort((a, b) => a - b);
+  return all.filter((v, i) => i === 0 || Math.abs(v - all[i - 1]) > 1e-9);
 }
 
 /**
- * Musical snap points in grid units (1/32 unit). Shift-dragging a sync knob
- * jumps between these. Mutable: `setSnapResolution()` rebuilds it when the user
- * changes the finest-division setting. Default = 1/32 (the historical set).
+ * Snap points in grid units (1/32 unit). Shift-dragging a sync knob jumps between
+ * these. The fine region (≤ 1/4) is filled at the user's grid resolution, so the
+ * default 1/32 set is [1,2,3,4,5,6,7,8, 12,16,24,32,48,64,96,128] and 1/64 fills
+ * in the half-steps between. Mutable: `setSnapResolution()` rebuilds it when the
+ * user changes the finest-division setting.
  */
 export let MUSICAL_SNAP_32 = _buildSnap(32);
 
@@ -152,55 +161,46 @@ export function setSnapResolution(finestBase) {
   _quantStep = GRID_BASE / finestBase;
 }
 
-// Clean fraction names keyed by grid-unit count (derived from GRID_BASE).
-const _COUNT32_NAME = (() => {
-  const names = {};
-  const fracs = { '1/32': 1 / 32, '1/16': 1 / 16, '1/8': 1 / 8, '1/4': 1 / 4,
-                  '1/2': 1 / 2, '1/1': 1, '2/1': 2, '4/1': 4 };
-  for (const [label, frac] of Object.entries(fracs)) {
-    const units = frac * GRID_BASE;
-    if (Number.isInteger(units)) names[units] = label;
-  }
-  return names;
-})();
-
-// Sub-1/32 remainders the formatter can name, keyed by 1/FINE_STEP units.
-// 8/16 of a 1/32 unit = 1/64, 4/16 = 1/128. Anything else falls back to "·N".
-const _FINE_REM_NAME = { 8: `1/${GRID_BASE * 2}`, 4: `1/${GRID_BASE * 4}`, 12: `3/${GRID_BASE * 4}` };
+function _gcd(a, b) { return b < 1e-9 ? a : _gcd(b, a % b); }
 
 /**
- * Human-readable label for a grid count (may be fractional). Exact divisions
- * render clean ("1/4"); otherwise the largest clean division ≤ count plus the
- * remainder ("1/8 + 1/32", "3/16 + 1/32"). A fractional remainder (the knob now
- * lands on 1/64 / 1/128 when the user raises the grid) reads as "+ 1/64" etc.
+ * Name a leftover of `units` 1/32-grid-units as ONE exact fraction of a whole note.
+ * units/32 reduced to lowest terms. The finest grid is 1/128 (units multiple of
+ * 0.25), so scale to 128ths first to stay integer. 8 → "1/4", 1 → "1/32",
+ * 1.25 → "5/128". Denominator side reads "N/1" only for whole notes (handled by the
+ * caller), so here the numerator is always < the denominator.
  */
-export function formatCount32(count) {
-  const n = Math.max(FINE_INCREMENT, count);
-  // Snap to the fine grid first, then split into whole + fine remainder so a
-  // value like 8.9999 reads as "1/4" (9 → next whole), not "1/8 + 1/64".
-  const fineTotal = Math.round(n * FINE_STEP);
-  const whole   = Math.floor(fineTotal / FINE_STEP);
-  const fineRem = fineTotal - whole * FINE_STEP;
-  if (whole === 0) {
-    // Sub-one-unit value (only reachable when the grid is 1/64 or finer).
-    return _FINE_REM_NAME[fineRem] ?? `1/${GRID_BASE} ·-${FINE_STEP - fineRem}`;
-  }
-  const baseLabel = _formatWholeCount(whole);
-  if (fineRem === 0) return baseLabel;
-  const remName = _FINE_REM_NAME[fineRem];
-  return remName ? `${baseLabel} + ${remName}` : `${baseLabel} ·${fineRem}`;
+function _fractionName(units) {
+  // units of a whole note = units/GRID_BASE. Express over 128ths (4×GRID_BASE) to
+  // absorb the 1/64 + 1/128 grid, then reduce.
+  const denomBase = GRID_BASE * 4;                   // 128
+  let num = Math.round(units * (denomBase / GRID_BASE));  // units → 128ths
+  let den = denomBase;
+  const g = _gcd(num, den) || 1;
+  num /= g; den /= g;
+  return `${num}/${den}`;
 }
 
-/** Label for an integer grid count (the clean/remainder logic). */
-function _formatWholeCount(n) {
-  if (_COUNT32_NAME[n]) return _COUNT32_NAME[n];
-  const cleanUnits = Object.keys(_COUNT32_NAME).map(Number).sort((a, b) => b - a);
-  const base = cleanUnits.find(u => u <= n) ?? 1;
-  const rem  = n - base;
-  if (rem === 0) return _COUNT32_NAME[base];
-  const baseLabel = _COUNT32_NAME[base] ?? `${base}/${GRID_BASE}`;
-  const remLabel  = _COUNT32_NAME[rem]  ?? `${rem}/${GRID_BASE}`;
-  return `${baseLabel} + ${remLabel}`;
+/**
+ * Human-readable label for a grid count (in 1/32 units, may be fractional). At most
+ * TWO terms: N whole notes ("N/1") + ONE exact fraction remainder. The remainder is
+ * shown exactly (reduced), so an odd leftover reads e.g. "2/1 + 5/128":
+ *   32 → "1/1"   40 → "1/1 + 1/4"   64 → "2/1"   97 → "3/1 + 1/32"
+ *   64.25 → "2/1 + 1/128"   65.25 → "2/1 + 5/128"
+ * Sub-whole values are just the fraction ("1/4", "1/64", "5/128").
+ */
+export function formatCount32(count) {
+  const n = Math.max(0, count);
+  const wholes = Math.floor(n / GRID_BASE + 1e-9);   // whole notes (1/1 each)
+  const rem    = n - wholes * GRID_BASE;              // leftover, 0..<32 units
+
+  const wholeLabel = wholes > 0 ? `${wholes}/1` : null;
+  const remLabel   = rem > 1e-6 ? _fractionName(rem) : null;
+
+  if (wholeLabel && remLabel) return `${wholeLabel} + ${remLabel}`;
+  if (wholeLabel)             return wholeLabel;
+  if (remLabel)               return remLabel;
+  return '1/32';                                     // count 0 floor (never < 1/32 in use)
 }
 
 /** Map a legacy beat-division string → grid count (for project load). */

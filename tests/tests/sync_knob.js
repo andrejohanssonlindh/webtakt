@@ -8,8 +8,10 @@
  */
 
 import { suite, test, assert, makeOfflineTrack, fireStep, rms } from '../runner.js';
+import * as BpmSync from '../../js/util/BpmSync.js';
 import { count32ToSeconds, divToCount32, quantizeCount, formatCount32,
          setSnapResolution } from '../../js/util/BpmSync.js';
+import { KnobWidget } from '../../js/ui/KnobWidget.js';
 
 suite('Sync knob (MS/BPM unified)', () => {
 
@@ -29,16 +31,206 @@ suite('Sync knob (MS/BPM unified)', () => {
       assert.near(quantizeCount(30.2), 30.25, 1e-9, '1/128 grid: 30.2 → 30.25');
       assert.near(quantizeCount(30.1), 30.0,  1e-9, '1/128 grid: 30.1 → 30');
 
-      // Labels: clean divisions, integer remainders, and the fractional 1/64 //
-      // 1/128 tail all read cleanly (no "·N" sub-step noise for grid values).
-      assert.ok(formatCount32(32)   === '1/1',            '32 → 1/1');
-      assert.ok(formatCount32(30)   === '1/2 + 14/32',    '30 → 1/2 + 14/32');
-      assert.ok(formatCount32(30.5) === '1/2 + 14/32 + 1/64',  '30.5 → +1/64');
-      assert.ok(formatCount32(30.25) === '1/2 + 14/32 + 1/128', '30.25 → +1/128');
-      assert.ok(formatCount32(0.5)  === '1/64',  'bare 0.5 → 1/64');
-      assert.ok(formatCount32(0.25) === '1/128', 'bare 0.25 → 1/128');
+      // Labels: at most TWO terms (N wholes + one exact fraction). Sub-whole
+      // values are a single reduced fraction.
+      assert.ok(formatCount32(32)   === '1/1',     '32 → 1/1');
+      assert.ok(formatCount32(30)   === '15/16',   '30 → 15/16 (one reduced fraction)');
+      assert.ok(formatCount32(30.5) === '61/64',   '30.5 → 61/64');
+      assert.ok(formatCount32(30.25) === '121/128','30.25 → 121/128');
+      assert.ok(formatCount32(0.5)  === '1/64',    'bare 0.5 → 1/64');
+      assert.ok(formatCount32(0.25) === '1/128',   'bare 0.25 → 1/128');
     } finally {
       setSnapResolution(32);                        // restore default for other tests
+    }
+  });
+
+  test('minBpmCount: floor follows the grid (lets values go below 1/32)', () => {
+    // The "can't go below 1/32" bug: sync knobs hardcoded min:1. The BPM floor must
+    // be ONE grid step so 1/64 (0.5) and 1/128 (0.25) become reachable.
+    try {
+      setSnapResolution(32);  assert.ok(BpmSync.minBpmCount() === 1,    '1/32 floor = 1');
+      setSnapResolution(64);  assert.ok(BpmSync.minBpmCount() === 0.5,  '1/64 floor = 0.5');
+      setSnapResolution(128); assert.ok(BpmSync.minBpmCount() === 0.25, '1/128 floor = 0.25');
+      // At the finest grid, the floor labels as 1/128 and quantize keeps it there.
+      assert.ok(formatCount32(0.25) === '1/128', '0.25 → 1/128');
+      assert.near(quantizeCount(0.3), 0.25, 1e-9, '0.3 snaps to the 1/128 floor');
+    } finally {
+      setSnapResolution(32);
+    }
+  });
+
+  test('formatCount32: whole-note + single fraction, never 3 terms', () => {
+    // Regression: above 2/1 the label used to read "2/1 + 33/32" … "2/1 + 63/32".
+    // Now it is N whole notes + ONE exact fraction, at most two terms total.
+    assert.ok(formatCount32(64)  === '2/1',        '64 → 2/1');
+    assert.ok(formatCount32(128) === '4/1',        '128 → 4/1');
+    assert.ok(formatCount32(65)  === '2/1 + 1/32', '65 → 2/1 + 1/32');
+    assert.ok(formatCount32(96)  === '3/1',        '96 → 3/1');
+    assert.ok(formatCount32(97)  === '3/1 + 1/32', '97 → 3/1 + 1/32 (not 2/1 + 1/1 + …)');
+    assert.ok(formatCount32(112) === '3/1 + 1/2',  '112 → 3/1 + 1/2');
+    assert.ok(formatCount32(40)  === '1/1 + 1/4',  '40 → 1/1 + 1/4');
+    assert.ok(formatCount32(64.25) === '2/1 + 1/128', '64.25 → 2/1 + 1/128');
+    assert.ok(formatCount32(65.25) === '2/1 + 5/128', '65.25 → 2/1 + 5/128 (exact odd numerator)');
+    // No label anywhere in the range has more than two "+"-joined terms.
+    for (let c = 1; c <= 128; c += 0.25) {
+      const label = formatCount32(c);
+      const terms = label.split(' + ').length;
+      assert.ok(terms <= 2, `count ${c} label "${label}" has ${terms} terms (max 2)`);
+    }
+  });
+
+  test('BpmSync: raising the grid FILLS IN fine snap steps (1/32↔1/16 reachable)', () => {
+    // The reported bug: switching to a finer grid "did not change the knobs" —
+    // because the snap set only added ONE 1/64 point below 1/32, nothing between
+    // 1/32 (count 1) and 1/16 (count 2). The fine region (≤1/4 = 8 units) must be
+    // filled at the user's resolution so shift-snap reaches every step there.
+    try {
+      setSnapResolution(32);
+      const at32 = BpmSync.MUSICAL_SNAP_32;
+      // Default 1/32: every whole count through 1/4, then coarse divisions.
+      assert.ok(JSON.stringify(at32.slice(0, 8)) === JSON.stringify([1,2,3,4,5,6,7,8]),
+        `1/32 fine region = 1..8, got ${at32.slice(0, 8)}`);
+      assert.ok(!at32.some(v => Math.abs(v - 1.5) < 1e-9), '1/32 has NO 1.5 (1/64) point');
+
+      setSnapResolution(64);
+      const at64 = BpmSync.MUSICAL_SNAP_32;
+      // 1/64: the half-steps between 1/32 and 1/16 (and on up) now exist.
+      assert.ok(at64.some(v => Math.abs(v - 1.5) < 1e-9), '1/64 fills 1.5 (1/32+1/64)');
+      assert.ok(at64.some(v => Math.abs(v - 2.5) < 1e-9), '1/64 fills 2.5 (1/16+1/64)');
+      // Fine region is every 0.5 from 0.5 to 8.
+      const fine64 = at64.filter(v => v <= 8);
+      const expect64 = []; for (let v = 0.5; v <= 8 + 1e-9; v += 0.5) expect64.push(v);
+      assert.ok(JSON.stringify(fine64) === JSON.stringify(expect64),
+        `1/64 fine region every 0.5, got ${fine64}`);
+
+      setSnapResolution(128);
+      const at128 = BpmSync.MUSICAL_SNAP_32;
+      assert.ok(at128.some(v => Math.abs(v - 1.25) < 1e-9), '1/128 fills 1.25 (1/32+1/128)');
+      assert.ok(at128.some(v => Math.abs(v - 1.75) < 1e-9), '1/128 fills 1.75 (1/32+3/128)');
+
+      // Coarse divisions above 1/4 are unchanged regardless of grid.
+      [12, 16, 24, 32, 48, 64, 96, 128].forEach(c =>
+        assert.ok(at128.some(v => Math.abs(v - c) < 1e-9), `coarse ${c} present at 1/128`));
+
+      // Fine-step labels are a single reduced fraction (sub-whole, one term).
+      assert.ok(formatCount32(1.5)  === '3/64',  '1.5 → 3/64');
+      assert.ok(formatCount32(2.5)  === '5/64',  '2.5 → 5/64');
+      assert.ok(formatCount32(1.25) === '5/128', '1.25 → 5/128');
+    } finally {
+      setSnapResolution(32);
+    }
+  });
+
+  test('KnobWidget BPM mode: EVERY drag position lands on the Settings grid', () => {
+    // Regression for "BPM mode shows lower granularity than the grid setting"
+    // (e.g. 3/32 + 31/64 at a 1/32 grid). The fix wires BpmSync.quantizeCount into
+    // KnobWidget as a `quantize` hook so the free-drag path can't produce off-grid
+    // floats. This drives the REAL knob across its whole 0..1 sweep (the same path
+    // a pointer drag takes via _setFromNorm) and asserts every emitted value is an
+    // exact multiple of the grid step. It prints offenders so a future regression
+    // says WHICH positions broke, not just that one did.
+    const STEPS = 500;                               // fine sweep across the range
+    const cases = [
+      { grid: 32,  step: 1,    min: 1, max: 64 },    // 1/32 → whole units
+      { grid: 64,  step: 0.5,  min: 1, max: 64 },    // 1/64 → half units
+      { grid: 128, step: 0.25, min: 1, max: 64 },    // 1/128 → quarter units
+    ];
+    try {
+      for (const { grid, step, min, max } of cases) {
+        setSnapResolution(grid);
+        let emitted = min;
+        const knob = new KnobWidget({
+          label: 'T', min, max, value: min,
+          quantize: quantizeCount,
+          onChange: v => { emitted = v; },
+        });
+        const offenders = [];
+        for (let i = 0; i <= STEPS; i++) {
+          const norm = i / STEPS;                    // sweep the full knob travel
+          knob._setFromNorm(norm);                   // exact path a drag takes
+          const v = emitted;
+          // On-grid ⇔ v / step is (near) an integer. Tight epsilon so genuine
+          // sub-grid noise (e.g. 4.46875 = "1/8 + 31/64" at a 1/32 grid) is caught
+          // while float dust from norm→value→quantize is not. This is THE rule the
+          // bug violated; the label is printed only for human-readable diagnostics.
+          const ratio  = v / step;
+          const onGrid = Math.abs(ratio - Math.round(ratio)) < 1e-6;
+          if (!onGrid) {
+            offenders.push(`norm=${norm.toFixed(3)} v=${v} label="${formatCount32(v)}"`);
+          }
+        }
+        if (offenders.length) {
+          console.warn(`[sync grid 1/${grid}] ${offenders.length} off-grid positions:`);
+          offenders.slice(0, 12).forEach(o => console.warn('   ' + o));
+        }
+        assert.ok(offenders.length === 0,
+          `grid 1/${grid}: ${offenders.length} off-grid positions (see console)`);
+      }
+    } finally {
+      setSnapResolution(32);
+    }
+  });
+
+  test('KnobWidget BPM drag: steps ONE grid unit at a time (not every 1/32)', () => {
+    // Regression for "1/128 grid jumps 1/128 → 5/128 → 9/128" (steps of 1/32). A
+    // range-proportional drag moves ≈1 count/px so quantize only ever lands on
+    // integer counts. dragStep pacing must make consecutive stops differ by exactly
+    // ONE grid step. Drives the REAL knob with synthetic pointer moves.
+    const dispatch = (el, type, x) => el.dispatchEvent(
+      new MouseEvent(type, { clientX: x, clientY: 0, bubbles: true, cancelable: true }));
+
+    const cases = [
+      { grid: 64,  step: 0.5  },
+      { grid: 128, step: 0.25 },
+    ];
+    try {
+      for (const { grid, step } of cases) {
+        setSnapResolution(grid);
+        const seen = [];
+        const knob = new KnobWidget({
+          label: 'T', min: step, max: 64, value: step,
+          quantize: quantizeCount, dragStep: step,
+          onChange: v => { if (seen[seen.length - 1] !== v) seen.push(v); },
+        });
+        // Press at x=0, then drag right pixel-by-pixel. 4px per step (STEP_PX), so
+        // ~40px climbs ~10 steps — enough to see the increment size.
+        dispatch(knob._canvas, 'mousedown', 0);
+        for (let x = 1; x <= 60; x++) dispatch(window, 'mousemove', x);
+        dispatch(window, 'mouseup', 60);
+
+        assert.gt(seen.length, 4, `1/${grid}: drag produced several stops (${seen.length})`);
+        // Every consecutive pair differs by exactly one grid step (no 1/32 jumps).
+        const bad = [];
+        for (let i = 1; i < seen.length; i++) {
+          const d = seen[i] - seen[i - 1];
+          if (Math.abs(d - step) > 1e-6) bad.push(`${seen[i-1]}→${seen[i]} (Δ${d})`);
+        }
+        if (bad.length) console.warn(`[drag 1/${grid}] non-grid steps:`, bad.slice(0, 8));
+        assert.ok(bad.length === 0, `1/${grid}: ${bad.length} non-single-step jumps (see console)`);
+        knob.destroy();   // remove window listeners so later dispatches don't hit it
+      }
+    } finally {
+      setSnapResolution(32);
+    }
+  });
+
+  test('KnobWidget BPM mode: clamps the grid step within [min,max]', () => {
+    // Rounding must never push the emitted value past the knob's range (a coarse
+    // 1/32 grid on a knob whose min is a sub-grid 0.25 must not round below it).
+    try {
+      setSnapResolution(32);
+      let emitted = 0;
+      const knob = new KnobWidget({
+        label: 'T', min: 1, max: 64, value: 1,
+        quantize: quantizeCount,
+        onChange: v => { emitted = v; },
+      });
+      knob._setFromNorm(0);    // hard left
+      assert.ok(emitted >= 1, `min respected, got ${emitted}`);
+      knob._setFromNorm(1);    // hard right
+      assert.ok(emitted <= 64, `max respected, got ${emitted}`);
+    } finally {
+      setSnapResolution(32);
     }
   });
 

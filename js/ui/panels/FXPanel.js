@@ -12,7 +12,7 @@
  */
 
 import { KnobWidget } from '../KnobWidget.js';
-import { formatCount32, quantizeCount } from '../../util/BpmSync.js';
+import { formatCount32, quantizeCount, minBpmCount } from '../../util/BpmSync.js';
 
 export class FXPanel {
   /**
@@ -145,7 +145,10 @@ export class FXPanel {
     const hasPLock   = canPLock && hasStep && step.plocks.has(activePath);
     const dispVal    = hasPLock ? step.plocks.get(activePath) : fxObj.getParam(activePath);
 
-    const min  = isBpm ? p.bpmMin : (msDesc?.min ?? 0);
+    // BPM floor = the finer of the FX's declared musical floor and the grid step,
+    // so a finer Settings grid lowers the reachable min below 1/32 (but never below
+    // what the FX itself allows). p.bpmMin defaults to 1 (1/32) for most FX.
+    const min  = isBpm ? Math.min(p.bpmMin ?? 1, minBpmCount()) : (msDesc?.min ?? 0);
     const max  = isBpm ? p.bpmMax : (msDesc?.max ?? 1);
     const fmt  = isBpm
       ? (v => formatCount32(v))
@@ -161,6 +164,11 @@ export class FXPanel {
       size:    64,
       fmt,
       snapPoints: isBpm ? p.bpmSnap : null,
+      // BPM mode quantizes free drag to the user's Settings grid (1/32, 1/64,
+      // 1/128) at the knob level, so the live readout never shows sub-grid noise
+      // like "1/8 + 31/64". onChange re-clamps below for sub-grid bpmMin floors.
+      quantize:   isBpm ? quantizeCount : null,
+      dragStep:   isBpm ? minBpmCount() : null,
       // Double-click the knob center to toggle modes. Center shows the current
       // mode; offLabel lets rate-style sync knobs read 'HZ' instead of 'MS'.
       centerLabel: isBpm ? 'BPM' : (p.offLabel ?? 'MS'),

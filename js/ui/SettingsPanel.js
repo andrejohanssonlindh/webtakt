@@ -29,6 +29,7 @@
 
 import { settings, GRID_OPTIONS, SAMPLE_RATE_OPTIONS, LATENCY_OPTIONS } from '../state/Settings.js';
 import { KB_LAYOUTS, CUSTOM_LAYOUT_LABEL } from './Keyboard.js';
+import { count32ToSeconds, minBpmCount } from '../util/BpmSync.js';
 
 // Black-key slots (parallel to Keyboard.BLACK_NOTES): -1 = gap (no key there).
 // Used to lay out the custom-layout editor's two rows like a real keyboard.
@@ -67,9 +68,12 @@ function codeLabel(code) {
 export class SettingsPanel {
   /**
    * @param {HTMLElement} cogBtn — the ⚙ button
+   * @param {() => number} [getBpm] — current project BPM (for the grid-ms readout)
    */
-  constructor(cogBtn) {
+  constructor(cogBtn, getBpm = () => 120) {
     this.cogBtn    = cogBtn;
+    this._getBpm   = getBpm;
+    this._gridMsEl = null;         // the "(Xms)" span beside the grid dropdown
     this._open     = false;
     this._capturing = null;        // action id currently waiting for a key, or null
     this._conflictWarning = null;  // set after a rebind that cleared a clash
@@ -86,6 +90,20 @@ export class SettingsPanel {
   }
 
   toggle() { this._open ? this.close() : this.openPane(); }
+
+  /**
+   * Refresh the "(Xms)" readout beside the grid dropdown to one grid step at the
+   * current BPM. Cheap + null-safe, so the transport can call it on every BPM
+   * change whether or not the pane is open. minBpmCount() is the grid step in 1/32
+   * units; count32ToSeconds turns it into wall-clock time.
+   */
+  refreshGridMs() {
+    if (!this._gridMsEl) return;
+    const ms = count32ToSeconds(minBpmCount(), this._getBpm()) * 1000;
+    // Sub-10ms grids want a decimal; coarser ones read cleaner as integers.
+    const txt = ms < 10 ? ms.toFixed(1) : Math.round(ms).toString();
+    this._gridMsEl.textContent = `(${txt} ms)`;
+  }
 
   openPane() {
     this._open = true;
@@ -123,6 +141,14 @@ export class SettingsPanel {
     // ── BPM grid resolution ──────────────────────────────────
     {
       const row = this._row('Synced-knob grid', 'Finest BPM division the synced knobs snap to / reach.');
+      // Live ms readout of one grid step at the current BPM, shown LEFT of the
+      // dropdown. Updates when the grid changes (re-render) or BPM changes
+      // (refreshGridMs, called from the transport).
+      this._gridMsEl = document.createElement('span');
+      this._gridMsEl.className = 'settings-grid-ms';
+      this.refreshGridMs();
+      row.appendChild(this._gridMsEl);
+
       const sel = document.createElement('select');
       sel.className = 'settings-select';
       GRID_OPTIONS.forEach(o => {
@@ -131,7 +157,10 @@ export class SettingsPanel {
         if (o.id === settings.get('bpmGrid')) opt.selected = true;
         sel.appendChild(opt);
       });
-      sel.addEventListener('change', () => settings.set('bpmGrid', sel.value));
+      sel.addEventListener('change', () => {
+        settings.set('bpmGrid', sel.value);
+        this.refreshGridMs();   // grid changed → new step → new ms (same BPM)
+      });
       row.appendChild(sel);
       p.appendChild(row);
     }

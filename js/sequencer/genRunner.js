@@ -134,6 +134,14 @@ export function runGen(track, evolve = false) {
   // never toggle .active or touch p-locks/velocity/length/nudge.
   const manual = g.rhythm === 'manual';
 
+  // Note length for NEWLY-activated steps: inherit the length the user set on the
+  // existing pattern rather than each empty slot's stale default of 1. We read the
+  // first already-active step's length (the LENGTH knob with no step selected
+  // writes the same length to every step, so the first active one is
+  // representative). Steps that are already active keep their own length below, so
+  // per-step tweaks survive. Falls back to 1 when nothing is active yet.
+  const patternLength = seq.steps.find(s => s?.active)?.voices[0]?.length ?? 1;
+
   for (let i = 0; i < n; i++) {
     const step = seq.steps[i];
     if (!step) continue;
@@ -142,8 +150,11 @@ export function runGen(track, evolve = false) {
       if (manual) {
         if (v0) v0.note = notes[i];
       } else {
+        // Keep an already-active step's own length; a freshly-activated slot
+        // inherits the pattern length (not its leftover default).
+        const length = step.active ? (v0?.length ?? patternLength) : patternLength;
         step.active = true;
-        step.voices = [{ note: notes[i], velocity: g.velocity, length: v0?.length ?? 1, nudge: v0?.nudge ?? 0 }];
+        step.voices = [{ note: notes[i], velocity: g.velocity, length, nudge: v0?.nudge ?? 0 }];
       }
     } else if (!manual) {
       if (step.active) { step.plocks.clear(); step.chance = 100; }

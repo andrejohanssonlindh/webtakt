@@ -249,6 +249,7 @@ if (window.matchMedia('(max-width: 640px)').matches) {
 setSnapResolution(settings.gridBase);
 const settingsPanel = new SettingsPanel(
   document.getElementById('btn-settings'),
+  () => clock.bpm,
 );
 
 // 📖 Manual: toggles the overlay for whichever tab is currently active.
@@ -424,6 +425,7 @@ bpmSlider.addEventListener('input', () => {
   const bpm = parseInt(bpmSlider.value);
   decks.setBPM(bpm);
   bpmDisplay.textContent = bpm;
+  settingsPanel.refreshGridMs();   // keep the grid-ms readout in sync with BPM
 });
 
 // ── Confirm / prompt modal (replaces window.confirm to avoid audio pause) ──
@@ -545,6 +547,7 @@ function _reloadAfterProjectSwap(name) {
   }
   bpmSlider.value = clock.bpm;
   bpmDisplay.textContent = clock.bpm;
+  settingsPanel.refreshGridMs();   // a loaded project may carry a different BPM
   trackRow._build();
   synthPanel.render();
   stepGrid._build();

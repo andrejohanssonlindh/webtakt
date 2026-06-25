@@ -10,7 +10,7 @@
  */
 
 import { KnobWidget }                  from '../KnobWidget.js';
-import { formatCount32, MUSICAL_SNAP_32 } from '../../util/BpmSync.js';
+import { formatCount32, MUSICAL_SNAP_32, quantizeCount, minBpmCount } from '../../util/BpmSync.js';
 
 export class LFOPanel {
   render(ctx) {
@@ -235,7 +235,7 @@ export class LFOPanel {
     const isBpm = lfo.getParam('lfo.syncMode') === 'bpm';
 
     const activePath = isBpm ? bpmPath : hzPath;
-    const min  = isBpm ? 1   : 0.001;
+    const min  = isBpm ? minBpmCount() : 0.001;   // grid step (1/32, 1/64, 1/128)
     const max  = isBpm ? 128 : 20;
     const fmt  = isBpm
       ? (v => formatCount32(v))
@@ -246,8 +246,11 @@ export class LFOPanel {
       value: lfo.getParam(activePath),
       size,
       fmt,
-      // Continuous in BPM mode; shift-drag/scroll snaps to musical divisions.
+      // BPM mode quantizes free drag to the user's grid (1/32, 1/64, …);
+      // shift-drag/scroll snaps to musical divisions.
       snapPoints: isBpm ? MUSICAL_SNAP_32 : null,
+      quantize:   isBpm ? quantizeCount : null,
+      dragStep:   isBpm ? minBpmCount() : null,
       centerLabel: isBpm ? 'BPM' : 'HZ',
       onCenterClick: () => {
         lfo.setParam('lfo.syncMode', isBpm ? 'hz' : 'bpm');

@@ -28,10 +28,16 @@
  * no mode label. See js/signal/Envelope.js and design/audio-signal-chain.md (Unified Sync-Knob Model).
  */
 
-import { formatCount32, count32ToSeconds, MUSICAL_SNAP_32 } from '../util/BpmSync.js';
+import { formatCount32, count32ToSeconds, quantizeCount, minBpmCount, MUSICAL_SNAP_32 } from '../util/BpmSync.js';
 
-// Count bounds for BPM-mode stage knobs (1/32 … 4 bars in 1/32 units).
-const COUNT_LO = 1, COUNT_HI = 128;
+// BPM-mode stage count bounds in 1/32 units. The LOW bound follows the user's grid
+// (1 at 1/32, 0.5 at 1/64, 0.25 at 1/128) so the AMP/FILTER envelope can reach
+// below 1/32 like the sync knobs — a hardcoded floor of 1 was the "AMP won't go
+// below 1/32" bug. HIGH stays 4 bars.
+const COUNT_LO = () => minBpmCount();
+const COUNT_HI = 128;
+// Pixels of drag per grid step for the BPM count knob (matches KnobWidget STEP_PX).
+const ADSR_STEP_PX = 4;
 
 const ADSR_ACCENT_DEFAULT = '#e8a020';
 const FENV_ACCENT         = '#4a90d9';   // blue for filter envelope
@@ -410,7 +416,10 @@ export class ADSRWidget {
   _setStageFromSeconds(key, secs, fine) {
     if (this._stageMode(key) !== 'bpm') { this._set(key, secs); return; }
     const perCount = count32ToSeconds(1, this._getBpm());   // seconds per 1/32
-    let count = _clamp(Math.round(secs / Math.max(perCount, 1e-6)), COUNT_LO, COUNT_HI);
+    // Quantize to the user's Settings grid (1/32 / 1/64 / 1/128), NOT a hard
+    // integer 1/32 — so finer grids actually reach the in-between steps, matching
+    // the sync knobs. quantizeCount reads the live grid set by setSnapResolution.
+    let count = _clamp(quantizeCount(secs / Math.max(perCount, 1e-6)), COUNT_LO(), COUNT_HI);
     if (fine) {
       // Snap to the nearest musical division (1/32 units).
       let best = MUSICAL_SNAP_32[0], bestD = Math.abs(count - best);
@@ -418,14 +427,15 @@ export class ADSRWidget {
         const d = Math.abs(count - c);
         if (d < bestD) { best = c; bestD = d; }
       }
-      count = _clamp(best, COUNT_LO, COUNT_HI);
+      count = _clamp(best, COUNT_LO(), COUNT_HI);
     }
     this._setStageCount(key, count);
   }
 
-  /** Set a BPM stage's 1/32 count (p-lock-aware), then redraw. */
+  /** Set a BPM stage's 1/32 count (p-lock-aware), then redraw. Quantizes to the
+   *  user's grid (not a hard integer) so 1/64 / 1/128 sub-counts survive. */
   _setStageCount(key, count) {
-    const c = _clamp(Math.round(count), COUNT_LO, COUNT_HI);
+    const c = _clamp(quantizeCount(count), COUNT_LO(), COUNT_HI);
     if (this._hasStep() && this._setStepPLock) {
       this._setStepPLock(this._countKey(key), c);
     } else {
@@ -534,6 +544,7 @@ export class ADSRWidget {
 
       let dragging = false, lastX = 0, lastY = 0, downX = 0, downY = 0, downInCenter = false;
       let lastClickTime = 0;   // for center double-click detection (mode toggle)
+      let dragRaw = 0;         // continuous (un-quantized) position for grid-paced BPM drag
       const accent    = this._accent;
       const syncable  = this._isSyncable(key);
 
@@ -547,7 +558,7 @@ export class ADSRWidget {
       const isBpm   = () => this._stageMode(key) === 'bpm';
       const getVal  = () => isBpm() ? this._get(this._countKey(key)) : this._get(key);
       const bounds  = () => isBpm()
-        ? { lo: COUNT_LO, hi: COUNT_HI }
+        ? { lo: COUNT_LO(), hi: COUNT_HI }
         : BOUNDS_TABLE[key];
       const toNorm  = (v) => { const { lo, hi } = bounds(); return _clamp((v - lo) / (hi - lo), 0, 1); };
       const fromNorm = (n) => { const { lo, hi } = bounds(); return lo + _clamp(n, 0, 1) * (hi - lo); };
@@ -564,8 +575,10 @@ export class ADSRWidget {
       const onWheel = (e) => {
         e.preventDefault();
         const fine = e.shiftKey || e.ctrlKey;
+        // BPM mode steps one grid unit per wheel tick (so 1/64 / 1/128 are reachable
+        // by scrolling); MS/other stays range-proportional.
         const { lo, hi } = bounds();
-        const step = (hi - lo) * (fine ? 0.002 : 0.02);
+        const step = isBpm() ? minBpmCount() : (hi - lo) * (fine ? 0.002 : 0.02);
         setVal(getVal() + (e.deltaY > 0 ? -step : step));
       };
       const onDown = (e) => {
@@ -580,17 +593,28 @@ export class ADSRWidget {
         const dx = (p.clientX - rect.left) - KS / 2;
         const dy = (p.clientY - rect.top)  - KS / 2;
         downInCenter = Math.hypot(dx, dy) <= KS * 0.35;
+        dragRaw = getVal();      // seed grid-paced drag from the current value
         e.preventDefault();
       };
       const onMove = (e) => {
         if (!dragging) return;
         const p     = point(e);
         const fine  = e.shiftKey || e.ctrlKey;
-        const speed = fine ? 0.0008 : 0.008;
         // Two-axis (matches KnobWidget): right (+X) or up (−Y) increases.
         const move  = (p.clientX - lastX) + (lastY - p.clientY);
-        const norm  = _clamp(toNorm(getVal()) + move * speed, 0, 1);
-        setVal(fromNorm(norm));
+        if (isBpm()) {
+          // Grid-paced BPM drag: advance one grid step (minBpmCount) per ADSR_STEP_PX
+          // px so 1/64 / 1/128 stops are reachable — a range-proportional drag over
+          // the 0.25..128 count range jumps a full 1/32 per pixel and skips them.
+          // dragRaw is the continuous position; setVal quantizes it to the grid.
+          const px = fine ? ADSR_STEP_PX / 2 : ADSR_STEP_PX;
+          dragRaw  = _clamp(dragRaw + (move / px) * minBpmCount(), COUNT_LO(), COUNT_HI);
+          setVal(dragRaw);
+        } else {
+          const speed = fine ? 0.0008 : 0.008;
+          const norm  = _clamp(toNorm(getVal()) + move * speed, 0, 1);
+          setVal(fromNorm(norm));
+        }
         lastX = p.clientX;
         lastY = p.clientY;
         if (e.cancelable) e.preventDefault();   // touch: don't scroll the page under the drag

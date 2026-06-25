@@ -201,6 +201,14 @@ body {
   padding: 2px 4px;
   font-size: 1rem;
 }
+/* Live ms readout of one grid step, just left of the grid dropdown. */
+.settings-grid-ms {
+  margin-left: auto;        /* push to the right group, immediately before the select */
+  color: var(--text-dim, #8a8a9a);
+  font-family: monospace;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
 .settings-slider-wrap {
   display: flex;
   align-items: center;

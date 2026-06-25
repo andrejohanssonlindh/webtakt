@@ -9,7 +9,7 @@
  */
 
 import { KnobWidget } from '../KnobWidget.js';
-import { formatCount32, MUSICAL_SNAP_32 } from '../../util/BpmSync.js';
+import { formatCount32, MUSICAL_SNAP_32, quantizeCount, minBpmCount } from '../../util/BpmSync.js';
 
 export class DefaultMachinePanel {
   /**
@@ -161,7 +161,7 @@ export class DefaultMachinePanel {
     const isBpm     = machine.getParam(modePath) === 'bpm';
 
     const activePath = isBpm ? countPath : rateP.path;
-    const min  = isBpm ? (countP?.min ?? 1)   : (rateP.min ?? 0);
+    const min  = isBpm ? minBpmCount()        : (rateP.min ?? 0);   // grid step floor
     const max  = isBpm ? (countP?.max ?? 128) : (rateP.max ?? 1);
     const fmt  = isBpm ? (v => formatCount32(v)) : (v => fmtParam(rateP, v));
 
@@ -175,6 +175,8 @@ export class DefaultMachinePanel {
       size:    64,
       fmt,
       snapPoints:  isBpm ? MUSICAL_SNAP_32 : null,
+      quantize:    isBpm ? quantizeCount : null,
+      dragStep:    isBpm ? minBpmCount() : null,
       centerLabel: isBpm ? 'BPM' : 'HZ',
       onCenterClick: () => {
         // Toggle on the machine directly (mode is a setting, not a per-step lock,

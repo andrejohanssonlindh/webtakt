@@ -21,7 +21,7 @@
 
 import { KnobWidget }  from '../KnobWidget.js';
 import { ARP_CHORD_NAMES, ARP_PATTERNS } from '../../signal/Arpeggiator.js';
-import { formatCount32, MUSICAL_SNAP_32 } from '../../util/BpmSync.js';
+import { formatCount32, MUSICAL_SNAP_32, quantizeCount, minBpmCount } from '../../util/BpmSync.js';
 
 const PATTERN_LABELS = { up: 'Up', down: 'Down', updown: 'UpDown', random: 'Rand' };
 
@@ -459,18 +459,23 @@ export class ArpPanel {
     const isBpm = getMode() === 'bpm';
     const knob = new KnobWidget({
       label,
-      min:   isBpm ? 1   : msMin,
+      min:   isBpm ? minBpmCount() : msMin,   // grid step (1/32, 1/64, 1/128)
       max:   isBpm ? 64  : 2000,
       value: isBpm ? getCount() : getMs(),
       size,
       fmt:   isBpm ? (v => formatCount32(v)) : (msFmt ?? (v => Math.round(v) + 'ms')),
-      // Continuous in BPM mode; shift-drag/scroll snaps to musical divisions.
+      // BPM mode quantizes free drag to the user's grid; shift-drag/scroll snaps
+      // to musical divisions.
       snapPoints:  isBpm ? MUSICAL_SNAP_32 : null,
+      quantize:    isBpm ? quantizeCount : null,
+      dragStep:    isBpm ? minBpmCount() : null,
       centerLabel: isBpm ? 'BPM' : 'MS',
       onCenterClick: () => toggleMode(),
       // setMs/setCount receive (value, knob) so p-lock-aware callers can flag the
-      // knob's p-lock highlight on write.
-      onChange: v => isBpm ? setCount(Math.round(v), knob) : setMs(Math.round(v), knob),
+      // knob's p-lock highlight on write. The knob already quantized the count to
+      // the grid (quantizeCount) — don't Math.round it here or 1/64 / 1/128 sub-
+      // counts collapse back to integer 1/32.
+      onChange: v => isBpm ? setCount(v, knob) : setMs(Math.round(v), knob),
       onRelease: onRelease ?? undefined,
     });
     knob.setHasPLock?.(hasPLock);

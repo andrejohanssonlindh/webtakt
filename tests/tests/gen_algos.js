@@ -204,6 +204,28 @@ suite('GEN: runner (rhythm × pitch layers)', () => {
     assert.gt(distinct, 1, `markov produced varied notes, got ${distinct} distinct`);
   });
 
+  test('newly-activated euclid steps inherit the pattern note length', async () => {
+    // User has a pattern at 2-bar note length, then extends/generates more hits:
+    // the freshly-activated steps must adopt 2 bars (32), not the default 1.
+    const t = fakeTrack(16, { rhythm: 'euclid', pulses: 1, steps: 16, rotate: 0 });
+    runGen(t);                                       // one hit lands
+    const firstActive = t.sequencer.steps.find(s => s.active);
+    firstActive.voices[0].length = 32;               // user sets 2-bar length
+    t.gen.pulses = 8;                                 // generate more hits
+    runGen(t);
+    const lens = t.sequencer.steps.filter(s => s.active).map(s => s.voices[0].length);
+    assert.ok(lens.length === 8, `8 active, got ${lens.length}`);
+    assert.ok(lens.every(l => l === 32), `all inherit 32, got ${lens.join(',')}`);
+  });
+
+  test('per-step length tweaks survive a regen', async () => {
+    const t = fakeTrack(8, { rhythm: 'euclid', pulses: 8, steps: 8 });
+    runGen(t);                                       // all 8 on (length 1)
+    t.sequencer.steps[3].voices[0].length = 4;       // tweak just one step
+    runGen(t);                                       // re-run same pattern
+    assert.ok(t.sequencer.steps[3].voices[0].length === 4, 'tweaked step kept its length');
+  });
+
   test('switching a step off clears its p-locks', async () => {
     const t = fakeTrack(8, { rhythm: 'euclid', pulses: 8, steps: 8 });
     runGen(t);                                      // all 8 on

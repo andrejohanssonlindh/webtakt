@@ -15,7 +15,7 @@
  */
 
 import { KnobWidget } from '../KnobWidget.js';
-import { formatCount32, MUSICAL_SNAP_32 } from '../../util/BpmSync.js';
+import { formatCount32, MUSICAL_SNAP_32, quantizeCount, minBpmCount } from '../../util/BpmSync.js';
 import { makeSlotBrowseButton, fetchUrlAsFile } from './sampleBrowserButton.js';
 
 const WAVE_H  = 72;  // canvas CSS height per slot (matches .wt-sampler-waveform)
@@ -150,13 +150,15 @@ export class WavetableSamplerPanel {
     const sweepActivePath = sweepBpm ? 'sweep.bpmCount32' : 'sweep.speed';
     const sweepSpeedKnob = new KnobWidget({
       label: 'SWP SPEED', size: 48,
-      min: sweepBpm ? 1   : 0.05,
+      min: sweepBpm ? minBpmCount() : 0.05,   // grid step floor (1/32, 1/64, 1/128)
       max: sweepBpm ? 128 : 20,
       value: m.getParam(sweepActivePath),
       fmt: sweepBpm
         ? (v => formatCount32(v))
         : (v => v < 1 ? v.toFixed(2) + 'Hz' : v.toFixed(1) + 'Hz'),
       snapPoints:  sweepBpm ? MUSICAL_SNAP_32 : null,
+      quantize:    sweepBpm ? quantizeCount : null,
+      dragStep:    sweepBpm ? minBpmCount() : null,
       centerLabel: sweepBpm ? 'BPM' : 'HZ',
       onCenterClick: () => {
         m.setParam('sweep.syncMode', sweepBpm ? 'hz' : 'bpm');
